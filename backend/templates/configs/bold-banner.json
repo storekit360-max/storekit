@@ -1,0 +1,95 @@
+{
+    "id": "bold-banner",
+    "label": "Bold Banner",
+    "description": "Diagonal-split colour blocking — energetic, modern retail",
+    "background": "bold-banner.png",
+    "canvas": { "width": 1080, "height": 1080 },
+    "thumbnail": "bold-banner.png",
+  
+    "productImage": {
+      "x": 240,
+      "y": 240,
+      "width": 700,
+      "height": 700,
+      "fit": "contain",
+      "shadow": { "enabled": true, "blur": 35, "opacity": 0.3, "offsetY": 25 }
+    },
+  
+    "fields": {
+      "name": {
+        "x": 50,
+        "y": 50,
+        "width": 620,
+        "maxLines": 3,
+        "fontSize": 58,
+        "fontWeight": 900,
+        "fontFamily": "Arial, sans-serif",
+        "color": "#ffffff",
+        "align": "left",
+        "lineHeight": 1.05,
+        "letterSpacing": -1
+      },
+      "discount": {
+        "x": 50,
+        "y": 920,
+        "width": 300,
+        "fontSize": 64,
+        "fontWeight": 900,
+        "fontFamily": "Arial, sans-serif",
+        "color": "#ffd600",
+        "align": "left",
+        "prefix": "",
+        "suffix": "% OFF",
+        "showIf": "discount > 0"
+      },
+      "originalPrice": {
+        "x": 600,
+        "y": 950,
+        "width": 220,
+        "fontSize": 28,
+        "fontWeight": 500,
+        "fontFamily": "Arial, sans-serif",
+        "color": "#5a5a6e",
+        "align": "left",
+        "strikethrough": true,
+        "prefix": "Rs. ",
+        "showIf": "discount > 0 && originalPrice > 0"
+      },
+      "price": {
+        "x": 600,
+        "y": 985,
+        "width": 280,
+        "fontSize": 44,
+        "fontWeight": 800,
+        "fontFamily": "Arial, sans-serif",
+        "color": "#1a1a2e",
+        "align": "left",
+        "prefix": "Rs. "
+      },
+      "description": {
+        "x": 50,
+        "y": 250,
+        "width": 560,
+        "maxLines": 2,
+        "fontSize": 24,
+        "fontWeight": 400,
+        "fontFamily": "Arial, sans-serif",
+        "color": "#e8e8f0",
+        "align": "left"
+      },
+      "cta": {
+        "x": 50,
+        "y": 990,
+        "width": 250,
+        "height": 80,
+        "fontSize": 28,
+        "fontWeight": 800,
+        "fontFamily": "Arial, sans-serif",
+        "color": "#1a1a2e",
+        "align": "center",
+        "background": "#ffd600",
+        "borderRadius": 8,
+        "uppercase": true
+      }
+    }
+  }

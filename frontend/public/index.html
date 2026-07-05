@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en-LK">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,viewport-fit=cover"/>
+    <!-- Core Web Vitals: preconnect to CDN origins used for images -->
+    <link rel="preconnect" href="https://res.cloudinary.com" crossorigin/>
+    <link rel="dns-prefetch" href="https://res.cloudinary.com"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin/>
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com"/>
+
+    <link rel="icon" href="/favicon.ico" type="image/x-icon"/>
+    <link rel="icon" href="/favicon.png" sizes="192x192" type="image/png"/><link rel="icon" href="/favicon-32x32.png" sizes="32x32" type="image/png"/><link rel="icon" href="/favicon-96x96.png" sizes="96x96" type="image/png"/>
+    <link rel="icon" href="/favicon-16x16.png" sizes="16x16" type="image/png"/>
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+    <link rel="manifest"         href="%PUBLIC_URL%/manifest.json"/>
+
+    <meta name="theme-color"                         content="#15803d" id="meta-theme-color"/>
+    <meta name="mobile-web-app-capable"              content="yes"/>
+    <meta name="apple-mobile-web-app-capable"        content="yes"/>
+    <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+    <meta name="apple-mobile-web-app-title"          content="StoreKit"/>
+    <meta name="format-detection"                    content="telephone=no"/>
+
+    <title>StoreKit — Premium Online Store Sri Lanka</title>
+    <meta name="description"  content="Shop the best products online in Sri Lanka. Fast delivery, guaranteed best prices on electronics, fashion and more at StoreKit."/>
+    <meta name="robots"       content="index,follow,max-image-preview:large"/>
+    <link rel="canonical"     href="https://storekit.local"/>
+    <meta property="og:type"        content="website"/>
+    <meta property="og:title"       content="StoreKit — Premium Online Store Sri Lanka"/>
+    <meta property="og:description" content="Shop the best products online in Sri Lanka. Fast delivery, best prices on electronics at StoreKit."/>
+    <meta property="og:image" content="https://res.cloudinary.com/dn7tvazaw/image/upload/w_1200,h_630,c_fit,f_png/v1779758903/storekit/1779758893538-714817024.png"/>
+    <meta property="og:image:width" content="1200"/>
+    <meta property="og:image:height" content="630"/>
+    <meta property="og:image:type" content="image/png"/>
+    <meta property="og:url"         content="https://storekit.local"/>
+    <meta property="og:site_name"   content="StoreKit"/>
+    <meta property="og:locale"      content="en_LK"/>
+    <meta name="twitter:card"        content="summary_large_image"/>
+    <meta name="twitter:title"       content="StoreKit — Premium Online Store Sri Lanka"/>
+    <meta name="twitter:description" content="Shop the best products online in Sri Lanka. Fast delivery, best prices on electronics at StoreKit."/>
+    <meta name="twitter:image" content="https://res.cloudinary.com/dn7tvazaw/image/upload/w_1200,h_630,c_fit,f_png/v1779758903/storekit/1779758893538-714817024.png"/>
+    <meta name="twitter:image:width" content="1200"/>
+    <meta name="twitter:image:height" content="630"/>
+
+    <link rel="preconnect"   href="https://fonts.googleapis.com"/>
+    <link rel="preconnect"   href="https://fonts.gstatic.com" crossorigin/>
+    <link rel="dns-prefetch" href="https://res.cloudinary.com"/>
+    <link rel="dns-prefetch" href="https://www.googletagmanager.com"/>
+    <link rel="dns-prefetch" href="https://connect.facebook.net"/>
+
+    <!-- Meta Pixel STUB — loads the fbq() function as a native queue so that
+         any event fired before fbevents.js loads is buffered by Meta's own
+         queue mechanism (f.queue), not our custom __fbQueue polyfill.
+         IMPORTANT: fbq('init', pixelId) and fbq('track','PageView') are NOT
+         called here — that is done by useAnalytics.js (bootstrapAnalytics)
+         once the Pixel ID is fetched from admin Settings → SEO panel.
+         This prevents the "Duplicate Pixel ID" warning while still ensuring
+         AddToCart / InitiateCheckout / Purchase events queued early are never
+         lost even when trackPurchase() fires right before navigate(). -->
+    <script>
+      !function(f,b,e,v,n,t,s){
+        if(f.fbq)return;
+        n=f.fbq=function(){n.callMethod?
+          n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;
+        n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];
+        t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)
+      }(window,document,'script',
+      'https://connect.facebook.net/en_US/fbevents.js');
+      // ⚠️  Do NOT call fbq('init') here — useAnalytics.js handles that.
+    </script>
+
+
+
+    <script>
+    (function(){
+      var T={
+        default:{p:'#15803d',pd:'#0f5f2e',pl:'#22c55e',a:'#84cc16',d:'#0f172a',s:'#1e293b',g:'linear-gradient(135deg,#15803d 0%,#22c55e 50%,#84cc16 100%)',hg:'linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#15803d 100%)',cb:'#ffffff',bb:'#fafaf8',dcb:'#1e1e1e',dbb:'#0f0f0f'},
+        coral:{p:'#f97316',pd:'#ea580c',pl:'#fb923c',a:'#fcd34d',d:'#1c0a00',s:'#431407',g:'linear-gradient(135deg,#ea580c 0%,#f97316 50%,#fcd34d 100%)',hg:'linear-gradient(135deg,#1c0a00 0%,#431407 50%,#ea580c 100%)',cb:'#ffffff',bb:'#fff7ed',dcb:'#1a1000',dbb:'#0d0800'},
+        amber:{p:'#b45309',pd:'#92400e',pl:'#f59e0b',a:'#fbbf24',d:'#1c0a00',s:'#451a03',g:'linear-gradient(135deg,#b45309 0%,#f59e0b 50%,#fbbf24 100%)',hg:'linear-gradient(135deg,#1c0a00 0%,#451a03 50%,#b45309 100%)',cb:'#ffffff',bb:'#fffbeb',dcb:'#1a1200',dbb:'#0d0900'},
+        rose:{p:'#be185d',pd:'#9d174d',pl:'#f43f5e',a:'#fb7185',d:'#1f0a14',s:'#3b0a20',g:'linear-gradient(135deg,#be185d 0%,#f43f5e 50%,#fb7185 100%)',hg:'linear-gradient(135deg,#1f0a14 0%,#3b0a20 50%,#be185d 100%)',cb:'#ffffff',bb:'#fff1f2',dcb:'#1a000a',dbb:'#0d0005'},
+        lava:{p:'#dc2626',pd:'#b91c1c',pl:'#ef4444',a:'#f97316',d:'#1c0000',s:'#450a0a',g:'linear-gradient(135deg,#b91c1c 0%,#dc2626 50%,#f97316 100%)',hg:'linear-gradient(135deg,#1c0000 0%,#450a0a 50%,#b91c1c 100%)',cb:'#ffffff',bb:'#fff5f5',dcb:'#1a0000',dbb:'#0d0000'},
+        ocean:{p:'#0369a1',pd:'#024f7a',pl:'#0ea5e9',a:'#06b6d4',d:'#0c1a2e',s:'#0f2744',g:'linear-gradient(135deg,#0369a1 0%,#0ea5e9 50%,#06b6d4 100%)',hg:'linear-gradient(135deg,#0c1a2e 0%,#0f2744 50%,#0369a1 100%)',cb:'#ffffff',bb:'#f0f9ff',dcb:'#001220',dbb:'#000c18'},
+        sky:{p:'#0284c7',pd:'#0369a1',pl:'#38bdf8',a:'#7dd3fc',d:'#0c2340',s:'#0f3460',g:'linear-gradient(135deg,#0369a1 0%,#0284c7 50%,#38bdf8 100%)',hg:'linear-gradient(135deg,#0c2340 0%,#0f3460 50%,#0369a1 100%)',cb:'#ffffff',bb:'#f0f9ff',dcb:'#001830',dbb:'#000d1a'},
+        slate:{p:'#334155',pd:'#1e293b',pl:'#475569',a:'#38bdf8',d:'#0f172a',s:'#1e293b',g:'linear-gradient(135deg,#1e293b 0%,#334155 50%,#38bdf8 100%)',hg:'linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#334155 100%)',cb:'#ffffff',bb:'#f8fafc',dcb:'#111827',dbb:'#0a0f1a'},
+        arctic:{p:'#0891b2',pd:'#0e7490',pl:'#22d3ee',a:'#a5f3fc',d:'#082f49',s:'#0c4a6e',g:'linear-gradient(135deg,#0e7490 0%,#0891b2 50%,#22d3ee 100%)',hg:'linear-gradient(135deg,#082f49 0%,#0c4a6e 50%,#0e7490 100%)',cb:'#ffffff',bb:'#ecfeff',dcb:'#001520',dbb:'#000a12'},
+        forest:{p:'#15803d',pd:'#0f5f2e',pl:'#22c55e',a:'#84cc16',d:'#052e16',s:'#0a3d20',g:'linear-gradient(135deg,#15803d 0%,#22c55e 50%,#84cc16 100%)',hg:'linear-gradient(135deg,#052e16 0%,#0a3d20 50%,#15803d 100%)',cb:'#ffffff',bb:'#f0fdf4',dcb:'#001a0a',dbb:'#000d05'},
+        emerald:{p:'#059669',pd:'#047857',pl:'#34d399',a:'#6ee7b7',d:'#022c22',s:'#064e3b',g:'linear-gradient(135deg,#047857 0%,#059669 50%,#34d399 100%)',hg:'linear-gradient(135deg,#022c22 0%,#064e3b 50%,#047857 100%)',cb:'#ffffff',bb:'#ecfdf5',dcb:'#00150e',dbb:'#000d08'},
+        sage:{p:'#4d7c0f',pd:'#3f6212',pl:'#84cc16',a:'#bef264',d:'#1a2e05',s:'#365314',g:'linear-gradient(135deg,#3f6212 0%,#4d7c0f 50%,#84cc16 100%)',hg:'linear-gradient(135deg,#1a2e05 0%,#365314 50%,#3f6212 100%)',cb:'#ffffff',bb:'#f7fee7',dcb:'#0d1600',dbb:'#080d00'},
+        royal:{p:'#7c3aed',pd:'#5b21b6',pl:'#a78bfa',a:'#f59e0b',d:'#1e1b4b',s:'#2e1065',g:'linear-gradient(135deg,#7c3aed 0%,#a78bfa 50%,#f59e0b 100%)',hg:'linear-gradient(135deg,#1e1b4b 0%,#2e1065 50%,#7c3aed 100%)',cb:'#ffffff',bb:'#faf5ff',dcb:'#0f0020',dbb:'#080010'},
+        sakura:{p:'#db2777',pd:'#be185d',pl:'#f472b6',a:'#a78bfa',d:'#1a0a14',s:'#2d1020',g:'linear-gradient(135deg,#be185d 0%,#db2777 50%,#a78bfa 100%)',hg:'linear-gradient(135deg,#1a0a14 0%,#2d1020 50%,#db2777 100%)',cb:'#ffffff',bb:'#fdf2f8',dcb:'#150010',dbb:'#0d000a'},
+        plum:{p:'#6d28d9',pd:'#4c1d95',pl:'#8b5cf6',a:'#ec4899',d:'#1e0a3c',s:'#2d1b69',g:'linear-gradient(135deg,#4c1d95 0%,#6d28d9 50%,#ec4899 100%)',hg:'linear-gradient(135deg,#1e0a3c 0%,#2d1b69 50%,#4c1d95 100%)',cb:'#ffffff',bb:'#f5f3ff',dcb:'#10002e',dbb:'#08001a'},
+        midnight:{p:'#6366f1',pd:'#4338ca',pl:'#818cf8',a:'#38bdf8',d:'#0a0a0f',s:'#111120',g:'linear-gradient(135deg,#4338ca 0%,#6366f1 50%,#38bdf8 100%)',hg:'linear-gradient(135deg,#0a0a0f 0%,#111120 50%,#4338ca 100%)',cb:'#1a1a2e',bb:'#0d0d1a',dcb:'#0d0d1a',dbb:'#050508'},
+        neon:{p:'#a855f7',pd:'#7c3aed',pl:'#c084fc',a:'#22d3ee',d:'#050010',s:'#0d001a',g:'linear-gradient(135deg,#7c3aed 0%,#a855f7 50%,#22d3ee 100%)',hg:'linear-gradient(135deg,#050010 0%,#0d001a 50%,#7c3aed 100%)',cb:'#0d001a',bb:'#080010',dcb:'#0a0015',dbb:'#05000d'},
+        matrix:{p:'#16a34a',pd:'#15803d',pl:'#4ade80',a:'#a3e635',d:'#000d00',s:'#001a00',g:'linear-gradient(135deg,#15803d 0%,#16a34a 50%,#4ade80 100%)',hg:'linear-gradient(135deg,#000d00 0%,#001a00 50%,#15803d 100%)',cb:'#001200',bb:'#000a00',dcb:'#001000',dbb:'#000800'},
+        obsidian:{p:'#475569',pd:'#1e293b',pl:'#64748b',a:'#f59e0b',d:'#020617',s:'#0f172a',g:'linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#475569 100%)',hg:'linear-gradient(135deg,#020617 0%,#0f172a 50%,#1e293b 100%)',cb:'#1e293b',bb:'#0f172a',dcb:'#111827',dbb:'#030712'},
+        snow:{p:'#18181b',pd:'#09090b',pl:'#3f3f46',a:'#f59e0b',d:'#09090b',s:'#18181b',g:'linear-gradient(135deg,#18181b 0%,#3f3f46 50%,#71717a 100%)',hg:'linear-gradient(135deg,#09090b 0%,#18181b 50%,#27272a 100%)',cb:'#ffffff',bb:'#fafafa',dcb:'#1c1c1e',dbb:'#000000'},
+        lavender:{p:'#7c3aed',pd:'#6d28d9',pl:'#8b5cf6',a:'#c084fc',d:'#1e1b4b',s:'#312e81',g:'linear-gradient(135deg,#6d28d9 0%,#7c3aed 50%,#c084fc 100%)',hg:'linear-gradient(135deg,#1e1b4b 0%,#312e81 50%,#6d28d9 100%)',cb:'#ffffff',bb:'#f5f3ff',dcb:'#0f0020',dbb:'#080010'},
+        monochrome:{p:'#374151',pd:'#111827',pl:'#6b7280',a:'#9ca3af',d:'#030712',s:'#111827',g:'linear-gradient(135deg,#111827 0%,#374151 50%,#6b7280 100%)',hg:'linear-gradient(135deg,#030712 0%,#111827 50%,#1f2937 100%)',cb:'#ffffff',bb:'#f9fafb',dcb:'#1f2937',dbb:'#111827'}
+      };
+      var F={
+        default:{fd:"'Playfair Display',serif",fb:"'DM Sans',sans-serif",u:'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;900&family=DM+Sans:wght@300;400;500;600;700&display=swap'},
+        modern:{fd:"'Poppins',sans-serif",fb:"'Inter',sans-serif",u:'https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap'},
+        elegant:{fd:"'Cormorant Garamond',serif",fb:"'Raleway',sans-serif",u:'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Raleway:wght@300;400;500;600;700&display=swap'},
+        bold:{fd:"'Syne',sans-serif",fb:"'Work Sans',sans-serif",u:'https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Work+Sans:wght@300;400;500;600&display=swap'},
+        luxury:{fd:"'Bodoni Moda',serif",fb:"'Jost',sans-serif",u:'https://fonts.googleapis.com/css2?family=Bodoni+Moda:wght@400;600;700&family=Jost:wght@300;400;500;600&display=swap'},
+        tech:{fd:"'Space Grotesk',sans-serif",fb:"'IBM Plex Sans',sans-serif",u:'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap'},
+        minimal:{fd:"'Outfit',sans-serif",fb:"'Nunito',sans-serif",u:'https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Nunito:wght@300;400;500;600&display=swap'},
+        classic:{fd:"'Libre Baskerville',serif",fb:"'Source Sans 3',sans-serif",u:'https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=Source+Sans+3:wght@300;400;500;600&display=swap'},
+        geometric:{fd:"'Josefin Sans',sans-serif",fb:"'Lato',sans-serif",u:'https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@300;400;600;700&family=Lato:wght@300;400;700&display=swap'},
+        humanist:{fd:"'Nunito Sans',sans-serif",fb:"'Mulish',sans-serif",u:'https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@300;400;600;700;800&family=Mulish:wght@300;400;500;600&display=swap'}
+      };
+
+      // Apply theme CSS variables so the page renders with correct colors from the first paint,
+      // preventing a flash of default/wrong styles before React loads.
+      function applySettings(s){
+        var tk=(s&&s.theme)||'default', t=T[tk]||T.default;
+        var isDark=!!(s&&s.darkMode);
+        var pr=(s&&s.primaryColor)||t.p, pd=(s&&s.primaryDarkColor)||t.pd,
+            pl=(s&&s.primaryLightColor)||t.pl, ac=(s&&s.secondaryColor)||t.a,
+            dk=(s&&s.darkBgColor)||t.d;
+        var cardBg=isDark?(t.dcb||'#1a1a2e'):t.cb;
+        var bodyBg=isDark?(t.dbb||'#0d0d1a'):t.bb;
+        var tp=isDark?'#f1f5f9':'#0f172a', ts=isDark?'#94a3b8':'#64748b', bc=isDark?'#1e293b':'#e5e7eb';
+        var r=document.documentElement;
+        r.style.setProperty('--color-primary',pr);r.style.setProperty('--color-primary-dark',pd);
+        r.style.setProperty('--color-primary-light',pl);r.style.setProperty('--color-accent',ac);
+        r.style.setProperty('--color-dark',dk);r.style.setProperty('--color-surface',t.s);
+        r.style.setProperty('--theme-gradient',t.g);r.style.setProperty('--hero-gradient',t.hg);
+        r.style.setProperty('--card-bg',cardBg);r.style.setProperty('--body-bg',bodyBg);
+        r.style.setProperty('--glow-primary',pr+'66');r.style.setProperty('--glow-accent',ac+'4d');
+        r.style.setProperty('--text-primary',tp);r.style.setProperty('--text-secondary',ts);
+        r.style.setProperty('--border-color',bc);
+        var bs=document.getElementById('theme-bootstrap-bg');
+        if(!bs){bs=document.createElement('style');bs.id='theme-bootstrap-bg';document.head.appendChild(bs);}
+        bs.textContent='html,body{background:'+bodyBg+' !important;color:'+tp+'}';
+        if(isDark)r.classList.add('dark-mode');else r.classList.remove('dark-mode');
+        var fk=(s&&s.fontStyle)||'default', f=F[fk]||F.default;
+        r.style.setProperty('--font-display',f.fd);r.style.setProperty('--font-body',f.fb);
+        var fl=document.getElementById('theme-font');
+        if(!fl){fl=document.createElement('link');fl.id='theme-font';fl.rel='stylesheet';document.head.appendChild(fl);}
+        if(fl.href!==f.u)fl.href=f.u;
+        if(s&&s.customCSS){
+          var cs=document.getElementById('theme-custom-css');
+          if(!cs){cs=document.createElement('style');cs.id='theme-custom-css';document.head.appendChild(cs);}
+          cs.textContent=s.customCSS;
+        }
+        var mt=document.getElementById('meta-theme-color');
+        if(mt)mt.content=pr;
+      }
+
+      // 1a. Always apply default theme first — ensures new devices never flash orange/wrong colours
+      //     while waiting for localStorage cache or API response.
+      applySettings({});
+
+      // 1b. Override with localStorage cache if available (returning visitors get their saved theme)
+      var cached=null;
+      try{var raw=localStorage.getItem('storekit_theme_v2');if(raw)cached=JSON.parse(raw);}catch(e){}
+      if(cached) applySettings(cached);
+
+      // 2. Pre-fetch latest theme from API so ThemeContext gets it without an extra round-trip
+      window.__szApiFetched=false;
+      fetch('/api/settings')
+        .then(function(r){return r.ok?r.json():null;})
+        .then(function(data){
+          if(data&&typeof data==='object'&&!Array.isArray(data)&&('theme' in data||'storeName' in data)){
+            applySettings(data);
+            window.__szApiFetched=true;
+            try{localStorage.setItem('storekit_theme_v2',JSON.stringify(data));}catch(e){}
+          }
+        })
+        .catch(function(){
+          if(cached) applySettings(cached);
+        });
+    })();
+    </script>
+      <meta name="google-site-verification" content="JBwfXhDxBe4cSEra_DYfuPe1BtNCXxW0yMBPCo8VSwI"/>
+  
+<!-- Structured Data for Google Search Appearance -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "StoreKit",
+  "alternateName": "StoreKit Sri Lanka",
+  "url": "https://storekit.local",
+  "description": "Shop the best products online in Sri Lanka. Fast delivery, guaranteed best prices on electronics, fashion and more.",
+  "potentialAction": {
+    "@type": "SearchAction",
+    "target": {
+      "@type": "EntryPoint",
+      "urlTemplate": "https://storekit.local/shop?search={search_term_string}"
+    },
+    "query-input": "required name=search_term_string"
+  }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "StoreKit",
+  "url": "https://storekit.local",
+  "logo": {
+    "@type": "ImageObject",
+    "url": "https://storekit.local/favicon.png",
+    "width": 512,
+    "height": 512
+  },
+  "description": "Sri Lanka's premium online store. Fast delivery, best prices on electronics, fashion and more.",
+  "address": {
+    "@type": "PostalAddress",
+    "addressCountry": "LK"
+  },
+  "contactPoint": {
+    "@type": "ContactPoint",
+    "contactType": "customer service",
+    "availableLanguage": ["English", "Sinhala"]
+  },
+  "sameAs": []
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Store",
+  "name": "StoreKit",
+  "url": "https://storekit.local",
+  "image": "https://storekit.local/favicon.png",
+  "description": "Sri Lanka's premium online store. Shop electronics, fashion and more with fast island-wide delivery.",
+  "priceRange": "Rs.500 - Rs.500,000",
+  "currenciesAccepted": "LKR",
+  "paymentAccepted": "Cash, Credit Card, Bank Transfer",
+  "areaServed": {
+    "@type": "Country",
+    "name": "Sri Lanka"
+  },
+  "address": {
+    "@type": "PostalAddress",
+    "addressCountry": "LK"
+  }
+}
+</script>
+</head>
+  <body>
+    <script>
+      // Disable browser scroll restoration BEFORE React loads
+      // This prevents the browser from jumping to the previous scroll position
+      // when navigating between pages (the "loads at footer" bug)
+      if('scrollRestoration' in history) history.scrollRestoration='manual';
+      window.scrollTo(0,0);
+    </script>
+
+    <!--
+      SSR Flash Prevention
+      The backend injects static HTML into #root for Google crawlers.
+      Without this, users see a ~200ms flash of raw text/links before
+      React mounts. The SSR content is wrapped in [data-ssr] and hidden
+      via CSS immediately. React's index.js sets data-react-ready on
+      <html> which removes this rule — real UI appears instantly.
+      Crawlers run no JS, so they always see the full SSR content.
+    -->
+    <style id="ssr-hide">
+      /* Hide SSR crawler content before React paints */
+      #root [data-ssr] { display: none !important; }
+      /* Belt-and-suspenders: also hide any direct #root children until ready */
+      html:not([data-react-ready]) #root > *:not(script) { visibility: hidden; }
+    </style>
+
+    <noscript>
+      <style>
+        #root [data-ssr] { display: block !important; }
+        html #root > * { visibility: visible !important; }
+      </style>
+      You need to enable JavaScript to run this app..
+    </noscript>
+    <div id="root"></div>
+
+
+  </body>
+</html>

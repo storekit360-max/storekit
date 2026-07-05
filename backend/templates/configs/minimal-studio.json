@@ -1,0 +1,97 @@
+{
+    "id": "minimal-studio",
+    "label": "Minimal Studio",
+    "description": "Clean white studio look — premium product showcase",
+    "background": "minimal-studio.png",
+    "canvas": { "width": 1080, "height": 1080 },
+    "thumbnail": "minimal-studio.png",
+  
+    "productImage": {
+      "x": 190,
+      "y": 200,
+      "width": 700,
+      "height": 650,
+      "fit": "contain",
+      "shadow": { "enabled": true, "blur": 40, "opacity": 0.18, "offsetY": 30 }
+    },
+  
+    "fields": {
+      "name": {
+        "x": 60,
+        "y": 870,
+        "width": 960,
+        "maxLines": 2,
+        "fontSize": 52,
+        "fontWeight": 800,
+        "fontFamily": "Arial, sans-serif",
+        "color": "#1a1a1a",
+        "align": "left",
+        "lineHeight": 1.1,
+        "letterSpacing": -1
+      },
+      "discount": {
+        "x": 60,
+        "y": 50,
+        "width": 200,
+        "fontSize": 42,
+        "fontWeight": 900,
+        "fontFamily": "Arial, sans-serif",
+        "color": "#ffffff",
+        "align": "center",
+        "prefix": "",
+        "suffix": "% OFF",
+        "background": "#e53935",
+        "borderRadius": 8,
+        "showIf": "discount > 0"
+      },
+      "originalPrice": {
+        "x": 60,
+        "y": 990,
+        "width": 260,
+        "fontSize": 28,
+        "fontWeight": 500,
+        "fontFamily": "Arial, sans-serif",
+        "color": "#999999",
+        "align": "left",
+        "strikethrough": true,
+        "prefix": "Rs. ",
+        "showIf": "discount > 0 && originalPrice > 0"
+      },
+      "price": {
+        "x": 60,
+        "y": 1020,
+        "width": 320,
+        "fontSize": 48,
+        "fontWeight": 900,
+        "fontFamily": "Arial, sans-serif",
+        "color": "#1a1a1a",
+        "align": "left",
+        "prefix": "Rs. "
+      },
+      "description": {
+        "x": 60,
+        "y": 945,
+        "width": 960,
+        "maxLines": 1,
+        "fontSize": 24,
+        "fontWeight": 400,
+        "fontFamily": "Arial, sans-serif",
+        "color": "#555555",
+        "align": "left"
+      },
+      "cta": {
+        "x": 780,
+        "y": 1005,
+        "width": 240,
+        "height": 72,
+        "fontSize": 26,
+        "fontWeight": 800,
+        "fontFamily": "Arial, sans-serif",
+        "color": "#ffffff",
+        "align": "center",
+        "background": "#1a1a1a",
+        "borderRadius": 36,
+        "uppercase": true
+      }
+    }
+  }

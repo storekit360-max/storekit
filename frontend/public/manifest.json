@@ -1,0 +1,39 @@
+{
+    "short_name": "StoreKit",
+    "name": "StoreKit — Online Store Sri Lanka",
+    "icons": [
+      {
+        "src": "/favicon-32x32.png",
+        "sizes": "32x32",
+        "type": "image/png",
+        "purpose": "any"
+      },
+      {
+        "src": "/apple-touch-icon.png",
+        "sizes": "180x180",
+        "type": "image/png",
+        "purpose": "any"
+      },
+      {
+        "src": "/android-chrome-192x192.png",
+        "sizes": "192x192",
+        "type": "image/png",
+        "purpose": "any maskable"
+      },
+      {
+        "src": "/android-chrome-512x512.png",
+        "sizes": "512x512",
+        "type": "image/png",
+        "purpose": "any maskable"
+      }
+    ],
+    "start_url": "/",
+    "scope": "/",
+    "display": "standalone",
+    "theme_color": "#15803d",
+    "background_color": "#ffffff",
+    "description": "StoreKit — Shop electronics, appliances and more online in Sri Lanka. Fast island-wide delivery.",
+    "lang": "en-LK",
+    "dir": "ltr",
+    "categories": ["shopping", "electronics"]
+  }

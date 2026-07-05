@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://storekit-production.up.railway.app/api/:path*"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "https://storekit-production.up.railway.app/api/seo/sitemap.xml"
+    },
+    {
+      "source": "/sitemap_index.xml",
+      "destination": "https://storekit-production.up.railway.app/api/seo/sitemap.xml"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "https://storekit-production.up.railway.app/api/seo/robots.txt"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/static/:path*",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+    "id": "sale-burst",
+    "label": "Sale Burst",
+    "description": "Bold orange/red radial burst — high-urgency sale promotions",
+    "background": "sale-burst.png",
+    "canvas": { "width": 1080, "height": 1080 },
+    "thumbnail": "sale-burst.png",
+  
+    "productImage": {
+      "x": 190,
+      "y": 330,
+      "width": 700,
+      "height": 700,
+      "fit": "contain",
+      "shadow": { "enabled": true, "blur": 40, "opacity": 0.35, "offsetY": 30 }
+    },
+  
+    "fields": {
+      "name": {
+        "x": 60,
+        "y": 60,
+        "width": 960,
+        "maxLines": 2,
+        "fontSize": 64,
+        "fontWeight": 800,
+        "fontFamily": "Arial, sans-serif",
+        "color": "#ffffff",
+        "align": "left",
+        "lineHeight": 1.08,
+        "letterSpacing": -1,
+        "shadow": { "enabled": true, "color": "rgba(0,0,0,0.35)", "blur": 8, "offsetY": 3 }
+      },
+      "discount": {
+        "x": 60,
+        "y": 950,
+        "width": 280,
+        "fontSize": 56,
+        "fontWeight": 900,
+        "fontFamily": "Arial, sans-serif",
+        "color": "#ffe600",
+        "align": "left",
+        "prefix": "",
+        "suffix": "% OFF",
+        "shadow": { "enabled": true, "color": "rgba(0,0,0,0.4)", "blur": 6, "offsetY": 2 },
+        "showIf": "discount > 0"
+      },
+      "originalPrice": {
+        "x": 60,
+        "y": 880,
+        "width": 280,
+        "fontSize": 34,
+        "fontWeight": 600,
+        "fontFamily": "Arial, sans-serif",
+        "color": "#ffd9c4",
+        "align": "left",
+        "strikethrough": true,
+        "prefix": "Rs. ",
+        "showIf": "discount > 0 && originalPrice > 0"
+      },
+      "price": {
+        "x": 360,
+        "y": 935,
+        "width": 380,
+        "fontSize": 58,
+        "fontWeight": 900,
+        "fontFamily": "Arial, sans-serif",
+        "color": "#ffffff",
+        "align": "left",
+        "prefix": "Rs. ",
+        "shadow": { "enabled": true, "color": "rgba(0,0,0,0.4)", "blur": 6, "offsetY": 2 }
+      },
+      "description": {
+        "x": 60,
+        "y": 1030,
+        "width": 960,
+        "maxLines": 1,
+        "fontSize": 26,
+        "fontWeight": 400,
+        "fontFamily": "Arial, sans-serif",
+        "color": "#ffe9df",
+        "align": "left"
+      },
+      "cta": {
+        "x": 740,
+        "y": 920,
+        "width": 280,
+        "height": 90,
+        "fontSize": 32,
+        "fontWeight": 800,
+        "fontFamily": "Arial, sans-serif",
+        "color": "#a8200d",
+        "align": "center",
+        "background": "#ffffff",
+        "borderRadius": 45,
+        "uppercase": true
+      }
+    }
+  }
