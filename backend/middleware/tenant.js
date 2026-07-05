@@ -6,29 +6,58 @@ function normalizeDomain(value) {
   return String(value || '')
     .toLowerCase()
     .replace(/^https?:\/\//, '')
+    .split('/')[0]
     .replace(/:\d+$/, '')
     .replace(/^www\./, '')
     .replace(/\/+$/, '')
     .trim();
 }
 
+function getHeaderDomainCandidates(req) {
+  const headers = req.headers || {};
+  const rawValues = [
+    headers['x-tenant-domain'],
+    headers['x-forwarded-host'],
+    headers.origin,
+    headers.referer,
+    headers.host,
+  ];
+
+  const domains = [];
+  for (const raw of rawValues) {
+    if (!raw) continue;
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    const domain = normalizeDomain(value);
+    if (!domain) continue;
+    domains.push(domain);
+    if (domain === 'localhost') domains.push('127.0.0.1');
+    if (domain === '127.0.0.1') domains.push('localhost');
+  }
+
+  return Array.from(new Set(domains));
+}
+
+async function findTenantFromRequest(req) {
+  const lookupDomains = getHeaderDomainCandidates(req);
+  if (!lookupDomains.length) return { tenant: null, lookupDomains };
+
+  const tenant = await Tenant.findOne({
+    status: 'active',
+    domains: { $elemMatch: { domain: { $in: lookupDomains }, active: true } },
+  }).populate('plan');
+
+  return { tenant, lookupDomains };
+}
+
 async function resolveTenant(req, res, next) {
   try {
-    const domain = normalizeDomain(
-      req.headers['x-tenant-domain'] ||
-      req.headers['x-forwarded-host'] ||
-      req.headers.host
-    );
-
-    const lookupDomains = Array.from(new Set([domain, domain === 'localhost' ? '127.0.0.1' : 'localhost']));
-
-    const tenant = await Tenant.findOne({
-      status: 'active',
-      domains: { $elemMatch: { domain: { $in: lookupDomains }, active: true } },
-    }).populate('plan');
+    const { tenant, lookupDomains } = await findTenantFromRequest(req);
 
     if (!tenant) {
-      return res.status(404).json({ message: 'Store not found for this domain', domain });
+      return res.status(404).json({
+        message: 'Store not found for this domain',
+        domainsChecked: lookupDomains,
+      });
     }
 
     req.tenant = tenant;
@@ -42,16 +71,7 @@ async function resolveTenant(req, res, next) {
 
 async function optionalTenant(req, _res, next) {
   try {
-    const domain = normalizeDomain(
-      req.headers['x-tenant-domain'] ||
-      req.headers['x-forwarded-host'] ||
-      req.headers.host
-    );
-    const lookupDomains = Array.from(new Set([domain, domain === 'localhost' ? '127.0.0.1' : 'localhost']));
-    const tenant = await Tenant.findOne({
-      status: 'active',
-      domains: { $elemMatch: { domain: { $in: lookupDomains }, active: true } },
-    }).populate('plan');
+    const { tenant } = await findTenantFromRequest(req);
     if (tenant) {
       req.tenant = tenant;
       req.tenantId = tenant._id;
@@ -72,4 +92,10 @@ function requireFeature(featureName) {
   };
 }
 
-module.exports = { resolveTenant, optionalTenant, requireFeature, normalizeDomain };
+module.exports = {
+  resolveTenant,
+  optionalTenant,
+  requireFeature,
+  normalizeDomain,
+  getHeaderDomainCandidates,
+};
