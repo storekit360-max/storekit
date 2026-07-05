@@ -89,11 +89,18 @@ export const applyTheme = (settings) => {
   const primary      = settings?.primaryColor      || t.primary;
   const primaryDark  = settings?.primaryDarkColor  || t.primaryDark;
   const primaryLight = settings?.primaryLightColor || t.primaryLight;
-  const accent       = settings?.secondaryColor    || t.accent;
-  const dark         = settings?.darkBgColor       || t.dark;
+  const accent       = settings?.secondaryColor    || settings?.accentColor || t.accent;
+  const dark         = settings?.darkBgColor       || settings?.darkColor   || t.dark;
+  const surface      = settings?.surfaceColor      || t.surface || dark;
 
-  const cardBg  = isDark ? (t.darkCardBg || '#1a1a2e') : t.cardBg;
-  const bodyBg  = isDark ? (t.darkBodyBg || '#0d0d1a') : t.bodyBg;
+  // Never keep the selected preset gradient when admin changed brand colours.
+  // Build gradients from the active admin colours so every storefront adapts
+  // immediately instead of falling back to default green/orange theme values.
+  const themeGradient = `linear-gradient(135deg, ${primaryDark} 0%, ${primary} 50%, ${accent} 100%)`;
+  const heroGradient  = `linear-gradient(135deg, ${dark} 0%, ${surface} 50%, ${primaryDark} 100%)`;
+
+  const cardBg  = settings?.cardBgColor || (isDark ? (t.darkCardBg || '#1a1a2e') : t.cardBg);
+  const bodyBg  = settings?.bodyBgColor || (isDark ? (t.darkBodyBg || '#0d0d1a') : t.bodyBg);
   const textPrimary   = isDark ? '#f1f5f9' : '#0f172a';
   const textSecondary = isDark ? '#94a3b8' : '#64748b';
   const borderColor   = isDark ? '#1e293b' : '#e5e7eb';
@@ -103,9 +110,9 @@ export const applyTheme = (settings) => {
   root.style.setProperty('--color-primary-light',  primaryLight);
   root.style.setProperty('--color-accent',         accent);
   root.style.setProperty('--color-dark',           dark);
-  root.style.setProperty('--color-surface',        t.surface);
-  root.style.setProperty('--theme-gradient',       t.gradient);
-  root.style.setProperty('--hero-gradient',        t.heroGradient);
+  root.style.setProperty('--color-surface',        surface);
+  root.style.setProperty('--theme-gradient',       themeGradient);
+  root.style.setProperty('--hero-gradient',        heroGradient);
   root.style.setProperty('--card-bg',              cardBg);
   root.style.setProperty('--body-bg',              bodyBg);
   root.style.setProperty('--glow-primary',         primary + '66');
@@ -113,6 +120,9 @@ export const applyTheme = (settings) => {
   root.style.setProperty('--text-primary',         textPrimary);
   root.style.setProperty('--text-secondary',       textSecondary);
   root.style.setProperty('--border-color',         borderColor);
+
+  const metaTheme = document.getElementById('meta-theme-color');
+  if (metaTheme) metaTheme.setAttribute('content', primary);
 
   document.body.style.setProperty('background', bodyBg, 'important');
   if (isDark) {
@@ -123,14 +133,14 @@ export const applyTheme = (settings) => {
     document.body.style.removeProperty('color');
   }
 
-  const fKey = settings?.fontStyle || 'default';
+  const fKey = settings?.fontStyle || settings?.fontFamily || 'default';
   const f    = FONTS[fKey] || FONTS.default;
   root.style.setProperty('--font-display', f.display);
   root.style.setProperty('--font-body',    f.body);
 
   let link = document.getElementById('theme-font');
   if (!link) { link = document.createElement('link'); link.id = 'theme-font'; link.rel = 'stylesheet'; document.head.appendChild(link); }
-  if (link.href !== f.url) link.href = f.url;
+  if (link.getAttribute('href') !== f.url) link.href = f.url;
 
   let style = document.getElementById('theme-custom-css');
   if (!style) { style = document.createElement('style'); style.id = 'theme-custom-css'; document.head.appendChild(style); }
