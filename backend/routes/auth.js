@@ -53,8 +53,21 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 //           measuring response time.
 const DUMMY_HASH = '$2a$12$dummyhashtopreventtimingattacks.onloginendpoint.padded';
 
+// Resolve tenant for auth routes before checking tenant-specific credentials.
+router.use(optionalTenant);
+
 // ─── Password strength validator ─────────────────────────────────────────────
 // Returns { valid: Boolean, errors: String[] } — unchanged from original.
+
+function sameTenant(user, tenantId) {
+  // Super admin is global and must be able to login from the platform/admin domain.
+  if (user?.role === 'superadmin') return true;
+
+  // Normal admin/customer users must belong to the tenant resolved from the domain.
+  if (!tenantId || !user?.tenantId) return false;
+  return String(user.tenantId) === String(tenantId);
+}
+
 function validatePasswordStrength(password) {
   const errors = [];
   if (!password || password.length < 8)      errors.push('At least 8 characters');

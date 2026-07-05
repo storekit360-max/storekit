@@ -8,6 +8,7 @@ function normalizeDomain(value) {
     .replace(/^https?:\/\//, '')
     .replace(/:\d+$/, '')
     .replace(/^www\./, '')
+    .replace(/\/+$/, '')
     .trim();
 }
 
