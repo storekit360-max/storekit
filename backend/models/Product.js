@@ -14,8 +14,9 @@ const variantOptionSchema = new mongoose.Schema({
 }, { _id: false });
 
 const productSchema = new mongoose.Schema({
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   name: { type: String, required: true },
-  slug: { type: String, unique: true },
+  slug: { type: String, required: true },
   description: { type: String, required: true },
   shortDescription: String,
   price: { type: Number, required: true },
@@ -69,5 +70,9 @@ productSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
   next();
 });
+
+
+productSchema.index({ tenantId: 1, slug: 1 }, { unique: true });
+productSchema.index({ tenantId: 1, category: 1 });
 
 module.exports = mongoose.model('Product', productSchema);
