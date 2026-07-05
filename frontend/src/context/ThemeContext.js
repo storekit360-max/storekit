@@ -8,7 +8,15 @@ import React, {
 import API from '../utils/api';
 
 const ThemeContext = createContext();
-const LS_KEY = 'storekit_theme_v2';
+const LS_BASE_KEY = 'storekit_theme_v2';
+const getTenantThemeCacheKey = () => {
+  try {
+    const host = window.location.hostname || 'default';
+    return `${LS_BASE_KEY}:${host}`;
+  } catch {
+    return `${LS_BASE_KEY}:default`;
+  }
+};
 
 /* ── 20+ Theme palette ──────────────────────────────────────────────────── */
 export const THEMES = {
@@ -72,11 +80,16 @@ export const FONTS = {
 
 /* ── localStorage helpers ─────────────────────────────────────────────── */
 const readCache = () => {
-  try { const r = localStorage.getItem(LS_KEY); return r ? JSON.parse(r) : null; }
+  try {
+    const boot = typeof window !== 'undefined' ? window.__STOREKIT_BOOTSTRAP_SETTINGS__ : null;
+    if (boot && typeof boot === 'object') return boot;
+    const r = localStorage.getItem(getTenantThemeCacheKey());
+    return r ? JSON.parse(r) : null;
+  }
   catch { return null; }
 };
 export const writeCache = (data) => {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch {}
+  try { localStorage.setItem(getTenantThemeCacheKey(), JSON.stringify(data)); } catch {}
 };
 
 /* ── Core applyTheme ─────────────────────────────────────────────────── */
@@ -166,9 +179,11 @@ export const applyTheme = (settings) => {
 };
 
 /* ── IIFE: runs before React ─────────────────────────────────────────── */
-// Only apply cache if index.html bootstrap hasn't already fetched the real
-// theme from the API (window.__szApiFetched is set by index.html on success).
-try { if (!window.__szApiFetched) { applyTheme(readCache()); } } catch {}
+// Apply bootstrap/API settings before React paints. Do not use cross-tenant/global defaults.
+try {
+  const boot = window.__STOREKIT_BOOTSTRAP_SETTINGS__ || readCache();
+  if (boot) applyTheme(boot);
+} catch {}
 
 /* ── ThemeProvider ───────────────────────────────────────────────────── */
 export const ThemeProvider = ({ children }) => {
@@ -177,9 +192,9 @@ export const ThemeProvider = ({ children }) => {
   const [darkMode, setDarkModeState] = useState(() => readCache()?.darkMode || false);
 
   useLayoutEffect(() => {
-    // Skip if index.html already fetched the real theme from API —
-    // applying cache here would overwrite it with stale/default data.
-    if (!window.__szApiFetched) { applyTheme(readCache()); }
+    const boot = window.__STOREKIT_BOOTSTRAP_SETTINGS__ || readCache();
+    if (boot) applyTheme(boot);
+    document.documentElement.classList.add('storekit-theme-ready');
   }, []);
 
   const lastSaveRef = React.useRef(0);
@@ -196,8 +211,9 @@ export const ThemeProvider = ({ children }) => {
       setDarkModeState(data.darkMode || false);
       applyTheme(data);
       writeCache(data);
-      // Mark that React has applied the real theme from the API
+      window.__STOREKIT_BOOTSTRAP_SETTINGS__ = data;
       window.__szApiFetched = true;
+      document.documentElement.classList.add('storekit-theme-ready');
       // Build __STOREKIT_SEO__ from either a nested seo_config object (legacy)
       // or the flat key/value pairs that the admin Settings page saves directly to DB.
       const seo = (data.seo_config && typeof data.seo_config === 'object') ? data.seo_config : {};

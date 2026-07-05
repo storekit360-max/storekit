@@ -73,7 +73,10 @@
       // ⚠️  Do NOT call fbq('init') here — useAnalytics.js handles that.
     </script>
 
-
+    <style id="tenant-first-paint-guard">
+      html:not(.storekit-theme-ready) #root { opacity: 0 !important; }
+      html.storekit-theme-ready #root { opacity: 1 !important; }
+    </style>
 
     <script>
     (function(){
@@ -114,66 +117,88 @@
         humanist:{fd:"'Nunito Sans',sans-serif",fb:"'Mulish',sans-serif",u:'https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@300;400;600;700;800&family=Mulish:wght@300;400;500;600&display=swap'}
       };
 
-      // Apply theme CSS variables so the page renders with correct colors from the first paint,
-      // preventing a flash of default/wrong styles before React loads.
+      // Apply tenant theme CSS variables before React paints. Never apply the default
+      // green theme on first paint; wait for tenant API or same-domain cache.
       function applySettings(s){
-        var tk=(s&&s.theme)||'default', t=T[tk]||T.default;
-        var isDark=!!(s&&s.darkMode);
-        var pr=(s&&s.primaryColor)||t.p, pd=(s&&s.primaryDarkColor)||t.pd,
-            pl=(s&&s.primaryLightColor)||t.pl, ac=(s&&s.secondaryColor)||t.a,
-            dk=(s&&s.darkBgColor)||t.d;
-        var cardBg=isDark?(t.dcb||'#1a1a2e'):t.cb;
-        var bodyBg=isDark?(t.dbb||'#0d0d1a'):t.bb;
+        if(!s||typeof s!=='object')return false;
+        var tk=s.theme||'default', t=T[tk]||T.default;
+        var isDark=!!s.darkMode;
+        var pr=s.primaryColor||t.p, pd=s.primaryDarkColor||t.pd,
+            pl=s.primaryLightColor||t.pl,
+            ac=s.secondaryColor||s.accentColor||t.a,
+            dk=s.darkBgColor||s.darkColor||t.d,
+            sf=s.surfaceColor||t.s||dk;
+        var tg='linear-gradient(135deg,'+pd+' 0%,'+pr+' 50%,'+ac+' 100%)';
+        var hg='linear-gradient(135deg,'+dk+' 0%,'+sf+' 50%,'+pd+' 100%)';
+        var cardBg=s.cardBgColor||(isDark?(t.dcb||'#1a1a2e'):t.cb);
+        var bodyBg=s.bodyBgColor||(isDark?(t.dbb||'#0d0d1a'):t.bb);
         var tp=isDark?'#f1f5f9':'#0f172a', ts=isDark?'#94a3b8':'#64748b', bc=isDark?'#1e293b':'#e5e7eb';
         var r=document.documentElement;
         r.style.setProperty('--color-primary',pr);r.style.setProperty('--color-primary-dark',pd);
         r.style.setProperty('--color-primary-light',pl);r.style.setProperty('--color-accent',ac);
-        r.style.setProperty('--color-dark',dk);r.style.setProperty('--color-surface',t.s);
-        r.style.setProperty('--theme-gradient',t.g);r.style.setProperty('--hero-gradient',t.hg);
+        r.style.setProperty('--color-dark',dk);r.style.setProperty('--color-surface',sf);
+        r.style.setProperty('--theme-gradient',tg);r.style.setProperty('--hero-gradient',hg);
         r.style.setProperty('--card-bg',cardBg);r.style.setProperty('--body-bg',bodyBg);
         r.style.setProperty('--glow-primary',pr+'66');r.style.setProperty('--glow-accent',ac+'4d');
         r.style.setProperty('--text-primary',tp);r.style.setProperty('--text-secondary',ts);
         r.style.setProperty('--border-color',bc);
         var bs=document.getElementById('theme-bootstrap-bg');
         if(!bs){bs=document.createElement('style');bs.id='theme-bootstrap-bg';document.head.appendChild(bs);}
-        bs.textContent='html,body{background:'+bodyBg+' !important;color:'+tp+'}';
+        bs.textContent='html,body{background:'+bodyBg+' !important;color:'+tp+'} body{font-family:var(--font-body) !important;}';
         if(isDark)r.classList.add('dark-mode');else r.classList.remove('dark-mode');
-        var fk=(s&&s.fontStyle)||'default', f=F[fk]||F.default;
+        var fk=s.fontStyle||s.fontFamily||'default', f=F[fk]||F.default;
         r.style.setProperty('--font-display',f.fd);r.style.setProperty('--font-body',f.fb);
         var fl=document.getElementById('theme-font');
         if(!fl){fl=document.createElement('link');fl.id='theme-font';fl.rel='stylesheet';document.head.appendChild(fl);}
-        if(fl.href!==f.u)fl.href=f.u;
-        if(s&&s.customCSS){
-          var cs=document.getElementById('theme-custom-css');
-          if(!cs){cs=document.createElement('style');cs.id='theme-custom-css';document.head.appendChild(cs);}
-          cs.textContent=s.customCSS;
-        }
+        if(fl.getAttribute('href')!==f.u)fl.href=f.u;
+        var cs=document.getElementById('theme-custom-css');
+        if(!cs){cs=document.createElement('style');cs.id='theme-custom-css';document.head.appendChild(cs);}
+        cs.textContent=s.customCSS||'';
         var mt=document.getElementById('meta-theme-color');
         if(mt)mt.content=pr;
+        window.__STOREKIT_BOOTSTRAP_SETTINGS__=s;
+        window.__szApiFetched=true;
+        r.classList.add('storekit-theme-ready');
+        return true;
       }
 
-      // 1a. Always apply default theme first — ensures new devices never flash orange/wrong colours
-      //     while waiting for localStorage cache or API response.
-      applySettings({});
-
-      // 1b. Override with localStorage cache if available (returning visitors get their saved theme)
+      var host=(window.location.hostname||'default').toLowerCase();
+      var cacheKey='storekit_theme_v2:'+host;
       var cached=null;
-      try{var raw=localStorage.getItem('storekit_theme_v2');if(raw)cached=JSON.parse(raw);}catch(e){}
+      try{var raw=localStorage.getItem(cacheKey);if(raw)cached=JSON.parse(raw);}catch(e){}
       if(cached) applySettings(cached);
 
-      // 2. Pre-fetch latest theme from API so ThemeContext gets it without an extra round-trip
+      var envApi='%REACT_APP_API_URL%';
+      if(!envApi||envApi.indexOf('%REACT_APP_')===0) envApi='/api';
+      envApi=envApi.replace(/\/$/,'');
+      var settingsUrl=envApi+'/settings';
       window.__szApiFetched=false;
-      fetch('/api/settings')
-        .then(function(r){return r.ok?r.json():null;})
+
+      var controller=null, timeout=null;
+      if(window.AbortController){controller=new AbortController();timeout=setTimeout(function(){try{controller.abort();}catch(e){}},3500);}
+      fetch(settingsUrl,{
+        credentials:'include',
+        headers:{'Accept':'application/json','X-Tenant-Domain':host},
+        signal:controller?controller.signal:undefined
+      })
+        .then(function(r){
+          var ct=r.headers.get('content-type')||'';
+          return r.ok&&ct.indexOf('application/json')!==-1?r.json():null;
+        })
         .then(function(data){
-          if(data&&typeof data==='object'&&!Array.isArray(data)&&('theme' in data||'storeName' in data)){
-            applySettings(data);
-            window.__szApiFetched=true;
-            try{localStorage.setItem('storekit_theme_v2',JSON.stringify(data));}catch(e){}
+          if(timeout)clearTimeout(timeout);
+          if(data&&typeof data==='object'&&!Array.isArray(data)&&('theme' in data||'storeName' in data||'primaryColor' in data)){
+            if(applySettings(data)){try{localStorage.setItem(cacheKey,JSON.stringify(data));}catch(e){}}
+          }else if(cached){
+            applySettings(cached);
+          }else{
+            document.documentElement.classList.add('storekit-theme-ready');
           }
         })
         .catch(function(){
+          if(timeout)clearTimeout(timeout);
           if(cached) applySettings(cached);
+          else document.documentElement.classList.add('storekit-theme-ready');
         });
     })();
     </script>
