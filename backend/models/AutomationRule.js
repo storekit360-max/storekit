@@ -9,11 +9,11 @@ const mongoose = require('mongoose');
 
 const automationRuleSchema = new mongoose.Schema(
   {
+    tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
     trigger: {
       type: String,
       enum: ['new_product', 'product_discount', 'offer_active', 'manual'],
       required: true,
-      unique: true,
     },
     label: {
       type: String,
@@ -47,5 +47,7 @@ const automationRuleSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+automationRuleSchema.index({ tenantId: 1, trigger: 1 }, { unique: true });
 
 module.exports = mongoose.model('AutomationRule', automationRuleSchema);

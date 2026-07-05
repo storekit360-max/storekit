@@ -31,8 +31,8 @@ const bcrypt   = require('bcryptjs');
 const userSchema = new mongoose.Schema({
   firstName:  { type: String, required: true },
   lastName:   { type: String, default: '' },
-  username:   { type: String, required: true, unique: true },
-  email:      { type: String, required: true, unique: true },
+  username:   { type: String, required: true },
+  email:      { type: String, required: true, lowercase: true, trim: true },
   password:   { type: String, required: true },
   phone:      { type: String },
   role:       { type: String, enum: ['customer', 'admin', 'superadmin'], default: 'customer' },
@@ -62,6 +62,9 @@ const userSchema = new mongoose.Schema({
   //   null means "not locked".  Expires automatically when the date passes.
   lockUntil: { type: Date, default: null },
 });
+
+userSchema.index({ tenantId: 1, email: 1 }, { unique: true });
+userSchema.index({ tenantId: 1, username: 1 }, { unique: true });
 
 // ─── Password hashing hook ────────────────────────────────────────────────────
 // UNCHANGED from original.

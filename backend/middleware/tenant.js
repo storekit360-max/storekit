@@ -39,8 +39,27 @@ async function resolveTenant(req, res, next) {
   }
 }
 
-function optionalTenant(req, _res, next) {
-  resolveTenant(req, { status: () => ({ json: () => next() }) }, next).catch(() => next());
+async function optionalTenant(req, _res, next) {
+  try {
+    const domain = normalizeDomain(
+      req.headers['x-tenant-domain'] ||
+      req.headers['x-forwarded-host'] ||
+      req.headers.host
+    );
+    const lookupDomains = Array.from(new Set([domain, domain === 'localhost' ? '127.0.0.1' : 'localhost']));
+    const tenant = await Tenant.findOne({
+      status: 'active',
+      domains: { $elemMatch: { domain: { $in: lookupDomains }, active: true } },
+    }).populate('plan');
+    if (tenant) {
+      req.tenant = tenant;
+      req.tenantId = tenant._id;
+      req.plan = tenant.plan;
+    }
+  } catch (_) {
+    // Optional tenant resolution must never block auth/superadmin flows.
+  }
+  next();
 }
 
 function requireFeature(featureName) {

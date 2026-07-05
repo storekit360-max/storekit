@@ -37,6 +37,7 @@ const templateSchema = new mongoose.Schema({
 
 // ─── Root document (one doc per shop) ────────────────────────────────────────
 const socialMediaSchema = new mongoose.Schema({
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   // platforms
   facebook:   { type: accountSchema, default: () => ({}) },
   instagram:  { type: accountSchema, default: () => ({}) },

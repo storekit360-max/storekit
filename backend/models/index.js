@@ -2,8 +2,9 @@ const mongoose = require('mongoose');
 
 // Category
 const categorySchema = new mongoose.Schema({
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   name: { type: String, required: true },
-  slug: { type: String, unique: true },
+  slug: { type: String, required: true },
   description: String,
   image: String,
   parent: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', default: null },
@@ -11,6 +12,7 @@ const categorySchema = new mongoose.Schema({
   sortOrder: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now }
 });
+categorySchema.index({ tenantId: 1, slug: 1 }, { unique: true });
 categorySchema.pre('save', function(next) {
   if (!this.slug) this.slug = this.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g,'');
   next();
@@ -19,7 +21,8 @@ const Category = mongoose.model('Category', categorySchema);
 
 // Coupon
 const couponSchema = new mongoose.Schema({
-  code: { type: String, required: true, unique: true, uppercase: true },
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
+  code: { type: String, required: true, uppercase: true },
   description: String,
   type: { type: String, enum: ['percentage', 'fixed'], required: true },
   value: { type: Number, required: true },
@@ -53,10 +56,12 @@ const couponSchema = new mongoose.Schema({
   usedByEmails: [{ type: String, lowercase: true, trim: true }],
   createdAt: { type: Date, default: Date.now }
 });
+couponSchema.index({ tenantId: 1, code: 1 }, { unique: true });
 const Coupon = mongoose.model('Coupon', couponSchema);
 
 // Banner - Enhanced with full banner system support
 const bannerSchema = new mongoose.Schema({
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   title: String,
   subtitle: String,
   image: String,
@@ -93,6 +98,7 @@ const Banner = mongoose.model('Banner', bannerSchema);
 
 // Review
 const reviewSchema = new mongoose.Schema({
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   order: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', required: true },
@@ -108,6 +114,7 @@ const Review = mongoose.model('Review', reviewSchema);
 
 // Notification
 const notificationSchema = new mongoose.Schema({
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   type: {
     type: String,
     enum: [
@@ -128,16 +135,19 @@ const Notification = mongoose.model('Notification', notificationSchema);
 
 // Settings
 const settingsSchema = new mongoose.Schema({
-  key: { type: String, unique: true, required: true },
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
+  key: { type: String, required: true },
   value: mongoose.Schema.Types.Mixed,
   group: { type: String, default: 'general' },
   updatedAt: { type: Date, default: Date.now }
 });
+settingsSchema.index({ tenantId: 1, key: 1 }, { unique: true });
 const Settings = mongoose.model('Settings', settingsSchema);
 
 // GiftCard
 const giftCardSchema = new mongoose.Schema({
-  code: { type: String, unique: true, uppercase: true, required: true },
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
+  code: { type: String, uppercase: true, required: true },
   initialValue: { type: Number, required: true },
   balance: { type: Number, required: true },
   purchasedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -170,11 +180,13 @@ const giftCardSchema = new mongoose.Schema({
   rejectedAt: Date,
   createdAt: { type: Date, default: Date.now }
 });
+giftCardSchema.index({ tenantId: 1, code: 1 }, { unique: true });
 const GiftCard = mongoose.model('GiftCard', giftCardSchema);
 
 // ── ReturnRequest ─────────────────────────────────────────────────────────────
 // ENHANCED: item condition tracking, courier charge deduction, order integration
 const returnRequestSchema = new mongoose.Schema({
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   order: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', required: true },
   customer: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   customerEmail: String,
@@ -228,6 +240,7 @@ const ReturnRequest = mongoose.model('ReturnRequest', returnRequestSchema);
 
 // OTP
 const otpSchema = new mongoose.Schema({
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   email: { type: String, required: true },
   otp: { type: String, required: true },
   expiresAt: { type: Date, required: true },
@@ -238,6 +251,7 @@ const OTP = mongoose.model('OTP', otpSchema);
 
 // SeasonalCampaign
 const seasonalCampaignSchema = new mongoose.Schema({
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   name: { type: String, required: true },
   type: { type: String, enum: ['new_year','christmas','black_friday','valentines','easter','halloween','eid','flash_sale','coupon','custom'], default: 'custom' },
   isActive: { type: Boolean, default: false },
@@ -282,7 +296,8 @@ const SeasonalCampaign = mongoose.model('SeasonalCampaign', seasonalCampaignSche
 
 // PaymentGateway config
 const paymentGatewaySchema = new mongoose.Schema({
-  gateway: { type: String, required: true, unique: true },
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
+  gateway: { type: String, required: true },
   isEnabled: { type: Boolean, default: false },
   isLive: { type: Boolean, default: false },
   displayName: String,
@@ -292,10 +307,12 @@ const paymentGatewaySchema = new mongoose.Schema({
   supportedCurrencies: [String],
   updatedAt: { type: Date, default: Date.now }
 });
+paymentGatewaySchema.index({ tenantId: 1, gateway: 1 }, { unique: true });
 const PaymentGateway = mongoose.model('PaymentGateway', paymentGatewaySchema);
 
 // DeliveryService
 const deliveryServiceSchema = new mongoose.Schema({
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   name: { type: String, required: true },
   code: { type: String, required: true, unique: true },
   isEnabled: { type: Boolean, default: false },
@@ -327,7 +344,8 @@ const DeliveryService = mongoose.model('DeliveryService', deliveryServiceSchema)
 
 // BusinessPage
 const businessPageSchema = new mongoose.Schema({
-  slug: { type: String, required: true, unique: true },
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
+  slug: { type: String, required: true },
   title: { type: String, required: true },
   content: String,
   metaTitle: String,
@@ -338,16 +356,19 @@ const businessPageSchema = new mongoose.Schema({
   sortOrder: { type: Number, default: 0 },
   updatedAt: { type: Date, default: Date.now }
 });
+businessPageSchema.index({ tenantId: 1, slug: 1 }, { unique: true });
 const BusinessPage = mongoose.model('BusinessPage', businessPageSchema);
 
 // Newsletter subscriber
 const subscriberSchema = new mongoose.Schema({
-  email: { type: String, required: true, unique: true },
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
+  email: { type: String, required: true },
   name: String,
   isActive: { type: Boolean, default: true },
   source: { type: String, default: 'website' },
   createdAt: { type: Date, default: Date.now }
 });
+subscriberSchema.index({ tenantId: 1, email: 1 }, { unique: true });
 const Subscriber = mongoose.model('Subscriber', subscriberSchema);
 
 module.exports = {

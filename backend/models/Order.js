@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   orderNumber: { type: String, unique: true },
   customer: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   guestInfo: {

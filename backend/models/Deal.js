@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const dealSchema = new mongoose.Schema({
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   title:       { type: String, required: true },
   subtitle:    { type: String, default: '' },
   type:        { type: String, enum: ['today', 'weekly', 'custom'], default: 'today' },

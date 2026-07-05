@@ -39,6 +39,7 @@ const bcrypt   = require('bcryptjs');
 const { OAuth2Client } = require('google-auth-library');
 const User     = require('../models/User');
 const { auth, generateToken, recordFailedLogin, clearFailedLogin, isAccountLocked } = require('../middleware/auth');
+const { optionalTenant } = require('../middleware/tenant');
 const { Notification, OTP, Coupon } = require('../models/index');
 const { sendMail, otpEmailHtml }    = require('../utils/mailer');
 
@@ -77,22 +78,27 @@ router.post('/register', async (req, res, next) => {
       return res.status(400).json({ message: 'Password is too weak', errors: pwCheck.errors });
     }
 
-    const exists = await User.findOne({ $or: [{ email }, { username }] });
+    if (!req.tenantId) return res.status(400).json({ message: 'Store tenant could not be resolved for this domain' });
+
+    const normalizedEmail = String(email || '').toLowerCase().trim();
+    const exists = await User.findOne({ tenantId: req.tenantId, $or: [{ email: normalizedEmail }, { username }] });
     if (exists) {
       return res.status(400).json({
         message: exists.email === email ? 'Email already registered' : 'Username already taken',
       });
     }
 
-    const user = await User.create({ firstName, lastName, username, email, password, phone });
+    const user = await User.create({ firstName, lastName, username, email: normalizedEmail, password, phone, tenantId: req.tenantId });
 
     const newUserCoupon = await Coupon.findOne({
+      tenantId: req.tenantId,
       isNewUserOnly: true,
       isActive:      true,
       validUntil:    { $gte: new Date() },
     });
 
     await Notification.create({
+      tenantId: req.tenantId,
       type:    'new_user',
       title:   'New Customer Registered',
       message: `${firstName} ${lastName} just created an account`,
@@ -118,14 +124,20 @@ router.post('/register', async (req, res, next) => {
 router.post('/login', async (req, res, next) => {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = String(email || '').toLowerCase().trim();
 
     // SECURITY: Find user; if not found, run a dummy bcrypt compare to make
     //           timing indistinguishable from a wrong-password scenario.
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: normalizedEmail });
 
     if (!user) {
       // SECURITY: Timing-safe — always do a bcrypt comparison so response time
       //           is the same whether the email exists or not.
+      await bcrypt.compare(password || '', DUMMY_HASH).catch(() => {});
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    if (!sameTenant(user, req.tenantId)) {
       await bcrypt.compare(password || '', DUMMY_HASH).catch(() => {});
       return res.status(401).json({ message: 'Invalid email or password' });
     }
@@ -194,13 +206,18 @@ router.post('/google', async (req, res, next) => {
     const { email, given_name, family_name, picture, sub: googleId } = payload;
 
     let user = await User.findOne({ googleId });
-    if (!user) user = await User.findOne({ email });
+    if (!user) user = await User.findOne({ email: String(email || '').toLowerCase().trim() });
+
+    if (user && !sameTenant(user, req.tenantId)) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
 
     if (!user) {
+      if (!req.tenantId) return res.status(400).json({ message: 'Store tenant could not be resolved for this domain' });
       const base = (email.split('@')[0]).replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20) || 'user';
       let username = base;
       let attempt  = 0;
-      while (await User.findOne({ username })) {
+      while (await User.findOne({ tenantId: req.tenantId, username })) {
         attempt++;
         username = `${base}_${attempt}`;
       }
@@ -209,7 +226,8 @@ router.post('/google', async (req, res, next) => {
         firstName:  given_name  || 'User',
         lastName:   family_name || '',
         username,
-        email,
+        email: String(email || '').toLowerCase().trim(),
+        tenantId: req.tenantId,
         password:   crypto.randomBytes(32).toString('hex'),
         googleId,
         avatar:     picture || '',

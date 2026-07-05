@@ -9,6 +9,8 @@ const mongoose = require('mongoose');
 
 const publishLogSchema = new mongoose.Schema(
   {
+    tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
+
     // ── What fired this ─────────────────────────────────────────────────────
     trigger: {
       type:    String,
