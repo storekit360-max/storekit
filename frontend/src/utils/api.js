@@ -22,17 +22,95 @@ const API = axios.create({
   withCredentials: true,
 });
 
+
+// ─── Lightweight in-memory GET cache ─────────────────────────────────────────
+// Reduces repeated admin/storefront requests in the same browser session.
+// It is tenant-aware because the cache key includes window.location.hostname.
+const LONG_GET_CACHE_TTL = 5 * 60 * 1000;
+const getCache = new Map();
+
+const normalizeUrl = (url = '') => String(url).replace(/\?.*$/, '');
+const tenantCacheKey = (config = {}) => {
+  let host = 'server';
+  try { host = window.location.hostname || 'default'; } catch (_) {}
+  const method = (config.method || 'get').toLowerCase();
+  const url = config.url || '';
+  const params = config.params ? JSON.stringify(config.params) : '';
+  return `${host}:${method}:${url}:${params}`;
+};
+
+const getCacheTTL = (config = {}) => {
+  if (config.cacheTTL === false || config.skipCache) return 0;
+  if (typeof config.cacheTTL === 'number') return config.cacheTTL;
+  const url = normalizeUrl(config.url);
+  if ([
+    '/settings',
+    '/products',
+    '/categories',
+    '/banners',
+    '/pages',
+    '/social-media/public',
+    '/whatsapp/config',
+    '/seasonal/active',
+    '/deals',
+  ].includes(url)) return LONG_GET_CACHE_TTL;
+  return 0;
+};
+
+export function clearApiCache(pattern) {
+  if (!pattern) { getCache.clear(); return; }
+  for (const key of Array.from(getCache.keys())) {
+    if (key.includes(pattern)) getCache.delete(key);
+  }
+}
+
 API.interceptors.request.use(config => {
   const token = localStorage.getItem('token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   if (typeof window !== 'undefined') {
     config.headers['X-Tenant-Domain'] = window.location.hostname;
   }
+
+  if ((config.method || 'get').toLowerCase() === 'get') {
+    const ttl = getCacheTTL(config);
+    if (ttl > 0) {
+      const key = tenantCacheKey(config);
+      const cached = getCache.get(key);
+      if (cached && cached.expiresAt > Date.now()) {
+        config.adapter = async () => ({
+          data: cached.data,
+          status: 200,
+          statusText: 'OK',
+          headers: cached.headers || {},
+          config,
+          request: null,
+        });
+      }
+      config.__cacheKey = key;
+      config.__cacheTTL = ttl;
+    }
+  }
+
   return config;
 });
 
 API.interceptors.response.use(
-  res => res,
+  res => {
+    if (res.config?.__cacheKey && res.config?.__cacheTTL) {
+      getCache.set(res.config.__cacheKey, {
+        data: res.data,
+        headers: res.headers,
+        expiresAt: Date.now() + res.config.__cacheTTL,
+      });
+    }
+
+    const method = (res.config?.method || 'get').toLowerCase();
+    if (['post', 'put', 'patch', 'delete'].includes(method)) {
+      clearApiCache();
+    }
+
+    return res;
+  },
   err => {
     if (err.response?.status === 401) {
       localStorage.removeItem('token');

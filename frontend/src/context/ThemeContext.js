@@ -64,6 +64,50 @@ export const THEME_CATEGORIES = {
   minimal: { label: '✨ Minimal', themes: ['snow','lavender','monochrome'] },
 };
 
+
+/* ── Storefront UI template catalogue (20+ complete visual systems) ────────
+   These are CSS-driven templates. They do not change APIs, DB schema, routes,
+   cart/auth logic, or component contracts. Admin can save `storeTemplate` via
+   existing /api/settings key-value settings, then ThemeContext applies it as
+   <html data-store-template="...">.
+*/
+export const STORE_TEMPLATES = {
+  classic:       { name: 'Classic Commerce', category: 'general', description: 'Balanced storefront for any catalogue.' },
+  modern:        { name: 'Modern Cards', category: 'general', description: 'Clean cards, soft shadows, modern spacing.' },
+  minimal:       { name: 'Minimal Studio', category: 'minimal', description: 'White-space focused premium layout.' },
+  luxury:        { name: 'Luxury Boutique', category: 'premium', description: 'Elegant premium boutique treatment.' },
+  fashion:       { name: 'Fashion Editorial', category: 'retail', description: 'Editorial-style product presentation.' },
+  electronics:   { name: 'Electronics Pro', category: 'retail', description: 'Tech-focused compact product grid.' },
+  mobile:        { name: 'Mobile Gadget', category: 'retail', description: 'Fast, dense, device-focused layout.' },
+  grocery:       { name: 'Grocery Fresh', category: 'retail', description: 'Friendly fresh-market interface.' },
+  beauty:        { name: 'Beauty Glow', category: 'retail', description: 'Soft rounded beauty store design.' },
+  furniture:     { name: 'Furniture Living', category: 'retail', description: 'Large cards for lifestyle catalogues.' },
+  jewelry:       { name: 'Jewelry Luxe', category: 'premium', description: 'High-end product focus with refined spacing.' },
+  sports:        { name: 'Sports Active', category: 'retail', description: 'Bold, energetic sports-store visual system.' },
+  automotive:    { name: 'Automotive Dark', category: 'retail', description: 'Strong dark performance look.' },
+  kids:          { name: 'Kids Playful', category: 'retail', description: 'Bright, friendly rounded UI.' },
+  books:         { name: 'Bookstore Calm', category: 'minimal', description: 'Readable calm catalogue style.' },
+  pharmacy:      { name: 'Pharmacy Clean', category: 'professional', description: 'Trust-focused clean medical retail.' },
+  b2b:           { name: 'B2B Wholesale', category: 'professional', description: 'Dense practical catalogue layout.' },
+  marketplace:   { name: 'Marketplace Grid', category: 'general', description: 'High-density multi-category storefront.' },
+  neon:          { name: 'Neon Cyber', category: 'dark', description: 'Dark cyber-style storefront.' },
+  organic:       { name: 'Organic Nature', category: 'retail', description: 'Natural soft eco-store style.' },
+  premiumApple:  { name: 'Premium Apple', category: 'premium', description: 'Apple-inspired spacing and glass effects.' },
+  sriLanka:      { name: 'Sri Lanka Retail', category: 'local', description: 'Local ecommerce style for Sri Lankan stores.' },
+  wholesale:     { name: 'Wholesale Deals', category: 'b2b', description: 'Offer-first layout with compact cards.' },
+  startup:       { name: 'Startup Store', category: 'modern', description: 'SaaS-like modern retail style.' },
+};
+
+export const TEMPLATE_CATEGORIES = {
+  general:      { label: 'General', templates: ['classic','modern','marketplace'] },
+  retail:       { label: 'Retail', templates: ['fashion','electronics','mobile','grocery','beauty','furniture','sports','kids','organic'] },
+  premium:      { label: 'Premium', templates: ['luxury','jewelry','premiumApple'] },
+  professional: { label: 'Professional', templates: ['pharmacy','b2b','wholesale'] },
+  minimal:      { label: 'Minimal', templates: ['minimal','books'] },
+  dark:         { label: 'Dark', templates: ['neon','automotive'] },
+  local:        { label: 'Local', templates: ['sriLanka','startup'] },
+};
+
 /* ── Font catalogue (10 fonts) ──────────────────────────────────────────── */
 export const FONTS = {
   default:  { name:'Playfair + DM Sans',       display:"'Playfair Display',serif",      body:"'DM Sans',sans-serif",          url:'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;900&family=DM+Sans:wght@300;400;500;600;700&display=swap' },
@@ -90,6 +134,34 @@ const readCache = () => {
 };
 export const writeCache = (data) => {
   try { localStorage.setItem(getTenantThemeCacheKey(), JSON.stringify(data)); } catch {}
+};
+
+
+const templateMetrics = {
+  classic:      { radius:'20px', shadow:'0 18px 45px rgba(15,23,42,0.10)', gap:'1.25rem' },
+  modern:       { radius:'24px', shadow:'0 22px 60px rgba(15,23,42,0.12)', gap:'1.5rem' },
+  minimal:      { radius:'12px', shadow:'0 1px 0 rgba(15,23,42,0.08)', gap:'2rem' },
+  luxury:       { radius:'28px', shadow:'0 30px 90px rgba(15,23,42,0.18)', gap:'2rem' },
+  fashion:      { radius:'6px',  shadow:'0 20px 55px rgba(15,23,42,0.12)', gap:'1.75rem' },
+  electronics:  { radius:'18px', shadow:'0 18px 50px rgba(2,6,23,0.16)', gap:'1rem' },
+  mobile:       { radius:'18px', shadow:'0 14px 40px rgba(15,23,42,0.12)', gap:'0.9rem' },
+  grocery:      { radius:'22px', shadow:'0 14px 35px rgba(22,101,52,0.10)', gap:'1rem' },
+  beauty:       { radius:'32px', shadow:'0 24px 70px rgba(219,39,119,0.12)', gap:'1.5rem' },
+  furniture:    { radius:'10px', shadow:'0 26px 75px rgba(67,20,7,0.12)', gap:'2rem' },
+  jewelry:      { radius:'999px', shadow:'0 28px 85px rgba(15,23,42,0.20)', gap:'2rem' },
+  sports:       { radius:'14px', shadow:'0 18px 55px rgba(15,23,42,0.16)', gap:'1rem' },
+  automotive:   { radius:'8px',  shadow:'0 28px 75px rgba(0,0,0,0.28)', gap:'1rem' },
+  kids:         { radius:'30px', shadow:'0 18px 45px rgba(15,23,42,0.10)', gap:'1.25rem' },
+  books:        { radius:'8px',  shadow:'0 12px 35px rgba(15,23,42,0.08)', gap:'1.6rem' },
+  pharmacy:     { radius:'16px', shadow:'0 14px 40px rgba(15,118,110,0.10)', gap:'1.2rem' },
+  b2b:          { radius:'10px', shadow:'0 10px 30px rgba(15,23,42,0.10)', gap:'0.75rem' },
+  marketplace:  { radius:'16px', shadow:'0 12px 36px rgba(15,23,42,0.10)', gap:'0.75rem' },
+  neon:         { radius:'18px', shadow:'0 0 35px var(--glow-primary)', gap:'1rem' },
+  organic:      { radius:'26px', shadow:'0 18px 50px rgba(77,124,15,0.12)', gap:'1.4rem' },
+  premiumApple: { radius:'30px', shadow:'0 30px 80px rgba(15,23,42,0.12)', gap:'2.25rem' },
+  sriLanka:     { radius:'18px', shadow:'0 18px 45px rgba(15,23,42,0.12)', gap:'1rem' },
+  wholesale:    { radius:'8px',  shadow:'0 10px 25px rgba(15,23,42,0.10)', gap:'0.65rem' },
+  startup:      { radius:'22px', shadow:'0 24px 70px rgba(15,23,42,0.12)', gap:'1.5rem' },
 };
 
 /* ── Core applyTheme ─────────────────────────────────────────────────── */
@@ -145,6 +217,13 @@ export const applyTheme = (settings) => {
     document.documentElement.classList.remove('dark-mode');
     document.body.style.removeProperty('color');
   }
+
+  const templateKey = settings?.storeTemplate || settings?.template || settings?.layoutTemplate || 'classic';
+  const safeTemplate = STORE_TEMPLATES[templateKey] ? templateKey : 'classic';
+  root.setAttribute('data-store-template', safeTemplate);
+  root.style.setProperty('--template-card-radius', templateMetrics[safeTemplate]?.radius || '20px');
+  root.style.setProperty('--template-card-shadow', templateMetrics[safeTemplate]?.shadow || '0 18px 45px rgba(15,23,42,0.10)');
+  root.style.setProperty('--template-section-gap', templateMetrics[safeTemplate]?.gap || '1.25rem');
 
   const fKey = settings?.fontStyle || settings?.fontFamily || 'default';
   const f    = FONTS[fKey] || FONTS.default;
@@ -203,7 +282,7 @@ export const ThemeProvider = ({ children }) => {
     // Don't overwrite a theme that was just saved (5s grace period)
     if (Date.now() - lastSaveRef.current < 5000) return;
     try {
-      const { data } = await API.get('/settings');
+      const { data } = await API.get('/settings', { cacheTTL: 5 * 60 * 1000 });
       if (!data || typeof data !== 'object' || Array.isArray(data)) return;
       if (!('storeName' in data || 'theme' in data)) return;
       setSettings(data);
@@ -249,17 +328,22 @@ export const ThemeProvider = ({ children }) => {
 
   useEffect(() => {
     loadAndApply();
-    // Retry quickly at first (backend may be starting), then slow down
-    const retry = () => {
-      loadAndApply();
+
+    // Low-usage mode: do not poll /api/settings every few seconds.
+    // Refresh only when the tab becomes active again and at a slow safety interval.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') loadAndApply();
     };
-    // Fast retries for first 30s (every 3s), then every 10s
-    const fast = setInterval(retry, 3000);
-    const slow = setTimeout(() => {
-      clearInterval(fast);
-      setInterval(loadAndApply, 10000);
-    }, 30000);
-    return () => { clearInterval(fast); clearTimeout(slow); };
+    document.addEventListener('visibilitychange', onVisible);
+
+    const slow = setInterval(() => {
+      if (document.visibilityState === 'visible') loadAndApply();
+    }, 5 * 60 * 1000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(slow);
+    };
   }, [loadAndApply]);
 
   const setDarkMode = useCallback((val) => {
@@ -296,7 +380,7 @@ export const ThemeProvider = ({ children }) => {
   }, [loadAndApply]);
 
   return (
-    <ThemeContext.Provider value={{ settings, themeKey, darkMode, setDarkMode, saveTheme, THEMES, THEME_CATEGORIES, FONTS, refreshTheme, applyTheme }}>
+    <ThemeContext.Provider value={{ settings, themeKey, darkMode, setDarkMode, saveTheme, THEMES, THEME_CATEGORIES, FONTS, STORE_TEMPLATES, TEMPLATE_CATEGORIES, refreshTheme, applyTheme }}>
       {children}
     </ThemeContext.Provider>
   );

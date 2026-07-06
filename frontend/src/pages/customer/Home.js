@@ -458,7 +458,7 @@ const CategoryCard = ({ cat }) => {
   },[]);
   return (
     <Link ref={ref} to={`/shop/${cat.slug}`}
-      className="flex flex-col items-center gap-2.5 p-3 sm:p-5 rounded-2xl border cursor-pointer"
+      className="category-card flex flex-col items-center gap-2.5 p-3 sm:p-5 rounded-2xl border cursor-pointer"
       style={{ background:'var(--card-bg)', borderColor:'var(--card-border)', transformStyle:'preserve-3d', willChange:'transform', transition:'border-color 0.3s,box-shadow 0.3s' }}
       onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--color-primary)';e.currentTarget.style.boxShadow='0 20px 60px rgba(0,0,0,0.1),0 0 0 2px var(--color-primary)';}}
       onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--card-border)';e.currentTarget.style.boxShadow='';}}>
@@ -644,6 +644,130 @@ const NewsletterSection = ({ settings }) => {
         </div>
       </div>
     </section>
+  );
+};
+
+
+
+/* ── Template-aware storefront layout renderer ─────────────────────────────
+   Uses the existing sections and API data, but changes the home page structure
+   based only on the selected store template. No API/schema/business change. */
+const normalizeTemplateKey = (settings = {}) => {
+  const key = settings.storeTemplate || settings.template || settings.layoutTemplate || 'classic';
+  return String(key || 'classic').replace(/[^a-zA-Z0-9_-]/g, '') || 'classic';
+};
+
+const TEMPLATE_HOME_PROFILES = {
+  classic:       { order:['hero','categories','featured','deals','promo','bestsellers','seasonal','new_arrivals','newsletter'], shell:'standard' },
+  modern:        { order:['hero','featured','categories','promo','new_arrivals','deals','bestsellers','newsletter'], shell:'floating' },
+  marketplace:   { order:['hero','categories','deals','featured','bestsellers','promo','new_arrivals','newsletter'], shell:'market' },
+  fashion:       { order:['hero','promo','featured','categories','new_arrivals','bestsellers','newsletter'], shell:'editorial' },
+  electronics:   { order:['hero','categories','featured','deals','bestsellers','promo','new_arrivals','newsletter'], shell:'tech' },
+  mobile:        { order:['hero','featured','deals','categories','bestsellers','new_arrivals','promo','newsletter'], shell:'tech' },
+  grocery:       { order:['categories','hero','deals','bestsellers','featured','new_arrivals','promo','newsletter'], shell:'quickshop' },
+  beauty:        { order:['hero','featured','promo','categories','new_arrivals','bestsellers','newsletter'], shell:'soft' },
+  furniture:     { order:['hero','categories','promo','featured','new_arrivals','deals','newsletter'], shell:'catalog' },
+  sports:        { order:['hero','bestsellers','categories','featured','promo','new_arrivals','newsletter'], shell:'dynamic' },
+  kids:          { order:['hero','categories','new_arrivals','featured','promo','deals','newsletter'], shell:'playful' },
+  organic:       { order:['hero','categories','featured','deals','new_arrivals','promo','newsletter'], shell:'natural' },
+  luxury:        { order:['hero','featured','promo','categories','new_arrivals','newsletter'], shell:'luxury' },
+  jewelry:       { order:['hero','featured','categories','promo','new_arrivals','newsletter'], shell:'luxury' },
+  premiumApple:  { order:['hero','featured','categories','new_arrivals','promo','newsletter'], shell:'apple' },
+  pharmacy:      { order:['categories','hero','featured','deals','new_arrivals','newsletter'], shell:'clinical' },
+  b2b:           { order:['categories','featured','hero','deals','new_arrivals','newsletter'], shell:'professional' },
+  wholesale:     { order:['deals','categories','featured','hero','new_arrivals','newsletter'], shell:'professional' },
+  minimal:       { order:['hero','featured','categories','new_arrivals','newsletter'], shell:'minimal' },
+  books:         { order:['categories','hero','featured','new_arrivals','promo','newsletter'], shell:'editorial' },
+  neon:          { order:['hero','featured','deals','categories','bestsellers','new_arrivals','newsletter'], shell:'neon' },
+  automotive:    { order:['hero','categories','featured','deals','promo','new_arrivals','newsletter'], shell:'garage' },
+  sriLanka:      { order:['hero','categories','deals','featured','promo','new_arrivals','newsletter'], shell:'local' },
+  startup:       { order:['hero','featured','categories','deals','new_arrivals','promo','newsletter'], shell:'startup' },
+};
+
+const TemplateSignature = ({ template, settings }) => {
+  const label = {
+    marketplace:'Marketplace Hub', fashion:'Editorial Collection', electronics:'Tech Storefront', mobile:'Smart Mobile Store',
+    grocery:'Fresh Daily Picks', beauty:'Beauty Studio', furniture:'Interior Showcase', sports:'Performance Store', kids:'Kids Corner',
+    organic:'Natural Market', luxury:'Luxury Boutique', jewelry:'Jewelry Atelier', premiumApple:'Minimal Premium', pharmacy:'Health Essentials',
+    b2b:'Business Catalogue', wholesale:'Wholesale Deals', minimal:'Minimal Store', books:'Book Shelf', neon:'Cyber Store',
+    automotive:'Auto Garage', sriLanka:'Local Sri Lankan Store', startup:'Startup Shop', modern:'Modern Retail', classic:'Classic Retail'
+  }[template] || 'Storefront';
+
+  return (
+    <div className="template-signature" aria-hidden="true">
+      <span>{label}</span>
+      <strong>{settings?.storeName || 'StoreKit'}</strong>
+    </div>
+  );
+};
+
+const TemplateHomeRenderer = ({ settings, isOn, sections, orderedIds }) => {
+  const template = normalizeTemplateKey(settings);
+  const profile = TEMPLATE_HOME_PROFILES[template] || TEMPLATE_HOME_PROFILES.classic;
+  const preferredOrder = profile.order || orderedIds;
+  const finalOrder = preferredOrder.filter(id => id !== 'hero' && isOn(id));
+  const renderSection = (id) => sections[id] || null;
+
+  if (profile.shell === 'market') {
+    return (
+      <div className={`storefront-template-home template-home-${template} template-shell-${profile.shell}`} style={{ background:'var(--body-bg)' }}>
+        <TemplateSignature template={template} settings={settings}/>
+        <div className="template-market-hero">{isOn('hero') && renderSection('hero')}</div>
+        <TrustBar settings={settings}/>
+        <div className="template-market-stack">
+          {finalOrder.map(id => <div key={id} className={`template-section template-section-${id}`}>{renderSection(id)}</div>)}
+        </div>
+        <div className="h-6"/>
+      </div>
+    );
+  }
+
+  if (profile.shell === 'professional') {
+    return (
+      <div className={`storefront-template-home template-home-${template} template-shell-${profile.shell}`} style={{ background:'var(--body-bg)' }}>
+        <TemplateSignature template={template} settings={settings}/>
+        <div className="template-professional-grid">
+          <aside className="template-professional-sidebar">
+            {renderSection('categories')}
+            {renderSection('deals')}
+          </aside>
+          <main className="template-professional-main">
+            {isOn('hero') && renderSection('hero')}
+            <TrustBar settings={settings}/>
+            {finalOrder.filter(id => !['categories','deals'].includes(id)).map(id => <div key={id} className={`template-section template-section-${id}`}>{renderSection(id)}</div>)}
+          </main>
+        </div>
+        <div className="h-6"/>
+      </div>
+    );
+  }
+
+  if (['luxury','editorial','catalog','apple','minimal'].includes(profile.shell)) {
+    return (
+      <div className={`storefront-template-home template-home-${template} template-shell-${profile.shell}`} style={{ background:'var(--body-bg)' }}>
+        <TemplateSignature template={template} settings={settings}/>
+        {isOn('hero') && <div className="template-hero-frame">{renderSection('hero')}</div>}
+        <TrustBar settings={settings}/>
+        <div className="template-editorial-flow">
+          {finalOrder.map((id, index) => (
+            <div key={id} className={`template-section template-section-${id} template-section-index-${index}`}>{renderSection(id)}</div>
+          ))}
+        </div>
+        <div className="h-6"/>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`storefront-template-home template-home-${template} template-shell-${profile.shell || 'standard'}`} style={{ background:'var(--body-bg)' }}>
+      <TemplateSignature template={template} settings={settings}/>
+      {isOn('hero') && renderSection('hero')}
+      <TrustBar settings={settings}/>
+      <div className="template-standard-flow">
+        {finalOrder.map(id => <div key={id} className={`template-section template-section-${id}`}>{renderSection(id)}</div>)}
+      </div>
+      <div className="h-6"/>
+    </div>
   );
 };
 
@@ -1011,16 +1135,11 @@ export default function Home() {
   }
 
   return (
-    <div className="mesh-bg" style={{ background:'var(--body-bg)' }}>
-      {/* Always show trust bar after hero */}
-      {isOn('hero') && SECTIONS.hero}
-      <TrustBar settings={settings}/>
-
-      {/* Render sections in admin-defined order */}
-      {orderedIds.filter(id=>id!=='hero').map(id => SECTIONS[id] || null)}
-
-    
-      <div className="h-6"/>
-    </div>
+    <TemplateHomeRenderer
+      settings={settings}
+      isOn={isOn}
+      sections={SECTIONS}
+      orderedIds={orderedIds}
+    />
   );
 }

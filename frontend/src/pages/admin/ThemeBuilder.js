@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { THEMES, THEME_CATEGORIES, FONTS, applyTheme, writeCache } from '../../context/ThemeContext';
+import { THEMES, THEME_CATEGORIES, FONTS, STORE_TEMPLATES, TEMPLATE_CATEGORIES, applyTheme, writeCache } from '../../context/ThemeContext';
 import { useTheme } from '../../context/ThemeContext';
 import API from '../../utils/api';
 import toast from 'react-hot-toast';
@@ -16,6 +16,28 @@ const ColorSwatch = ({ color, onChange, label }) => (
       <p className="text-xs text-gray-400 font-mono">{color}</p>
     </div>
   </div>
+);
+
+
+const TemplateCard = ({ id, template, active, onSelect }) => (
+  <button type="button" onClick={() => onSelect(id)}
+    className={`text-left relative overflow-hidden rounded-2xl border-2 bg-white transition-all ${active ? 'border-primary shadow-lg scale-[1.02]' : 'border-gray-100 hover:border-gray-200 hover:shadow-md'}`}>
+    <div className={`h-24 p-3 store-template-preview store-template-preview-${id}`}>
+      <div className="preview-hero" />
+      <div className="preview-grid">
+        <span /><span /><span />
+      </div>
+    </div>
+    <div className="p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-sm font-bold text-gray-900">{template.name}</p>
+          <p className="text-xs text-gray-500 mt-1 leading-snug">{template.description}</p>
+        </div>
+        {active && <span className="text-primary font-bold text-sm">✓</span>}
+      </div>
+    </div>
+  </button>
 );
 
 const ThemeCard = ({ id, theme, active, onSelect }) => (
@@ -39,6 +61,7 @@ export default function ThemeBuilder() {
   const { settings, themeKey, darkMode, setDarkMode, refreshTheme } = useTheme();
   const [activeTab, setActiveTab] = useState('themes');
   const [selectedTheme, setSelectedTheme] = useState(themeKey || 'default');
+  const [selectedTemplate, setSelectedTemplate] = useState(settings?.storeTemplate || settings?.template || settings?.layoutTemplate || 'classic');
   const [selectedFont, setSelectedFont] = useState(settings?.fontStyle || 'default');
   const [customColors, setCustomColors] = useState({
     primary: settings?.primaryColor || THEMES[themeKey || 'default']?.primary || '#b5451b',
@@ -49,8 +72,9 @@ export default function ThemeBuilder() {
   const [customCSS, setCustomCSS] = useState(settings?.customCSS || '');
   const [saving, setSaving] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [templateFilter, setTemplateFilter] = useState('all');
 
-  const applyPreview = useCallback((themeId, font, colors, dark) => {
+  const applyPreview = useCallback((themeId, font, colors, dark, template = selectedTemplate) => {
     const merged = {
       ...settings,
       theme: themeId,
@@ -60,11 +84,12 @@ export default function ThemeBuilder() {
       primaryLightColor: colors.primaryLight,
       secondaryColor: colors.accent,
       darkMode: dark,
+      storeTemplate: template,
       customCSS,
     };
     applyTheme(merged);
     writeCache(merged);
-  }, [settings, customCSS]);
+  }, [settings, customCSS, selectedTemplate]);
 
   const handleThemeSelect = (id) => {
     setSelectedTheme(id);
@@ -82,6 +107,12 @@ export default function ThemeBuilder() {
   const handleFontSelect = (key) => {
     setSelectedFont(key);
     applyPreview(selectedTheme, key, customColors, darkMode);
+  };
+
+
+  const handleTemplateSelect = (id) => {
+    setSelectedTemplate(id);
+    applyPreview(selectedTheme, selectedFont, customColors, darkMode, id);
   };
 
   const handleColorChange = (key, val) => {
@@ -106,6 +137,7 @@ export default function ThemeBuilder() {
         primaryLightColor: customColors.primaryLight,
         secondaryColor: customColors.accent,
         darkMode,
+        storeTemplate: selectedTemplate,
         customCSS,
       };
       await API.put('/settings', payload);
@@ -130,8 +162,13 @@ export default function ThemeBuilder() {
     ? Object.entries(THEMES)
     : (THEME_CATEGORIES[categoryFilter]?.themes || []).map(id => [id, THEMES[id]]);
 
+  const displayTemplates = templateFilter === 'all'
+    ? Object.entries(STORE_TEMPLATES)
+    : (TEMPLATE_CATEGORIES[templateFilter]?.templates || []).map(id => [id, STORE_TEMPLATES[id]]);
+
   const tabs = [
     { id: 'themes', label: '🎨 Themes', icon: '🎨' },
+    { id: 'templates', label: '🧩 Templates', icon: '🧩' },
     { id: 'fonts', label: '🔤 Fonts', icon: '🔤' },
     { id: 'colors', label: '🖌️ Colors', icon: '🖌️' },
     { id: 'mode', label: '🌙 Mode', icon: '🌙' },
@@ -167,7 +204,7 @@ export default function ThemeBuilder() {
             <p className="text-sm font-bold text-gray-900" style={{ fontFamily: FONTS[selectedFont]?.display }}>
               {THEMES[selectedTheme]?.name}
             </p>
-            <p className="text-xs text-gray-400">{FONTS[selectedFont]?.name}</p>
+            <p className="text-xs text-gray-400">{FONTS[selectedFont]?.name} · {STORE_TEMPLATES[selectedTemplate]?.name}</p>
           </div>
           <div className="flex gap-2 ml-auto">
             {[customColors.primary, customColors.primaryLight, customColors.accent].map((c, i) => (
@@ -209,6 +246,34 @@ export default function ThemeBuilder() {
           <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
             {displayThemes.map(([id, theme]) => theme && (
               <ThemeCard key={id} id={id} theme={theme} active={selectedTheme === id} onSelect={handleThemeSelect} />
+            ))}
+          </div>
+        </div>
+      )}
+
+
+      {/* ── TEMPLATES TAB ── */}
+      {activeTab === 'templates' && (
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
+            <p className="text-sm font-semibold text-blue-900">Storefront UI Templates</p>
+            <p className="text-xs text-blue-700 mt-1">Templates change the storefront visual system with CSS only: cards, radius, shadows, density, hero feel and product-grid style. No backend API, database, auth or checkout logic is changed.</p>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            <button onClick={() => setTemplateFilter('all')}
+              className={`flex-shrink-0 text-xs font-medium px-4 py-1.5 rounded-full transition-all ${templateFilter === 'all' ? 'bg-primary text-white' : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+              All ({Object.keys(STORE_TEMPLATES).length})
+            </button>
+            {Object.entries(TEMPLATE_CATEGORIES).map(([id, cat]) => (
+              <button key={id} onClick={() => setTemplateFilter(id)}
+                className={`flex-shrink-0 text-xs font-medium px-4 py-1.5 rounded-full transition-all ${templateFilter === id ? 'bg-primary text-white' : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                {cat.label}
+              </button>
+            ))}
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {displayTemplates.map(([id, template]) => template && (
+              <TemplateCard key={id} id={id} template={template} active={selectedTemplate === id} onSelect={handleTemplateSelect} />
             ))}
           </div>
         </div>
