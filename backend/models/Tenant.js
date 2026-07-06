@@ -42,7 +42,23 @@ const tenantSchema = new mongoose.Schema({
   slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
   owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   plan: { type: mongoose.Schema.Types.ObjectId, ref: 'Plan', required: true },
-  status: { type: String, enum: ['active', 'suspended', 'pending'], default: 'active' },
+  status: { type: String, enum: ['active', 'suspended', 'pending', 'expired'], default: 'active' },
+  subscription: {
+    status: { type: String, enum: ['trialing', 'active', 'past_due', 'grace', 'expired', 'cancelled'], default: 'trialing' },
+    billingCycle: { type: String, enum: ['monthly', 'yearly', 'once'], default: 'monthly' },
+    trialStart: { type: Date, default: null },
+    trialEnd: { type: Date, default: null },
+    currentPeriodStart: { type: Date, default: null },
+    currentPeriodEnd: { type: Date, default: null },
+    graceUntil: { type: Date, default: null },
+    autoRenew: { type: Boolean, default: true },
+    cancelAtPeriodEnd: { type: Boolean, default: false },
+    lastInvoice: { type: mongoose.Schema.Types.ObjectId, ref: 'SubscriptionInvoice', default: null },
+    lastPaymentStatus: { type: String, enum: ['none', 'pending', 'succeeded', 'failed'], default: 'none' },
+    failedPaymentCount: { type: Number, default: 0 },
+    couponCode: { type: String, default: '' },
+    suspendedReason: { type: String, default: '' },
+  },
   domains: { type: [domainSchema], default: [] },
 
   // Tenant settings/theme must be flexible because admin Settings + Theme Builder
@@ -55,4 +71,4 @@ const tenantSchema = new mongoose.Schema({
 
 tenantSchema.index({ 'domains.domain': 1 }, { unique: true, sparse: true });
 
-module.exports = mongoose.model('Tenant', tenantSchema);
+module.exports = mongoose.models.Tenant || mongoose.model('Tenant', tenantSchema);

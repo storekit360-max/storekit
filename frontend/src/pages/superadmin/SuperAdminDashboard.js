@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import API from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
@@ -72,12 +72,13 @@ const emptyFeatures = FEATURE_CATALOG.reduce((acc, group) => {
 
 const emptyPlan = {
   name: '', description: '', price: 0, currency: 'LKR', billingCycle: 'monthly', active: true,
+  billing: { monthlyPrice: 0, yearlyPrice: 0, trialDays: 0, graceDays: 3, taxPercent: 0, autoRenew: true, allowMonthly: true, allowYearly: true, invoicePrefix: 'INV' },
   limits: { products: 100, ordersPerMonth: 500, admins: 2, storageMb: 500 },
   features: emptyFeatures,
 };
 
 const emptyTenant = {
-  storeName: '', slug: '', domain: '', plan: '', adminEmail: '', adminPassword: 'Admin@123456',
+  storeName: '', slug: '', domain: '', plan: '', billingCycle: 'monthly', couponCode: '', autoRenew: true, adminEmail: '', adminPassword: 'Admin@123456',
   adminFirstName: 'Store', adminLastName: 'Admin',
   settings: { currency: 'LKR', country: 'Sri Lanka', timezone: 'Asia/Colombo', whatsapp: '', phone: '', storeEmail: '', metaTitle: '', metaDescription: '' },
   theme: { primaryColor: '#6366f1', accentColor: '#22d3ee', darkColor: '#0f172a', fontFamily: 'Inter' },
@@ -86,6 +87,7 @@ const emptyTenant = {
 const TABS = [
   { key: 'overview', label: 'Overview', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
   { key: 'plans', label: 'Plans', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
+  { key: 'billing', label: 'Billing', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 4v16m8-8a8 8 0 11-16 0 8 8 0 0116 0z' },
   { key: 'tenants', label: 'Tenants', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
   { key: 'domains', label: 'Domains', icon: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0zM3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18 15 15 0 010-18z' },
 ];
@@ -109,13 +111,13 @@ export default function SuperAdminDashboard() {
 
   const selectedTenant = useMemo(() => tenants.find(t => t._id === selectedTenantId), [tenants, selectedTenantId]);
 
-  const notify = useCallback((type, text) => {
+  function notify(type, text) {
     setToast({ type, text });
     window.clearTimeout(notify._t);
     notify._t = window.setTimeout(() => setToast(null), 4000);
-  }, []);
+  }
 
-  const loadAll = useCallback(async () => {
+  async function loadAll() {
     setLoading(true);
     try {
       const [statsRes, plansRes, tenantsRes] = await Promise.all([
@@ -126,15 +128,16 @@ export default function SuperAdminDashboard() {
       setStats(statsRes.data);
       setPlans(plansRes.data);
       setTenants(tenantsRes.data);
-      setTenantForm(prev => (!prev.plan && plansRes.data[0]?._id) ? { ...prev, plan: plansRes.data[0]._id } : prev);
+      if (!tenantForm.plan && plansRes.data[0]?._id) setTenantForm(prev => ({ ...prev, plan: plansRes.data[0]._id }));
     } catch (err) {
       notify('error', err.response?.data?.message || err.message || 'Failed to load superadmin data');
     } finally {
       setLoading(false);
     }
-  }, [notify]);
+  }
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadAll(); }, []);
 
   function updatePlan(path, value) { setPlanForm(prev => setDeep(prev, path, value)); }
   function updateTenant(path, value) { setTenantForm(prev => setDeep(prev, path, value)); }
@@ -326,7 +329,14 @@ export default function SuperAdminDashboard() {
                   <Input label="Plan Name" value={planForm.name} onChange={v => updatePlan('name', v)} required />
                   <Input label="Price" type="number" value={planForm.price} onChange={v => updatePlan('price', Number(v))} />
                   <Input label="Currency" value={planForm.currency} onChange={v => updatePlan('currency', v)} />
+                  <label className="grid gap-1.5 text-xs font-semibold text-slate-600">Billing Cycle<select className="h-10 border border-slate-300 rounded-lg px-3 text-sm" value={planForm.billingCycle} onChange={e => updatePlan('billingCycle', e.target.value)}><option value="monthly">Monthly</option><option value="yearly">Yearly</option><option value="once">One-time</option></select></label>
                   <Input label="Description" value={planForm.description} onChange={v => updatePlan('description', v)} />
+                  <Input label="Monthly Price" type="number" value={planForm.billing?.monthlyPrice} onChange={v => updatePlan('billing.monthlyPrice', Number(v))} />
+                  <Input label="Yearly Price" type="number" value={planForm.billing?.yearlyPrice} onChange={v => updatePlan('billing.yearlyPrice', Number(v))} />
+                  <Input label="Trial Days" type="number" value={planForm.billing?.trialDays} onChange={v => updatePlan('billing.trialDays', Number(v))} />
+                  <Input label="Grace Days" type="number" value={planForm.billing?.graceDays} onChange={v => updatePlan('billing.graceDays', Number(v))} />
+                  <Input label="Tax %" type="number" value={planForm.billing?.taxPercent} onChange={v => updatePlan('billing.taxPercent', Number(v))} />
+                  <Input label="Invoice Prefix" value={planForm.billing?.invoicePrefix} onChange={v => updatePlan('billing.invoicePrefix', v)} />
                   <Input label="Product Limit" type="number" value={planForm.limits.products} onChange={v => updatePlan('limits.products', Number(v))} />
                   <Input label="Orders / Month" type="number" value={planForm.limits.ordersPerMonth} onChange={v => updatePlan('limits.ordersPerMonth', Number(v))} />
                   <Input label="Admins" type="number" value={planForm.limits.admins} onChange={v => updatePlan('limits.admins', Number(v))} />
@@ -352,6 +362,11 @@ export default function SuperAdminDashboard() {
             </div>
           )}
 
+
+          {activeTab === 'billing' && (
+            <BillingPanel tenants={tenants} plans={plans} onRefresh={loadAll} notify={notify} />
+          )}
+
           {activeTab === 'tenants' && (
             <div className="space-y-6">
               <div className="bg-white rounded-2xl border border-slate-200 p-6">
@@ -366,6 +381,9 @@ export default function SuperAdminDashboard() {
                       {plans.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
                     </select>
                   </label>
+                  <label className="grid gap-1.5 text-xs font-semibold text-slate-600">Billing Cycle<select className="h-10 border border-slate-300 rounded-lg px-3 text-sm" value={tenantForm.billingCycle} onChange={e => updateTenant('billingCycle', e.target.value)}><option value="monthly">Monthly</option><option value="yearly">Yearly</option><option value="once">One-time</option></select></label>
+                  <Input label="Subscription Coupon" value={tenantForm.couponCode} onChange={v => updateTenant('couponCode', v)} />
+                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-600 mt-7"><input type="checkbox" checked={!!tenantForm.autoRenew} onChange={e => updateTenant('autoRenew', e.target.checked)} /> Auto renewal</label>
                   <Input label="Admin Email" value={tenantForm.adminEmail} onChange={v => updateTenant('adminEmail', v)} required />
                   <Input label="Admin Password" value={tenantForm.adminPassword} onChange={v => updateTenant('adminPassword', v)} />
                   <Input label="WhatsApp" value={tenantForm.settings.whatsapp} onChange={v => updateTenant('settings.whatsapp', v)} />
@@ -563,9 +581,15 @@ function PlanCard({ plan, onSave }) {
     <div className="border border-slate-200 rounded-2xl p-4 grid gap-3">
       <input className="h-10 border border-slate-300 rounded-lg px-3 text-sm font-semibold" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} />
       <textarea className="min-h-[64px] border border-slate-300 rounded-lg p-3 text-sm" value={draft.description || ''} onChange={e => setDraft({ ...draft, description: e.target.value })} />
-      <div className="flex items-center gap-3">
-        <input className="h-10 border border-slate-300 rounded-lg px-3 text-sm w-32" type="number" value={draft.price} onChange={e => setDraft({ ...draft, price: Number(e.target.value) })} />
-        <span className="text-xs text-slate-500">{draft.currency} / {draft.billingCycle}</span>
+      <div className="grid grid-cols-2 gap-2">
+        <input className="h-10 border border-slate-300 rounded-lg px-3 text-sm" type="number" value={draft.price} onChange={e => setDraft({ ...draft, price: Number(e.target.value) })} />
+        <select className="h-10 border border-slate-300 rounded-lg px-3 text-sm" value={draft.billingCycle || 'monthly'} onChange={e => setDraft({ ...draft, billingCycle: e.target.value })}><option value="monthly">Monthly</option><option value="yearly">Yearly</option><option value="once">One-time</option></select>
+        <input className="h-10 border border-slate-300 rounded-lg px-3 text-sm" placeholder="Monthly price" type="number" value={draft.billing?.monthlyPrice || 0} onChange={e => setDraft({ ...draft, billing: { ...(draft.billing || {}), monthlyPrice: Number(e.target.value) } })} />
+        <input className="h-10 border border-slate-300 rounded-lg px-3 text-sm" placeholder="Yearly price" type="number" value={draft.billing?.yearlyPrice || 0} onChange={e => setDraft({ ...draft, billing: { ...(draft.billing || {}), yearlyPrice: Number(e.target.value) } })} />
+        <input className="h-10 border border-slate-300 rounded-lg px-3 text-sm" placeholder="Trial days" type="number" value={draft.billing?.trialDays || 0} onChange={e => setDraft({ ...draft, billing: { ...(draft.billing || {}), trialDays: Number(e.target.value) } })} />
+        <input className="h-10 border border-slate-300 rounded-lg px-3 text-sm" placeholder="Grace days" type="number" value={draft.billing?.graceDays ?? 3} onChange={e => setDraft({ ...draft, billing: { ...(draft.billing || {}), graceDays: Number(e.target.value) } })} />
+        <input className="h-10 border border-slate-300 rounded-lg px-3 text-sm" placeholder="Tax %" type="number" value={draft.billing?.taxPercent || 0} onChange={e => setDraft({ ...draft, billing: { ...(draft.billing || {}), taxPercent: Number(e.target.value) } })} />
+        <input className="h-10 border border-slate-300 rounded-lg px-3 text-sm" placeholder="Invoice prefix" value={draft.billing?.invoicePrefix || 'INV'} onChange={e => setDraft({ ...draft, billing: { ...(draft.billing || {}), invoicePrefix: e.target.value } })} />
       </div>
       <FeatureEditor features={draft.features || {}} onChange={(features) => setDraft({ ...draft, features })} />
       <button onClick={handleSave} disabled={saving} className="h-10 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold text-sm">
@@ -595,7 +619,7 @@ function TenantTable({ tenants, plans, onUpdate, onResetPassword }) {
             <tr key={t._id}>
               <td className="py-3 pr-3">
                 <div className="font-semibold text-slate-800">{t.storeName}</div>
-                <div className="text-xs text-slate-400">{t.slug}</div>
+                <div className="text-xs text-slate-400">{t.slug}</div><div className="text-[11px] text-indigo-500">{t.subscription?.status || 'no subscription'} · {t.subscription?.billingCycle || '-'}</div>
               </td>
               <td className="py-3 pr-3 text-slate-600">{t.plan?.name || '-'}</td>
               <td className="py-3 pr-3">
@@ -629,6 +653,206 @@ function TenantTable({ tenants, plans, onUpdate, onResetPassword }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+
+function BillingPanel({ tenants, plans, onRefresh, notify }) {
+  const [data, setData] = useState({ invoices: [], payments: [], coupons: [] });
+  const [selectedTenantId, setSelectedTenantId] = useState('');
+  const [invoiceTenantId, setInvoiceTenantId] = useState('');
+  const [payment, setPayment] = useState({ tenantId: '', invoiceId: '', amount: 0, method: 'manual', status: 'succeeded', transactionId: '', failureReason: '' });
+  const [coupon, setCoupon] = useState({ code: '', name: '', type: 'percentage', value: 10, billingCycles: [], maxRedemptions: 0, active: true });
+  const selectedTenant = tenants.find(t => t._id === selectedTenantId) || tenants[0];
+
+  async function loadBilling() {
+    try {
+      const { data: res } = await API.get('/superadmin/billing/summary');
+      setData(res || { invoices: [], payments: [], coupons: [] });
+    } catch (err) {
+      notify('error', err.response?.data?.message || err.message || 'Could not load billing data');
+    }
+  }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadBilling(); }, []);
+
+  async function runMaintenance() {
+    try {
+      await API.post('/superadmin/billing/maintenance');
+      notify('success', 'Billing maintenance completed');
+      await Promise.all([loadBilling(), onRefresh()]);
+    } catch (err) { notify('error', err.response?.data?.message || err.message || 'Maintenance failed'); }
+  }
+
+  async function changePlan(e) {
+    e.preventDefault();
+    if (!selectedTenant?._id) return;
+    const fd = new FormData(e.currentTarget);
+    try {
+      await API.post(`/superadmin/tenants/${selectedTenant._id}/billing/change-plan`, {
+        planId: fd.get('planId'),
+        billingCycle: fd.get('billingCycle'),
+        couponCode: fd.get('couponCode'),
+        invoice: fd.get('invoice') === 'on',
+      });
+      notify('success', 'Tenant subscription updated');
+      await Promise.all([loadBilling(), onRefresh()]);
+    } catch (err) { notify('error', err.response?.data?.message || err.message || 'Could not change plan'); }
+  }
+
+  async function issueInvoice(e) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const tenantId = fd.get('tenantId');
+    if (!tenantId) return;
+    try {
+      await API.post(`/superadmin/tenants/${tenantId}/billing/invoice`, {
+        billingCycle: fd.get('billingCycle'),
+        couponCode: fd.get('couponCode'),
+        dueDays: Number(fd.get('dueDays') || 7),
+      });
+      notify('success', 'Invoice generated');
+      await Promise.all([loadBilling(), onRefresh()]);
+    } catch (err) { notify('error', err.response?.data?.message || err.message || 'Could not issue invoice'); }
+  }
+
+  async function recordTenantPayment(e) {
+    e.preventDefault();
+    if (!payment.tenantId) return;
+    try {
+      await API.post(`/superadmin/tenants/${payment.tenantId}/billing/payment`, payment);
+      notify(payment.status === 'failed' ? 'error' : 'success', payment.status === 'failed' ? 'Failed payment recorded' : 'Payment recorded');
+      setPayment({ tenantId: '', invoiceId: '', amount: 0, method: 'manual', status: 'succeeded', transactionId: '', failureReason: '' });
+      await Promise.all([loadBilling(), onRefresh()]);
+    } catch (err) { notify('error', err.response?.data?.message || err.message || 'Could not record payment'); }
+  }
+
+  async function suspendTenant(id) {
+    try {
+      await API.post(`/superadmin/tenants/${id}/billing/suspend`, { reason: 'Suspended by Super Admin' });
+      notify('success', 'Tenant suspended');
+      await Promise.all([loadBilling(), onRefresh()]);
+    } catch (err) { notify('error', err.response?.data?.message || err.message || 'Could not suspend tenant'); }
+  }
+
+  async function reactivateTenant(id) {
+    try {
+      await API.post(`/superadmin/tenants/${id}/billing/reactivate`, { extend: true });
+      notify('success', 'Tenant reactivated');
+      await Promise.all([loadBilling(), onRefresh()]);
+    } catch (err) { notify('error', err.response?.data?.message || err.message || 'Could not reactivate tenant'); }
+  }
+
+  async function saveCoupon(e) {
+    e.preventDefault();
+    try {
+      await API.post('/superadmin/billing/coupons', coupon);
+      setCoupon({ code: '', name: '', type: 'percentage', value: 10, billingCycles: [], maxRedemptions: 0, active: true });
+      notify('success', 'Subscription coupon created');
+      await loadBilling();
+    } catch (err) { notify('error', err.response?.data?.message || err.message || 'Could not create coupon'); }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Stat label="Paid Revenue" value={`${data.invoices?.filter(i => i.status === 'paid').reduce((sum, i) => sum + Number(i.total || 0), 0).toLocaleString()} LKR`} accent="text-emerald-600" icon="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8v16" />
+        <Stat label="Open Invoices" value={data.invoices?.filter(i => ['issued', 'overdue'].includes(i.status)).length || 0} accent="text-amber-600" icon="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5" />
+        <Stat label="Coupons" value={data.coupons?.length || 0} icon="M15 5v2m0 4v2m0 4v2M5 5h14a2 2 0 012 2v3a2 2 0 010 4v3a2 2 0 01-2 2H5" />
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col justify-between gap-3">
+          <div><p className="text-xs font-semibold text-slate-500">Lifecycle Control</p><p className="text-sm text-slate-500 mt-1">Expire/suspend stores based on plan dates.</p></div>
+          <button onClick={runMaintenance} className="h-10 rounded-lg bg-slate-900 text-white text-sm font-semibold">Run Maintenance</button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6">
+          <h2 className="text-base font-bold text-slate-900 mb-4">Upgrade / Downgrade Tenant</h2>
+          <form onSubmit={changePlan} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <select className="h-10 border border-slate-300 rounded-lg px-3 text-sm" value={selectedTenantId || tenants[0]?._id || ''} onChange={e => setSelectedTenantId(e.target.value)}>
+              {tenants.map(t => <option key={t._id} value={t._id}>{t.storeName}</option>)}
+            </select>
+            <select name="planId" className="h-10 border border-slate-300 rounded-lg px-3 text-sm" defaultValue={selectedTenant?.plan?._id || ''}>
+              {plans.map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
+            </select>
+            <select name="billingCycle" className="h-10 border border-slate-300 rounded-lg px-3 text-sm" defaultValue={selectedTenant?.subscription?.billingCycle || 'monthly'}><option value="monthly">Monthly</option><option value="yearly">Yearly</option><option value="once">One-time</option></select>
+            <input name="couponCode" className="h-10 border border-slate-300 rounded-lg px-3 text-sm" placeholder="Coupon code" />
+            <label className="flex items-center gap-2 text-sm text-slate-600"><input name="invoice" type="checkbox" defaultChecked /> Generate invoice</label>
+            <button className="h-10 rounded-lg bg-indigo-600 text-white font-semibold text-sm">Apply Change</button>
+          </form>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 p-6">
+          <h2 className="text-base font-bold text-slate-900 mb-4">Generate Invoice</h2>
+          <form onSubmit={issueInvoice} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <select name="tenantId" className="h-10 border border-slate-300 rounded-lg px-3 text-sm" value={invoiceTenantId} onChange={e => setInvoiceTenantId(e.target.value)}><option value="">Select tenant</option>{tenants.map(t => <option key={t._id} value={t._id}>{t.storeName}</option>)}</select>
+            <select name="billingCycle" className="h-10 border border-slate-300 rounded-lg px-3 text-sm"><option value="monthly">Monthly</option><option value="yearly">Yearly</option><option value="once">One-time</option></select>
+            <input name="couponCode" className="h-10 border border-slate-300 rounded-lg px-3 text-sm" placeholder="Coupon code" />
+            <input name="dueDays" type="number" className="h-10 border border-slate-300 rounded-lg px-3 text-sm" defaultValue={7} />
+            <button className="h-10 rounded-lg bg-indigo-600 text-white font-semibold text-sm sm:col-span-2">Generate Invoice</button>
+          </form>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6">
+          <h2 className="text-base font-bold text-slate-900 mb-4">Record Payment / Failed Payment</h2>
+          <form onSubmit={recordTenantPayment} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <select className="h-10 border border-slate-300 rounded-lg px-3 text-sm" value={payment.tenantId} onChange={e => setPayment({ ...payment, tenantId: e.target.value })}><option value="">Select tenant</option>{tenants.map(t => <option key={t._id} value={t._id}>{t.storeName}</option>)}</select>
+            <select className="h-10 border border-slate-300 rounded-lg px-3 text-sm" value={payment.invoiceId} onChange={e => setPayment({ ...payment, invoiceId: e.target.value })}><option value="">No invoice</option>{data.invoices?.map(i => <option key={i._id} value={i._id}>{i.invoiceNumber} · {i.tenant?.storeName}</option>)}</select>
+            <input type="number" className="h-10 border border-slate-300 rounded-lg px-3 text-sm" placeholder="Amount" value={payment.amount} onChange={e => setPayment({ ...payment, amount: Number(e.target.value) })} />
+            <select className="h-10 border border-slate-300 rounded-lg px-3 text-sm" value={payment.status} onChange={e => setPayment({ ...payment, status: e.target.value })}><option value="succeeded">Succeeded</option><option value="pending">Pending</option><option value="failed">Failed</option><option value="refunded">Refunded</option></select>
+            <input className="h-10 border border-slate-300 rounded-lg px-3 text-sm" placeholder="Method" value={payment.method} onChange={e => setPayment({ ...payment, method: e.target.value })} />
+            <input className="h-10 border border-slate-300 rounded-lg px-3 text-sm" placeholder="Transaction ID / failure reason" value={payment.status === 'failed' ? payment.failureReason : payment.transactionId} onChange={e => setPayment(payment.status === 'failed' ? { ...payment, failureReason: e.target.value } : { ...payment, transactionId: e.target.value })} />
+            <button className="h-10 rounded-lg bg-indigo-600 text-white font-semibold text-sm sm:col-span-2">Record Payment</button>
+          </form>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 p-6">
+          <h2 className="text-base font-bold text-slate-900 mb-4">Create Subscription Coupon</h2>
+          <form onSubmit={saveCoupon} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <input className="h-10 border border-slate-300 rounded-lg px-3 text-sm" placeholder="Code" value={coupon.code} onChange={e => setCoupon({ ...coupon, code: e.target.value.toUpperCase() })} />
+            <input className="h-10 border border-slate-300 rounded-lg px-3 text-sm" placeholder="Name" value={coupon.name} onChange={e => setCoupon({ ...coupon, name: e.target.value })} />
+            <select className="h-10 border border-slate-300 rounded-lg px-3 text-sm" value={coupon.type} onChange={e => setCoupon({ ...coupon, type: e.target.value })}><option value="percentage">Percentage</option><option value="fixed">Fixed</option></select>
+            <input type="number" className="h-10 border border-slate-300 rounded-lg px-3 text-sm" value={coupon.value} onChange={e => setCoupon({ ...coupon, value: Number(e.target.value) })} />
+            <input type="number" className="h-10 border border-slate-300 rounded-lg px-3 text-sm" placeholder="Max redemptions (0 = unlimited)" value={coupon.maxRedemptions} onChange={e => setCoupon({ ...coupon, maxRedemptions: Number(e.target.value) })} />
+            <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={!!coupon.active} onChange={e => setCoupon({ ...coupon, active: e.target.checked })} /> Active</label>
+            <button className="h-10 rounded-lg bg-indigo-600 text-white font-semibold text-sm sm:col-span-2">Create Coupon</button>
+          </form>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 p-6">
+        <h2 className="text-base font-bold text-slate-900 mb-4">Tenant Subscription Control</h2>
+        <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left text-xs text-slate-500 border-b"><th className="py-2 pr-3">Tenant</th><th className="py-2 pr-3">Plan</th><th className="py-2 pr-3">Status</th><th className="py-2 pr-3">Period End</th><th className="py-2 pr-3">Actions</th></tr></thead><tbody className="divide-y divide-slate-100">{tenants.map(t => <tr key={t._id}><td className="py-3 pr-3 font-semibold">{t.storeName}</td><td className="py-3 pr-3">{t.plan?.name}</td><td className="py-3 pr-3"><span className="px-2 py-1 rounded-full bg-slate-100 text-xs">{t.status} / {t.subscription?.status || '-'}</span></td><td className="py-3 pr-3 text-xs text-slate-500">{t.subscription?.currentPeriodEnd ? new Date(t.subscription.currentPeriodEnd).toLocaleDateString() : '-'}</td><td className="py-3 pr-3 flex gap-2"><button onClick={() => suspendTenant(t._id)} className="h-8 px-3 rounded-lg bg-red-50 text-red-600 text-xs font-semibold">Suspend</button><button onClick={() => reactivateTenant(t._id)} className="h-8 px-3 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-semibold">Reactivate</button></td></tr>)}</tbody></table></div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <BillingList title="Latest Invoices" rows={data.invoices || []} kind="invoice" />
+        <BillingList title="Latest Payments" rows={data.payments || []} kind="payment" />
+      </div>
+    </div>
+  );
+}
+
+function BillingList({ title, rows, kind }) {
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 p-6">
+      <h2 className="text-base font-bold text-slate-900 mb-4">{title}</h2>
+      <div className="divide-y divide-slate-100">
+        {rows.slice(0, 12).map(row => (
+          <div key={row._id} className="py-3 flex items-center justify-between gap-3 text-sm">
+            <div className="min-w-0">
+              <p className="font-semibold text-slate-800 truncate">{kind === 'invoice' ? row.invoiceNumber : row.tenant?.storeName}</p>
+              <p className="text-xs text-slate-500 truncate">{kind === 'invoice' ? row.tenant?.storeName : row.invoice?.invoiceNumber || row.method}</p>
+            </div>
+            <div className="text-right flex-shrink-0"><p className="font-bold text-slate-900">{Number(row.total || row.amount || 0).toLocaleString()} {row.currency || 'LKR'}</p><p className="text-xs text-slate-500">{row.status}</p></div>
+          </div>
+        ))}
+        {rows.length === 0 && <p className="text-sm text-slate-400 py-6 text-center">No records yet.</p>}
+      </div>
     </div>
   );
 }

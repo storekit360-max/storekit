@@ -54,9 +54,20 @@ const planSchema = new mongoose.Schema({
   price: { type: Number, default: 0 },
   currency: { type: String, default: 'LKR' },
   billingCycle: { type: String, enum: ['monthly', 'yearly', 'once'], default: 'monthly' },
+  billing: {
+    monthlyPrice: { type: Number, default: 0 },
+    yearlyPrice: { type: Number, default: 0 },
+    trialDays: { type: Number, default: 0 },
+    graceDays: { type: Number, default: 3 },
+    taxPercent: { type: Number, default: 0 },
+    autoRenew: { type: Boolean, default: true },
+    allowMonthly: { type: Boolean, default: true },
+    allowYearly: { type: Boolean, default: true },
+    invoicePrefix: { type: String, default: 'INV' },
+  },
   active: { type: Boolean, default: true },
   limits: { type: limitSchema, default: () => ({}) },
   features: { type: featureSchema, default: () => ({}) },
 }, { timestamps: true });
 
-module.exports = mongoose.model('Plan', planSchema);
+module.exports = mongoose.models.Plan || mongoose.model('Plan', planSchema);
