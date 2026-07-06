@@ -1,5 +1,21 @@
 const mongoose = require('mongoose');
 
+function slugify(value = '') {
+  let slug = String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+  const MAX_SLUG_LEN = 75;
+  if (slug.length > MAX_SLUG_LEN) {
+    slug = slug.slice(0, MAX_SLUG_LEN);
+    slug = slug.slice(0, slug.lastIndexOf('-')) || slug.slice(0, MAX_SLUG_LEN);
+    slug = slug.replace(/-$/, '');
+  }
+  return slug || 'product';
+}
+
 const variantOptionSchema = new mongoose.Schema({
   name: { type: String, required: true },       // e.g. "Size", "Color", "Material"
   type: { type: String, enum: ['size','color','text','button','material','style','storage','weight','flavor'], default: 'button' },
@@ -56,17 +72,14 @@ const productSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
+productSchema.pre('validate', function(next) {
+  if (!this.slug && this.name) this.slug = slugify(this.name);
+  if (this.slug) this.slug = slugify(this.slug);
+  next();
+});
+
 productSchema.pre('save', function(next) {
-  if (!this.slug) {
-    let slug = this.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-    const MAX_SLUG_LEN = 75;
-    if (slug.length > MAX_SLUG_LEN) {
-      slug = slug.slice(0, MAX_SLUG_LEN);
-      slug = slug.slice(0, slug.lastIndexOf('-')) || slug.slice(0, MAX_SLUG_LEN);
-      slug = slug.replace(/-$/, '');
-    }
-    this.slug = slug;
-  }
+  if (!this.slug && this.name) this.slug = slugify(this.name);
   this.updatedAt = Date.now();
   next();
 });

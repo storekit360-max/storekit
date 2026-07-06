@@ -314,7 +314,7 @@ const PaymentGateway = mongoose.model('PaymentGateway', paymentGatewaySchema);
 const deliveryServiceSchema = new mongoose.Schema({
   tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   name: { type: String, required: true },
-  code: { type: String, required: true, unique: true },
+  code: { type: String, required: true },
   isEnabled: { type: Boolean, default: false },
   codAllowed: { type: Boolean, default: true },
   sortOrder: { type: Number, default: 0 },
@@ -340,6 +340,7 @@ const deliveryServiceSchema = new mongoose.Schema({
   updatedAt: Date,
   createdAt: { type: Date, default: Date.now }
 });
+deliveryServiceSchema.index({ tenantId: 1, code: 1 }, { unique: true });
 const DeliveryService = mongoose.model('DeliveryService', deliveryServiceSchema);
 
 // BusinessPage

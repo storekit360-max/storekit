@@ -4,6 +4,20 @@ const { Category } = require('../models/index');
 const Product = require('../models/Product');
 const { adminAuth } = require('../middleware/auth');
 
+function tenantIdForWrite(req) {
+  return req.user?.tenantId || req.tenantId || null;
+}
+
+function requireTenantForAdmin(req, res) {
+  const tenantId = tenantIdForWrite(req);
+  if (!tenantId) {
+    res.status(400).json({ message: 'Tenant not resolved. Open admin through the tenant store domain or re-login.' });
+    return null;
+  }
+  return tenantId;
+}
+
+
 function slugify(value = '') {
   return String(value)
     .trim()
@@ -59,7 +73,9 @@ router.get('/sub/:parentId', async (req, res) => {
 // ── ADMIN: Get ALL categories (including hidden) ─────────────────────────────
 router.get('/admin/all', adminAuth, async (req, res) => {
   try {
-    const cats = await Category.find()
+    const tenantId = requireTenantForAdmin(req, res);
+    if (!tenantId) return;
+    const cats = await Category.find({ tenantId })
       .populate('parent', 'name')
       .sort({ sortOrder: 1, name: 1 });
     res.json(cats);
@@ -75,6 +91,9 @@ router.post('/', adminAuth, async (req, res) => {
     if (!payload.name) return res.status(400).json({ message: 'Category name is required' });
     if (!payload.slug) return res.status(400).json({ message: 'Category slug is required' });
 
+    const tenantId = requireTenantForAdmin(req, res);
+    if (!tenantId) return;
+    payload.tenantId = tenantId;
     const cat = await Category.create(payload);
     res.status(201).json(cat);
   } catch (err) {
@@ -92,7 +111,9 @@ router.put('/:id', adminAuth, async (req, res) => {
     if (!payload.name) return res.status(400).json({ message: 'Category name is required' });
     if (!payload.slug) return res.status(400).json({ message: 'Category slug is required' });
 
-    const existing = await Category.findById(req.params.id);
+    const tenantId = requireTenantForAdmin(req, res);
+    if (!tenantId) return;
+    const existing = await Category.findOne({ _id: req.params.id, tenantId });
     if (!existing) return res.status(404).json({ message: 'Category not found' });
 
     // Prevent assigning a category as child of itself.
@@ -102,14 +123,15 @@ router.put('/:id', adminAuth, async (req, res) => {
 
     // Prevent making a parent category a child of one of its own subcategories.
     if (payload.parent) {
-      const children = await Category.find({ parent: existing._id }).select('_id').lean();
+      const children = await Category.find({ tenantId, parent: existing._id }).select('_id').lean();
       const childIds = children.map(c => String(c._id));
       if (childIds.includes(String(payload.parent))) {
         return res.status(400).json({ message: 'Cannot move a category under its own subcategory' });
       }
     }
 
-    const cat = await Category.findByIdAndUpdate(req.params.id, payload, {
+    delete payload.tenantId;
+    const cat = await Category.findOneAndUpdate({ _id: req.params.id, tenantId }, payload, {
       new: true,
       runValidators: true,
     }).populate('parent', 'name slug');
@@ -126,20 +148,22 @@ router.put('/:id', adminAuth, async (req, res) => {
 // ── ADMIN: Hard delete category ─────────────────────────────────────────────
 router.delete('/:id', adminAuth, async (req, res) => {
   try {
-    const category = await Category.findById(req.params.id).lean();
+    const tenantId = requireTenantForAdmin(req, res);
+    if (!tenantId) return;
+    const category = await Category.findOne({ _id: req.params.id, tenantId }).lean();
     if (!category) return res.status(404).json({ message: 'Category not found' });
 
-    const children = await Category.find({ parent: req.params.id }).select('_id name').lean();
+    const children = await Category.find({ tenantId, parent: req.params.id }).select('_id name').lean();
     const categoryIds = [category._id, ...children.map(c => c._id)];
 
     // Do not leave products pointing at deleted categories.
     // Move affected products to uncategorized state instead of hiding/deleting products.
     const productUpdate = await Product.updateMany(
-      { category: { $in: categoryIds } },
+      { tenantId, category: { $in: categoryIds } },
       { $unset: { category: '', subCategory: '' }, $set: { updatedAt: new Date() } }
     );
 
-    const deleteResult = await Category.deleteMany({ _id: { $in: categoryIds } });
+    const deleteResult = await Category.deleteMany({ tenantId, _id: { $in: categoryIds } });
 
     return res.json({
       message: 'Category permanently deleted',

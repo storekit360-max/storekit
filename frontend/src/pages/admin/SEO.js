@@ -52,7 +52,7 @@ export default function AdminSEO() {
   const [generatingSitemap, setGeneratingSitemap] = useState(false);
 
   useEffect(() => {
-    API.get('/settings').then(r => {
+    API.get('/settings', { cacheTTL: 5 * 60 * 1000 }).then(r => {
       const s = r.data || {};
       // Merge CAPI-specific keys into settings state so form fields are pre-filled
       setSettings({

@@ -168,7 +168,7 @@ export default function LayoutEditor() {
 
   /* ── Load layouts from Settings API ────────────────────── */
   useEffect(() => {
-    API.get('/settings')
+    API.get('/settings', { cacheTTL: 5 * 60 * 1000 })
       .then(r => {
         const saved = r.data?.layout_builder || {};
         const merged = {};

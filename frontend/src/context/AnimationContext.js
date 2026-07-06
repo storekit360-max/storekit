@@ -50,7 +50,7 @@ export const AnimationProvider = ({ children }) => {
 
   const load = useCallback(async () => {
     try {
-      const { data } = await API.get('/settings');
+      const { data } = await API.get('/settings', { cacheTTL: 5 * 60 * 1000 });
       if (data?.animationConfig) {
         setConfig({ ...ANIMATION_DEFAULTS, ...JSON.parse(data.animationConfig) });
       }

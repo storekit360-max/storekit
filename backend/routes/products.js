@@ -21,6 +21,41 @@ const { normalizeImagesMiddleware } = require('../utils/imageUrlHelper');
 // In-memory upload for bulk-import excel files (not saved to disk)
 const bulkUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
+function tenantIdForWrite(req) {
+  return req.user?.tenantId || req.tenantId || null;
+}
+
+function requireTenantForAdmin(req, res) {
+  const tenantId = tenantIdForWrite(req);
+  if (!tenantId) {
+    res.status(400).json({ message: 'Tenant not resolved. Open admin through the tenant store domain or re-login.' });
+    return null;
+  }
+  return tenantId;
+}
+
+function slugify(value = '') {
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '') || 'product';
+}
+
+async function makeUniqueProductSlug(nameOrSlug, tenantId, excludeId = null) {
+  const base = slugify(nameOrSlug).slice(0, 80).replace(/-$/, '') || 'product';
+  let slug = base;
+  let i = 2;
+  // eslint-disable-next-line no-await-in-loop
+  while (await Product.exists({ tenantId, slug, ...(excludeId ? { _id: { $ne: excludeId } } : {}) })) {
+    slug = `${base}-${i}`;
+    i += 1;
+  }
+  return slug;
+}
+
+
 // ── IMPORTANT: named routes BEFORE /:slug wildcard ───────────────────────────
 
 // Admin — export all products as Excel
@@ -29,7 +64,10 @@ router.get('/admin/export/excel', adminAuth, async (req, res) => {
     // Lazy-require so exceljs is only loaded when this route is hit
     const ExcelJS = require('exceljs');
 
-    const products = await Product.find({})
+    const tenantId = requireTenantForAdmin(req, res);
+    if (!tenantId) return;
+
+    const products = await Product.find({ tenantId })
       .populate('category', 'name')
       .sort({ createdAt: -1 })
       .lean();
@@ -278,7 +316,9 @@ router.get('/admin/export/excel', adminAuth, async (req, res) => {
 router.get('/admin/import-template/excel', adminAuth, async (req, res) => {
   try {
     const ExcelJS = require('exceljs');
-    const categories = await Category.find({ isActive: true }).sort({ name: 1 }).lean();
+    const tenantId = requireTenantForAdmin(req, res);
+    if (!tenantId) return;
+    const categories = await Category.find({ tenantId, isActive: true }).sort({ name: 1 }).lean();
 
     const wb = new ExcelJS.Workbook();
     wb.creator = 'StoreKit';
@@ -414,6 +454,8 @@ router.get('/admin/import-template/excel', adminAuth, async (req, res) => {
 router.post('/admin/import/excel', adminAuth, bulkUpload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+    const tenantId = requireTenantForAdmin(req, res);
+    if (!tenantId) return;
 
     const ExcelJS = require('exceljs');
     const wb = new ExcelJS.Workbook();
@@ -472,7 +514,7 @@ router.post('/admin/import/excel', adminAuth, bulkUpload.single('file'), async (
     }
 
     // Build a lookup of categories by lowercase name (and optionally scoped by parent)
-    const allCategories = await Category.find({}).lean();
+    const allCategories = await Category.find({ tenantId }).lean();
     const catByNameAndParent = {}; // key: `${lowerName}|${parentId||''}`
     const catByName = {};          // key: lowerName -> first match
     allCategories.forEach(c => {
@@ -558,6 +600,7 @@ router.post('/admin/import/excel', adminAuth, bulkUpload.single('file'), async (
         const salePrice = num(row, colMap.salePrice);
 
         const productData = {
+          tenantId,
           name,
           description,
           shortDescription: cell(row, colMap.shortDescription) || undefined,
@@ -580,6 +623,7 @@ router.post('/admin/import/excel', adminAuth, bulkUpload.single('file'), async (
           isOnSale: !!salePrice,
         };
 
+        productData.slug = await makeUniqueProductSlug(productData.slug || productData.name, tenantId);
         const product = await Product.create(productData);
         results.created++;
 
@@ -606,7 +650,9 @@ router.post('/admin/import/excel', adminAuth, bulkUpload.single('file'), async (
 // "Applicable Brands" dropdown). Returns a clean, sorted, de-duplicated list.
 router.get('/admin/brands', adminAuth, async (req, res) => {
   try {
-    const brands = await Product.distinct('brand', { brand: { $nin: [null, ''] } });
+    const tenantId = requireTenantForAdmin(req, res);
+    if (!tenantId) return;
+    const brands = await Product.distinct('brand', { tenantId, brand: { $nin: [null, ''] } });
     res.json(brands.filter(Boolean).sort((a, b) => a.localeCompare(b)));
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -622,11 +668,13 @@ router.get('/admin/brands', adminAuth, async (req, res) => {
 router.get('/admin/lookup', normalizeImagesMiddleware(), adminAuth, async (req, res) => {
   try {
     const { brand, category, subCategory, ids, search } = req.query;
+    const tenantId = requireTenantForAdmin(req, res);
+    if (!tenantId) return;
 
     // ── Mode 2: fetch by explicit IDs ──────────────────────────────────────
     if (ids) {
       const idList = ids.split(',').filter(Boolean);
-      const products = await Product.find({ _id: { $in: idList } })
+      const products = await Product.find({ tenantId, _id: { $in: idList } })
         .select('name price salePrice thumbnail brand category subCategory')
         .lean();
       return res.json({ products, categories: [], subCategories: [] });
@@ -635,6 +683,7 @@ router.get('/admin/lookup', normalizeImagesMiddleware(), adminAuth, async (req, 
     // ── Mode 3: search by name keyword ─────────────────────────────────────
     if (search) {
       const products = await Product.find({
+        tenantId,
         isActive: true,
         name: { $regex: search.trim(), $options: 'i' },
       })
@@ -646,7 +695,7 @@ router.get('/admin/lookup', normalizeImagesMiddleware(), adminAuth, async (req, 
 
     // ── Mode 1: cascading filter ───────────────────────────────────────────
     // Build the product filter incrementally
-    const productFilter = { isActive: true };
+    const productFilter = { tenantId, isActive: true };
     if (brand)       productFilter.brand       = brand;
     if (category)    productFilter.category    = category;
     if (subCategory) productFilter.subCategory = subCategory;
@@ -659,7 +708,7 @@ router.get('/admin/lookup', normalizeImagesMiddleware(), adminAuth, async (req, 
 
     // Derive the narrowed category list from those products
     const categoryIds = [...new Set(products.map(p => p.category?.toString()).filter(Boolean))];
-    const categories  = await Category.find({ _id: { $in: categoryIds } })
+    const categories  = await Category.find({ tenantId, _id: { $in: categoryIds } })
       .select('name')
       .lean();
 
@@ -675,7 +724,9 @@ router.get('/admin/lookup', normalizeImagesMiddleware(), adminAuth, async (req, 
 router.get('/admin/all', normalizeImagesMiddleware(), adminAuth, async (req, res) => {
   try {
     const { search, category, brand, status, stock, page = 1, limit = 20 } = req.query;
-    const filter = {};
+    const tenantId = requireTenantForAdmin(req, res);
+    if (!tenantId) return;
+    const filter = { tenantId };
     if (search)   filter.$or = [
       { name:  new RegExp(search, 'i') },
       { brand: new RegExp(search, 'i') },
@@ -703,7 +754,11 @@ router.get('/admin/all', normalizeImagesMiddleware(), adminAuth, async (req, res
 router.post('/', adminAuth, async (req, res) => {
   let product;
   try {
-    product = await Product.create(req.body);
+    const tenantId = requireTenantForAdmin(req, res);
+    if (!tenantId) return;
+    const body = { ...req.body, tenantId };
+    body.slug = await makeUniqueProductSlug(body.slug || body.name, tenantId);
+    product = await Product.create(body);
     res.status(201).json(product);
   } catch (err) {
     return res.status(500).json({ message: err.message });
@@ -723,9 +778,15 @@ router.post('/', adminAuth, async (req, res) => {
 router.put('/:id', adminAuth, async (req, res) => {
   let before, product;
   try {
-    before  = await Product.findById(req.params.id).lean();
-    product = await Product.findByIdAndUpdate(
-      req.params.id, { $set: { ...req.body, updatedAt: new Date() } }, { new: true, runValidators: false }
+    const tenantId = requireTenantForAdmin(req, res);
+    if (!tenantId) return;
+    before  = await Product.findOne({ _id: req.params.id, tenantId }).lean();
+    if (!before) return res.status(404).json({ message: 'Product not found' });
+    const body = { ...req.body };
+    delete body.tenantId;
+    if (body.slug || body.name) body.slug = await makeUniqueProductSlug(body.slug || body.name, tenantId, req.params.id);
+    product = await Product.findOneAndUpdate(
+      { _id: req.params.id, tenantId }, { $set: { ...body, updatedAt: new Date() } }, { new: true, runValidators: false }
     );
     res.json(product);
   } catch (err) {
@@ -753,7 +814,9 @@ router.put('/:id', adminAuth, async (req, res) => {
 // Body: { platforms: ['facebook','instagram',...], customMsg?: '' }
 router.post('/:id/publish', adminAuth, async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const tenantId = requireTenantForAdmin(req, res);
+    if (!tenantId) return;
+    const product = await Product.findOne({ _id: req.params.id, tenantId });
     if (!product) return res.status(404).json({ message: 'Product not found' });
 
     const { platforms = [], customMsg = '' } = req.body;
@@ -803,7 +866,9 @@ router.post('/:id/publish', adminAuth, async (req, res) => {
 // Admin — hard delete
 router.delete('/:id', adminAuth, async (req, res) => {
   try {
-    const deleted = await Product.findByIdAndDelete(req.params.id);
+    const tenantId = requireTenantForAdmin(req, res);
+    if (!tenantId) return;
+    const deleted = await Product.findOneAndDelete({ _id: req.params.id, tenantId });
     if (!deleted) return res.status(404).json({ message: 'Product not found' });
     res.json({ message: 'Product deleted' });
   } catch (err) { res.status(500).json({ message: err.message }); }

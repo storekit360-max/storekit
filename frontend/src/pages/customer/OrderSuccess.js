@@ -407,7 +407,7 @@ export function OrderTracking() {
   }, [id]);
 
   useEffect(() => {
-    API.get('/settings')
+    API.get('/settings', { cacheTTL: 5 * 60 * 1000 })
       .then(r => {
         const raw = r.data?.cancelWindowMinutes;
         const parsed = (raw !== undefined && raw !== null && String(raw).trim() !== '') ? Number(raw) : 60;

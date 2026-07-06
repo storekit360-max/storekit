@@ -376,7 +376,7 @@ export default function MyOrders() {
   // Load cancel window setting — keep null until response arrives so the
   // countdown hook doesn't flash "window closed" before we know the real value.
   useEffect(() => {
-    API.get('/settings')
+    API.get('/settings', { cacheTTL: 5 * 60 * 1000 })
       .then(r => {
         const raw    = r.data?.cancelWindowMinutes;
         // Treat missing/empty/null/undefined as the default (60 min)

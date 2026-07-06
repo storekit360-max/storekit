@@ -172,7 +172,7 @@ export default function AdminSettings() {
   const [savingWA, setSavingWA] = useState(false);
 
   useEffect(() => {
-    API.get('/settings').then(r => {
+    API.get('/settings', { cacheTTL: 5 * 60 * 1000 }).then(r => {
       const raw = r.data;
       const coerced = {};
       Object.keys(raw).forEach(k => {

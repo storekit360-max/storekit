@@ -5,7 +5,7 @@ export default function PrintBill({ order, trigger }) {
   const [storeSettings, setStoreSettings] = useState(null);
 
   useEffect(() => {
-    API.get('/settings').then(r => setStoreSettings(r.data)).catch(() => {});
+    API.get('/settings', { cacheTTL: 5 * 60 * 1000 }).then(r => setStoreSettings(r.data)).catch(() => {});
   }, []);
 
   const handlePrint = () => {

@@ -210,7 +210,7 @@ export default function AdminLayout() {
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const { data } = await API.get('/notifications');
+      const { data } = await API.get('/notifications', { cacheTTL: 60 * 1000 });
       setNotifications(data.notifications);
       setUnreadCount(data.unreadCount);
     } catch {}
@@ -218,17 +218,19 @@ export default function AdminLayout() {
 
   useEffect(() => {
     fetchNotifications();
-    API.get('/admin/dashboard')
+    API.get('/admin/dashboard', { cacheTTL: 60 * 1000 })
       .then(r => setBadges({ orders: r.data.stats.pendingOrders, returns: 0 }))
       .catch(() => {});
-    const id = setInterval(fetchNotifications, 30000);
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchNotifications();
+    }, 120000);
     return () => clearInterval(id);
   }, [fetchNotifications]);
 
   // Load the tenant's plan so we can hide sidebar items the current plan
   // doesn't include (e.g. Theme Builder on a Starter plan).
   useEffect(() => {
-    API.get('/tenant/my')
+    API.get('/tenant/my', { cacheTTL: 5 * 60 * 1000 })
       .then(r => setPlanFeatures(r.data?.plan?.features || null))
       .catch(() => setPlanFeatures(null)); // fail open — don't hide the whole sidebar on a network error
   }, []);

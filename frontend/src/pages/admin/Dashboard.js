@@ -6,6 +6,7 @@ import {
   ComposedChart, Line, Legend
 } from 'recharts';
 import API from '../../utils/api';
+import StoreReadiness from '../../components/admin/StoreReadiness';
 
 /* ── helpers ──────────────────────────────────────────────────────────────── */
 const fmt  = n  => `Rs. ${(n || 0).toLocaleString()}`;
@@ -210,6 +211,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      <StoreReadiness />
 
       {/* Nav pills */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">

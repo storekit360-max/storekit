@@ -102,7 +102,7 @@ export default function Monitoring() {
 
   const fetchData = useCallback(async () => {
     try {
-      const { data: d } = await API.get('/monitoring');
+      const { data: d } = await API.get('/monitoring', { cacheTTL: 60 * 1000 });
       setData(d);
       setError('');
     } catch (e) {
@@ -118,7 +118,9 @@ export default function Monitoring() {
 
   useEffect(() => {
     if (!autoRefresh) return;
-    const id = setInterval(fetchData, 10000);
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchData();
+    }, 60000);
     return () => clearInterval(id);
   }, [autoRefresh, fetchData]);
 
