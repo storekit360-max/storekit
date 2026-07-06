@@ -3,6 +3,13 @@ import React, { useEffect, useState, useCallback } from 'react';
 import API from '../../utils/api';
 import toast from 'react-hot-toast';
 
+const slugify = (value = '') => String(value)
+  .trim()
+  .toLowerCase()
+  .replace(/&/g, ' and ')
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/(^-|-$)/g, '');
+
 const Modal = ({ title, onClose, children, wide }) => (
   <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
     <div className={`bg-white rounded-2xl shadow-2xl w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} max-h-[90vh] overflow-y-auto scale-in`} onClick={e => e.stopPropagation()}>
@@ -18,7 +25,7 @@ const Modal = ({ title, onClose, children, wide }) => (
 export function AdminCategories() {
   const [cats, setCats] = useState([]);
   const [modal, setModal] = useState(false);       // 'single' | 'bulk' | false
-  const [form, setForm] = useState({ name: '', description: '', image: '', isActive: true, parent: null });
+  const [form, setForm] = useState({ name: '', slug: '', description: '', image: '', isActive: true, parent: null });
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const [expandedParent, setExpandedParent] = useState(null);
@@ -42,13 +49,13 @@ export function AdminCategories() {
 
   // ── Single add/edit ──────────────────────────────────────────────────────
   const openAddParent = () => {
-    setForm({ name: '', description: '', image: '', isActive: true, parent: null });
+    setForm({ name: '', slug: '', description: '', image: '', isActive: true, parent: null });
     setEditing(null);
     setModal('single');
   };
 
   const openAddSub = (parentId) => {
-    setForm({ name: '', description: '', image: '', isActive: true, parent: parentId });
+    setForm({ name: '', slug: '', description: '', image: '', isActive: true, parent: parentId });
     setEditing(null);
     setModal('single');
     setExpandedParent(parentId);
@@ -57,6 +64,7 @@ export function AdminCategories() {
   const openEdit = (c) => {
     setForm({
       name: c.name,
+      slug: c.slug || slugify(c.name),
       description: c.description || '',
       image: c.image || '',
       isActive: c.isActive,
@@ -70,7 +78,7 @@ export function AdminCategories() {
     if (!form.name) { toast.error('Name required'); return; }
     setSaving(true);
     try {
-      const payload = { ...form };
+      const payload = { ...form, name: form.name.trim(), slug: slugify(form.slug || form.name) };
       if (!payload.parent) payload.parent = null;
       if (editing) {
         await API.put(`/categories/${editing._id}`, payload);
@@ -89,10 +97,14 @@ export function AdminCategories() {
   };
 
   const del = async (id) => {
-    if (!window.confirm('Delete this category? Its subcategories will also be hidden.')) return;
-    await API.delete(`/categories/${id}`);
-    toast.success('Deleted');
-    fetchAll();
+    if (!window.confirm('Permanently delete this category? Subcategories will also be deleted. Products assigned to this category will become uncategorized.')) return;
+    try {
+      const { data } = await API.delete(`/categories/${id}`);
+      toast.success(data?.message || 'Category permanently deleted');
+      fetchAll();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Delete failed');
+    }
   };
 
   // ── Bulk paste ────────────────────────────────────────────────────────────
@@ -129,7 +141,7 @@ export function AdminCategories() {
     let failed  = 0;
     for (const name of bulkParsed) {
       try {
-        await API.post('/categories', { name, isActive: true, parent: bulkParentId || null });
+        await API.post('/categories', { name, slug: slugify(name), isActive: true, parent: bulkParentId || null });
         created++;
       } catch {
         failed++;
@@ -271,11 +283,28 @@ export function AdminCategories() {
               <label className="form-label">Name *</label>
               <input
                 value={form.name}
-                onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                onChange={e => {
+                  const name = e.target.value;
+                  setForm(p => ({
+                    ...p,
+                    name,
+                    slug: !editing && (!p.slug || p.slug === slugify(p.name)) ? slugify(name) : p.slug,
+                  }));
+                }}
                 className="form-input"
                 placeholder={form.parent ? 'Subcategory name' : 'Category name'}
                 autoFocus
               />
+            </div>
+            <div>
+              <label className="form-label">Slug *</label>
+              <input
+                value={form.slug}
+                onChange={e => setForm(p => ({ ...p, slug: slugify(e.target.value) }))}
+                className="form-input"
+                placeholder="category-url-slug"
+              />
+              <p className="text-xs text-gray-400 mt-1">Used in URLs. Auto-generated from name, but you can edit it.</p>
             </div>
             <div>
               <label className="form-label">Description</label>

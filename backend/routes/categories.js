@@ -1,7 +1,25 @@
 const express = require('express');
 const router = express.Router();
 const { Category } = require('../models/index');
+const Product = require('../models/Product');
 const { adminAuth } = require('../middleware/auth');
+
+function slugify(value = '') {
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
+
+function buildCategoryPayload(body = {}) {
+  const payload = { ...body };
+  payload.name = String(payload.name || '').trim();
+  payload.slug = slugify(payload.slug || payload.name);
+  payload.parent = payload.parent || null;
+  return payload;
+}
 
 // ── PUBLIC: Get all active parent categories (no parent) ────────────────────
 router.get('/', async (req, res) => {
@@ -53,9 +71,16 @@ router.get('/admin/all', adminAuth, async (req, res) => {
 // ── ADMIN: Create category or subcategory ────────────────────────────────────
 router.post('/', adminAuth, async (req, res) => {
   try {
-    const cat = await Category.create(req.body);
+    const payload = buildCategoryPayload(req.body);
+    if (!payload.name) return res.status(400).json({ message: 'Category name is required' });
+    if (!payload.slug) return res.status(400).json({ message: 'Category slug is required' });
+
+    const cat = await Category.create(payload);
     res.status(201).json(cat);
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ message: 'Category slug already exists for this store' });
+    }
     res.status(500).json({ message: err.message });
   }
 });
@@ -63,20 +88,64 @@ router.post('/', adminAuth, async (req, res) => {
 // ── ADMIN: Update category ───────────────────────────────────────────────────
 router.put('/:id', adminAuth, async (req, res) => {
   try {
-    const cat = await Category.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const payload = buildCategoryPayload(req.body);
+    if (!payload.name) return res.status(400).json({ message: 'Category name is required' });
+    if (!payload.slug) return res.status(400).json({ message: 'Category slug is required' });
+
+    const existing = await Category.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Category not found' });
+
+    // Prevent assigning a category as child of itself.
+    if (payload.parent && String(payload.parent) === String(existing._id)) {
+      return res.status(400).json({ message: 'A category cannot be its own parent' });
+    }
+
+    // Prevent making a parent category a child of one of its own subcategories.
+    if (payload.parent) {
+      const children = await Category.find({ parent: existing._id }).select('_id').lean();
+      const childIds = children.map(c => String(c._id));
+      if (childIds.includes(String(payload.parent))) {
+        return res.status(400).json({ message: 'Cannot move a category under its own subcategory' });
+      }
+    }
+
+    const cat = await Category.findByIdAndUpdate(req.params.id, payload, {
+      new: true,
+      runValidators: true,
+    }).populate('parent', 'name slug');
+
     res.json(cat);
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ message: 'Category slug already exists for this store' });
+    }
     res.status(500).json({ message: err.message });
   }
 });
 
-// ── ADMIN: Delete (soft-delete) category ────────────────────────────────────
+// ── ADMIN: Hard delete category ─────────────────────────────────────────────
 router.delete('/:id', adminAuth, async (req, res) => {
   try {
-    await Category.findByIdAndUpdate(req.params.id, { isActive: false });
-    // Also deactivate all subcategories of this parent
-    await Category.updateMany({ parent: req.params.id }, { isActive: false });
-    res.json({ message: 'Category deleted' });
+    const category = await Category.findById(req.params.id).lean();
+    if (!category) return res.status(404).json({ message: 'Category not found' });
+
+    const children = await Category.find({ parent: req.params.id }).select('_id name').lean();
+    const categoryIds = [category._id, ...children.map(c => c._id)];
+
+    // Do not leave products pointing at deleted categories.
+    // Move affected products to uncategorized state instead of hiding/deleting products.
+    const productUpdate = await Product.updateMany(
+      { category: { $in: categoryIds } },
+      { $unset: { category: '', subCategory: '' }, $set: { updatedAt: new Date() } }
+    );
+
+    const deleteResult = await Category.deleteMany({ _id: { $in: categoryIds } });
+
+    return res.json({
+      message: 'Category permanently deleted',
+      deletedCount: deleteResult.deletedCount || 0,
+      affectedProducts: productUpdate.modifiedCount || 0,
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
