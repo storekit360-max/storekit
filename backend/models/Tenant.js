@@ -58,6 +58,12 @@ const tenantSchema = new mongoose.Schema({
     failedPaymentCount: { type: Number, default: 0 },
     couponCode: { type: String, default: '' },
     suspendedReason: { type: String, default: '' },
+    reminders: {
+      trialEndingSentAt: { type: Date, default: null },
+      paymentDueSentAt: { type: Date, default: null },
+      graceSentAt: { type: Date, default: null },
+      expiredSentAt: { type: Date, default: null },
+    },
   },
   domains: { type: [domainSchema], default: [] },
 

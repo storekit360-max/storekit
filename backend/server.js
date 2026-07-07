@@ -22,15 +22,11 @@
 
 const express    = require('express');
 const mongoose   = require('mongoose');
-const { tenantContextMiddleware, installTenantScope } = require('./middleware/tenantContext');
 const cors       = require('cors');
 const path       = require('path');
 require('dotenv').config();
 
-installTenantScope(mongoose);
-
 const app = express();
-const { resolveTenant } = require('./middleware/tenant');
 
 // Trust the Railway/Vercel proxy so express-rate-limit sees the real client IP
 // from X-Forwarded-For rather than the proxy's internal address.
@@ -130,14 +126,8 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok', time: new Date() 
 //           credential-stuffing attacks independently of the global limiter.
 app.use('/api/auth/login', loginLimiter);
 app.use('/api/auth',          require('./routes/auth'));
-app.use('/api/superadmin',    require('./routes/superadmin'));
-
-// Every storefront/admin API below this point is tenant-aware. The tenant is
-// resolved from X-Tenant-Domain / forwarded host and stored in async context so
-// Mongoose queries are automatically scoped to that tenant.
-app.use('/api', resolveTenant, tenantContextMiddleware);
-
 app.use('/api/tenant',        require('./routes/tenant'));
+app.use('/api/superadmin',    require('./routes/superadmin'));
 
 // ─── Public routes ────────────────────────────────────────────────────────────
 app.use('/api/products',      require('./routes/products'));
@@ -170,6 +160,7 @@ app.get('/robots.txt',  (req, res) => res.redirect(301, '/api/seo/robots.txt'));
 //           responses are identical to before.
 app.use('/api/admin', auditLog, require('./routes/admin'));
 app.use('/api/admin/reset', require('./routes/reset'));
+app.use('/api/admin/billing', require('./routes/adminBilling'));
 
 // ─── Other routes ─────────────────────────────────────────────────────────────
 app.use('/api/whatsapp',      require('./routes/whatsapp'));
@@ -223,6 +214,9 @@ async function startServer() {
 
     const { startBackupScheduler } = require('./services/backupScheduler');
     startBackupScheduler();
+
+    const { startSubscriptionScheduler } = require('./services/subscriptionScheduler');
+    startSubscriptionScheduler();
 
     const PORT = process.env.PORT || 5001;
     app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
