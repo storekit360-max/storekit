@@ -204,6 +204,7 @@ export default function AdminLayout() {
   // null = not loaded yet (show everything so the sidebar doesn't flash empty);
   // once loaded this becomes the plan's features object, e.g. { products: true, ... }
   const [planFeatures,  setPlanFeatures]  = useState(null);
+  const [billingStatus, setBillingStatus] = useState(null);
 
   // navRef is attached to the <nav> element inside Sidebar.
   // Because Sidebar is a stable component (not redefined each render) the ref
@@ -223,6 +224,15 @@ export default function AdminLayout() {
     API.get('/admin/dashboard')
       .then(r => setBadges({ orders: r.data.stats.pendingOrders, returns: 0 }))
       .catch(() => {});
+    API.get('/admin/billing/status')
+      .then(r => setBillingStatus({
+        status: r.data.subscription?.status || 'unknown',
+        plan: r.data.plan?.name || 'Plan',
+        nextBillingAt: r.data.subscription?.nextBillingAt,
+        currentPeriodEnd: r.data.subscription?.currentPeriodEnd,
+        daysLeft: r.data.planDates?.daysUntilNextBilling,
+      }))
+      .catch(() => setBillingStatus(null));
     const id = setInterval(fetchNotifications, 30000);
     return () => clearInterval(id);
   }, [fetchNotifications]);
@@ -360,6 +370,19 @@ export default function AdminLayout() {
             >
               <span style={{ fontSize: 18, lineHeight: 1 }}>{darkMode ? '☀️' : '🌙'}</span>
             </button>
+
+            {/* Billing status near notifications */}
+            {billingStatus && (
+              <Link
+                to="/admin/billing"
+                className="hidden md:flex items-center gap-2 px-3 py-2 rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors"
+                title={`Plan ends: ${billingStatus.currentPeriodEnd ? new Date(billingStatus.currentPeriodEnd).toLocaleDateString() : 'Not set'}`}
+              >
+                <span className="text-sm">💳</span>
+                <span className="text-xs font-black">{billingStatus.plan}</span>
+                <span className="text-[10px] uppercase font-black bg-white/70 px-2 py-0.5 rounded-full">{String(billingStatus.status).replace('_',' ')}</span>
+              </Link>
+            )}
 
             {/* Notifications */}
             <div style={{ position: 'relative', flexShrink: 0 }}>

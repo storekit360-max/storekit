@@ -34,6 +34,16 @@ const featureSchema = new mongoose.Schema({
   autoConfirmOrders: { type: Boolean, default: false },
   autoCancelDecision: { type: Boolean, default: false },
   maintenanceMode: { type: Boolean, default: false },
+
+  productVariants: { type: Boolean, default: false },
+  bulkImport: { type: Boolean, default: false },
+  paymentGateways: { type: Boolean, default: false },
+  deliveryServices: { type: Boolean, default: false },
+  whatsapp: { type: Boolean, default: false },
+  templates: { type: Boolean, default: true },
+  customPages: { type: Boolean, default: false },
+  invoices: { type: Boolean, default: false },
+  paymentProofReview: { type: Boolean, default: true },
 }, { _id: false });
 
 const limitSchema = new mongoose.Schema({
