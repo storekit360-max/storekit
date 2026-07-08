@@ -684,23 +684,6 @@ const TEMPLATE_HOME_PROFILES = {
   startup:       { order:['hero','featured','categories','deals','new_arrivals','promo','newsletter'], shell:'startup' },
 };
 
-const TemplateSignature = ({ template, settings }) => {
-  const label = {
-    marketplace:'Marketplace Hub', fashion:'Editorial Collection', electronics:'Tech Storefront', mobile:'Smart Mobile Store',
-    grocery:'Fresh Daily Picks', beauty:'Beauty Studio', furniture:'Interior Showcase', sports:'Performance Store', kids:'Kids Corner',
-    organic:'Natural Market', luxury:'Luxury Boutique', jewelry:'Jewelry Atelier', premiumApple:'Minimal Premium', pharmacy:'Health Essentials',
-    b2b:'Business Catalogue', wholesale:'Wholesale Deals', minimal:'Minimal Store', books:'Book Shelf', neon:'Cyber Store',
-    automotive:'Auto Garage', sriLanka:'Local Sri Lankan Store', startup:'Startup Shop', modern:'Modern Retail', classic:'Classic Retail'
-  }[template] || 'Storefront';
-
-  return (
-    <div className="template-signature" aria-hidden="true">
-      <span>{label}</span>
-      <strong>{settings?.storeName || 'StoreKit'}</strong>
-    </div>
-  );
-};
-
 const TemplateHomeRenderer = ({ settings, isOn, sections, orderedIds }) => {
   const template = normalizeTemplateKey(settings);
   const profile = TEMPLATE_HOME_PROFILES[template] || TEMPLATE_HOME_PROFILES.classic;
@@ -711,7 +694,6 @@ const TemplateHomeRenderer = ({ settings, isOn, sections, orderedIds }) => {
   if (profile.shell === 'market') {
     return (
       <div className={`storefront-template-home template-home-${template} template-shell-${profile.shell}`} style={{ background:'var(--body-bg)' }}>
-        <TemplateSignature template={template} settings={settings}/>
         <div className="template-market-hero">{isOn('hero') && renderSection('hero')}</div>
         <TrustBar settings={settings}/>
         <div className="template-market-stack">
@@ -725,7 +707,6 @@ const TemplateHomeRenderer = ({ settings, isOn, sections, orderedIds }) => {
   if (profile.shell === 'professional') {
     return (
       <div className={`storefront-template-home template-home-${template} template-shell-${profile.shell}`} style={{ background:'var(--body-bg)' }}>
-        <TemplateSignature template={template} settings={settings}/>
         <div className="template-professional-grid">
           <aside className="template-professional-sidebar">
             {renderSection('categories')}
@@ -745,7 +726,6 @@ const TemplateHomeRenderer = ({ settings, isOn, sections, orderedIds }) => {
   if (['luxury','editorial','catalog','apple','minimal'].includes(profile.shell)) {
     return (
       <div className={`storefront-template-home template-home-${template} template-shell-${profile.shell}`} style={{ background:'var(--body-bg)' }}>
-        <TemplateSignature template={template} settings={settings}/>
         {isOn('hero') && <div className="template-hero-frame">{renderSection('hero')}</div>}
         <TrustBar settings={settings}/>
         <div className="template-editorial-flow">
@@ -760,7 +740,6 @@ const TemplateHomeRenderer = ({ settings, isOn, sections, orderedIds }) => {
 
   return (
     <div className={`storefront-template-home template-home-${template} template-shell-${profile.shell || 'standard'}`} style={{ background:'var(--body-bg)' }}>
-      <TemplateSignature template={template} settings={settings}/>
       {isOn('hero') && renderSection('hero')}
       <TrustBar settings={settings}/>
       <div className="template-standard-flow">
