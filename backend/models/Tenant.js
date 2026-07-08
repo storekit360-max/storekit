@@ -9,72 +9,60 @@ const domainSchema = new mongoose.Schema({
   active: { type: Boolean, default: true },
 }, { _id: false });
 
-const defaultTenantSettings = {
-  storeEmail: '',
-  phone: '',
-  whatsapp: '',
-  currency: 'LKR',
-  country: 'Sri Lanka',
-  timezone: 'Asia/Colombo',
-  logoUrl: '',
-  faviconUrl: '',
-  metaTitle: '',
-  metaDescription: '',
-};
-
-const defaultTenantTheme = {
-  theme: 'default',
-  primaryColor: '#15803d',
-  primaryDarkColor: '#0f5f2e',
-  primaryLightColor: '#22c55e',
-  secondaryColor: '#84cc16',
-  accentColor: '#84cc16',
-  darkBgColor: '#0f172a',
-  darkColor: '#0f172a',
-  fontStyle: 'default',
-  fontFamily: 'default',
-  darkMode: false,
-  customCSS: '',
-};
+const subscriptionSchema = new mongoose.Schema({
+  status: { type: String, enum: ['trialing', 'active', 'past_due', 'grace', 'suspended', 'cancelled'], default: 'trialing' },
+  billingCycle: { type: String, enum: ['monthly', 'yearly'], default: 'monthly' },
+  trialStartedAt: { type: Date, default: null },
+  trialEndsAt: { type: Date, default: null },
+  currentPeriodStart: { type: Date, default: null },
+  currentPeriodEnd: { type: Date, default: null },
+  nextBillingAt: { type: Date, default: null },
+  graceEndsAt: { type: Date, default: null },
+  lastPaidAt: { type: Date, default: null },
+  suspendedAt: { type: Date, default: null },
+  cancelledAt: { type: Date, default: null },
+  autoRenew: { type: Boolean, default: false },
+  reminders: {
+    trial7: { type: Boolean, default: false },
+    trial3: { type: Boolean, default: false },
+    renewal7: { type: Boolean, default: false },
+    renewal3: { type: Boolean, default: false },
+    dueToday: { type: Boolean, default: false },
+    grace: { type: Boolean, default: false },
+    suspended: { type: Boolean, default: false },
+  },
+}, { _id: false });
 
 const tenantSchema = new mongoose.Schema({
   storeName: { type: String, required: true, trim: true },
   slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
   owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   plan: { type: mongoose.Schema.Types.ObjectId, ref: 'Plan', required: true },
-  status: { type: String, enum: ['active', 'suspended', 'pending', 'expired'], default: 'active' },
-  subscription: {
-    status: { type: String, enum: ['trialing', 'active', 'past_due', 'grace', 'expired', 'cancelled'], default: 'trialing' },
-    billingCycle: { type: String, enum: ['monthly', 'yearly', 'once'], default: 'monthly' },
-    trialStart: { type: Date, default: null },
-    trialEnd: { type: Date, default: null },
-    currentPeriodStart: { type: Date, default: null },
-    currentPeriodEnd: { type: Date, default: null },
-    graceUntil: { type: Date, default: null },
-    autoRenew: { type: Boolean, default: true },
-    cancelAtPeriodEnd: { type: Boolean, default: false },
-    lastInvoice: { type: mongoose.Schema.Types.ObjectId, ref: 'SubscriptionInvoice', default: null },
-    lastPaymentStatus: { type: String, enum: ['none', 'pending', 'succeeded', 'failed'], default: 'none' },
-    failedPaymentCount: { type: Number, default: 0 },
-    couponCode: { type: String, default: '' },
-    suspendedReason: { type: String, default: '' },
-    reminders: {
-      trialEndingSentAt: { type: Date, default: null },
-      paymentDueSentAt: { type: Date, default: null },
-      graceSentAt: { type: Date, default: null },
-      expiredSentAt: { type: Date, default: null },
-    },
-  },
+  status: { type: String, enum: ['active', 'suspended', 'pending'], default: 'active' },
   domains: { type: [domainSchema], default: [] },
-
-  // Tenant settings/theme must be flexible because admin Settings + Theme Builder
-  // save many flat keys. A strict nested schema silently dropped keys like
-  // fontStyle, darkMode, primaryDarkColor, customCSS, etc., so values saved but
-  // could not be applied to the storefront.
-  settings: { type: mongoose.Schema.Types.Mixed, default: () => ({ ...defaultTenantSettings }) },
-  theme: { type: mongoose.Schema.Types.Mixed, default: () => ({ ...defaultTenantTheme }) },
-}, { timestamps: true, minimize: false });
+  subscription: { type: subscriptionSchema, default: () => ({}) },
+  settings: {
+    storeEmail: { type: String, default: '' },
+    phone: { type: String, default: '' },
+    whatsapp: { type: String, default: '' },
+    currency: { type: String, default: 'LKR' },
+    country: { type: String, default: 'Sri Lanka' },
+    timezone: { type: String, default: 'Asia/Colombo' },
+    logoUrl: { type: String, default: '' },
+    faviconUrl: { type: String, default: '' },
+    metaTitle: { type: String, default: '' },
+    metaDescription: { type: String, default: '' },
+  },
+  theme: {
+    primaryColor: { type: String, default: '#15803d' },
+    accentColor: { type: String, default: '#84cc16' },
+    darkColor: { type: String, default: '#0f172a' },
+    fontFamily: { type: String, default: 'Inter' },
+    template: { type: String, default: 'modern-pro' },
+  },
+}, { timestamps: true });
 
 tenantSchema.index({ 'domains.domain': 1 }, { unique: true, sparse: true });
+tenantSchema.index({ 'subscription.status': 1, 'subscription.nextBillingAt': 1 });
 
 module.exports = mongoose.models.Tenant || mongoose.model('Tenant', tenantSchema);

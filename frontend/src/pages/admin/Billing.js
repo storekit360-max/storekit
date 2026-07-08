@@ -1,138 +1,125 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import API from '../../utils/api';
 
-function fmtDate(v) {
-  if (!v) return '—';
-  return new Date(v).toLocaleDateString();
-}
-function fmtMoney(v, c = 'LKR') {
-  return `${c} ${Number(v || 0).toLocaleString('en-LK', { maximumFractionDigits: 2 })}`;
-}
-function statusClass(status) {
-  if (['active', 'paid', 'succeeded'].includes(status)) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-  if (['trialing'].includes(status)) return 'bg-blue-100 text-blue-700 border-blue-200';
-  if (['grace', 'pending', 'issued'].includes(status)) return 'bg-amber-100 text-amber-700 border-amber-200';
-  return 'bg-red-100 text-red-700 border-red-200';
-}
+function fmtDate(v) { return v ? new Date(v).toLocaleDateString() : 'Not set'; }
+function money(v, c = 'LKR') { return `${c} ${Number(v || 0).toLocaleString()}`; }
+function daysLeft(v) { if (!v) return null; return Math.ceil((new Date(v).getTime() - Date.now()) / 86400000); }
 
-export default function AdminBilling() {
+export default function Billing() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState('');
-  const [requesting, setRequesting] = useState(false);
-  const [paymentForm, setPaymentForm] = useState({ invoiceId: '', amount: '', method: 'bank_transfer', transactionId: '', notes: '' });
+  const [saving, setSaving] = useState(false);
+  const [payment, setPayment] = useState({ method: 'manual_bank', amount: '', reference: '', proofUrl: '', note: '' });
+  const [toast, setToast] = useState(null);
 
-  async function loadBilling() {
+  async function load() {
     setLoading(true);
     try {
       const res = await API.get('/admin/billing/status');
       setData(res.data);
-      const open = res.data.invoices?.find(i => ['issued', 'overdue'].includes(i.status));
-      if (open) setPaymentForm(prev => ({ ...prev, invoiceId: open._id, amount: open.total }));
+      setPayment(prev => ({ ...prev, amount: res.data.openInvoice?.total || res.data.plan?.monthlyPrice || res.data.plan?.price || '' }));
     } catch (err) {
-      setMessage(err.response?.data?.message || err.message || 'Failed to load billing details');
-    } finally {
-      setLoading(false);
-    }
+      setToast({ type: 'error', text: err.response?.data?.message || err.message || 'Billing failed to load' });
+    } finally { setLoading(false); }
   }
 
-  useEffect(() => { loadBilling(); }, []);
+  useEffect(() => { load(); }, []);
 
-  const openInvoice = useMemo(() => data?.invoices?.find(i => ['issued', 'overdue'].includes(i.status)), [data]);
-  const sub = data?.subscription || {};
-  const plan = data?.plan || {};
+  const status = data?.subscription?.status || 'unknown';
+  const dueDays = daysLeft(data?.subscription?.nextBillingAt || data?.openInvoice?.dueDate);
+  const statusClass = useMemo(() => ({
+    trialing: 'bg-blue-50 text-blue-700 border-blue-200',
+    active: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    past_due: 'bg-orange-50 text-orange-700 border-orange-200',
+    grace: 'bg-amber-50 text-amber-700 border-amber-200',
+    suspended: 'bg-red-50 text-red-700 border-red-200',
+    cancelled: 'bg-slate-50 text-slate-700 border-slate-200',
+  }[status] || 'bg-slate-50 text-slate-700 border-slate-200'), [status]);
 
-  async function submitPaymentRequest(e) {
+  async function submitPayment(e) {
     e.preventDefault();
-    setRequesting(true);
-    setMessage('');
+    setSaving(true);
     try {
-      const payload = { ...paymentForm, amount: Number(paymentForm.amount || openInvoice?.total || 0) };
-      const res = await API.post('/admin/billing/payment-request', payload);
-      setMessage(res.data?.message || 'Payment request submitted');
-      await loadBilling();
-    } catch (err) {
-      setMessage(err.response?.data?.message || err.message || 'Could not submit payment request');
-    } finally {
-      setRequesting(false);
-    }
+      await API.post('/admin/billing/payments', { ...payment, invoiceId: data?.openInvoice?._id });
+      setToast({ type: 'success', text: 'Payment proof submitted. Super Admin will review it.' });
+      setPayment({ method: 'manual_bank', amount: '', reference: '', proofUrl: '', note: '' });
+      await load();
+    } catch (err) { setToast({ type: 'error', text: err.response?.data?.message || err.message || 'Could not submit payment' }); }
+    finally { setSaving(false); }
   }
 
-  if (loading) return <div className="p-6">Loading billing status...</div>;
+  if (loading) return <div className="p-6 bg-white rounded-2xl border">Loading billing…</div>;
+  if (!data) return <div className="p-6 bg-white rounded-2xl border text-red-600">Billing information unavailable.</div>;
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      <div className="rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 text-white p-6 shadow-xl">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <p className="text-sm text-white/60">Store Subscription</p>
-            <h1 className="text-2xl md:text-3xl font-bold">{plan.name || 'Current Plan'}</h1>
-            <p className="text-white/70 mt-1">Billing cycle: {sub.billingCycle || plan.billingCycle || 'monthly'}</p>
+    <div className="space-y-6">
+      {toast && <div className={`p-4 rounded-xl border text-sm ${toast.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>{toast.text}</div>}
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Current Plan</p>
+              <h1 className="text-2xl font-extrabold text-slate-900">{data.plan?.name || 'No plan'}</h1>
+              <p className="text-sm text-slate-500 mt-1">{data.plan?.description || 'Subscription details for this store.'}</p>
+            </div>
+            <span className={`px-3 py-1 rounded-full border text-xs font-bold uppercase ${statusClass}`}>{status.replace('_', ' ')}</span>
           </div>
-          <div className={`inline-flex px-4 py-2 rounded-full border text-sm font-semibold ${statusClass(sub.status)}`}>
-            {String(sub.status || 'active').toUpperCase()}
+          <div className="grid grid-cols-2 gap-4">
+            <Info label="Billing Cycle" value={data.subscription?.billingCycle || 'monthly'} />
+            <Info label="Amount" value={money(data.openInvoice?.total || data.plan?.monthlyPrice || data.plan?.price, data.plan?.currency)} />
+            <Info label="Trial Ends" value={fmtDate(data.subscription?.trialEndsAt)} />
+            <Info label="Next Billing" value={fmtDate(data.subscription?.nextBillingAt)} />
+            <Info label="Grace Ends" value={fmtDate(data.subscription?.graceEndsAt)} />
+            <Info label="Days Remaining" value={dueDays == null ? 'Not set' : `${dueDays} day(s)`} />
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-6">
-          <div className="bg-white/10 rounded-2xl p-4"><p className="text-white/60 text-xs">Period Start</p><p className="font-semibold">{fmtDate(sub.currentPeriodStart)}</p></div>
-          <div className="bg-white/10 rounded-2xl p-4"><p className="text-white/60 text-xs">Period End</p><p className="font-semibold">{fmtDate(sub.currentPeriodEnd)}</p></div>
-          <div className="bg-white/10 rounded-2xl p-4"><p className="text-white/60 text-xs">Trial End</p><p className="font-semibold">{fmtDate(sub.trialEnd)}</p></div>
-          <div className="bg-white/10 rounded-2xl p-4"><p className="text-white/60 text-xs">Grace Until</p><p className="font-semibold">{fmtDate(sub.graceUntil)}</p></div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 p-6">
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Open Invoice</p>
+          <p className="text-xl font-extrabold text-slate-900 mt-2">{data.openInvoice?.invoiceNumber || 'None'}</p>
+          <p className="text-sm text-slate-500 mt-2">Due: {fmtDate(data.openInvoice?.dueDate)}</p>
+          <p className="text-2xl font-extrabold text-indigo-600 mt-4">{money(data.openInvoice?.total, data.openInvoice?.currency)}</p>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 p-6">
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Store Status</p>
+          <p className="text-xl font-extrabold text-slate-900 mt-2">{data.tenant?.status}</p>
+          <p className="text-sm text-slate-500 mt-2">Auto renew: {data.subscription?.autoRenew ? 'Enabled' : 'Manual approval'}</p>
+          <button onClick={load} className="mt-5 w-full h-10 rounded-xl bg-slate-900 text-white text-sm font-bold">Refresh</button>
         </div>
       </div>
 
-      {message && <div className="rounded-2xl border border-blue-200 bg-blue-50 text-blue-700 p-4">{message}</div>}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <form onSubmit={submitPayment} className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4">
+          <h2 className="font-bold text-slate-900">Submit Monthly Payment</h2>
+          <Field label="Amount" type="number" value={payment.amount} onChange={v => setPayment(p => ({ ...p, amount: v }))} required />
+          <Field label="Reference / Bank Slip Number" value={payment.reference} onChange={v => setPayment(p => ({ ...p, reference: v }))} required />
+          <Field label="Payment Proof URL" value={payment.proofUrl} onChange={v => setPayment(p => ({ ...p, proofUrl: v }))} placeholder="Cloudinary / image URL" />
+          <label className="grid gap-1.5 text-xs font-semibold text-slate-600">Note<textarea className="border rounded-xl p-3 text-sm" rows="3" value={payment.note} onChange={e => setPayment(p => ({ ...p, note: e.target.value }))}/></label>
+          <button disabled={saving} className="w-full h-11 rounded-xl bg-indigo-600 text-white font-bold disabled:opacity-60">{saving ? 'Submitting…' : 'Submit Payment for Review'}</button>
+        </form>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-            <h2 className="font-bold text-lg">Invoices</h2>
-            {openInvoice && <span className="text-sm text-amber-600 font-semibold">Open invoice: {fmtMoney(openInvoice.total, openInvoice.currency)}</span>}
-          </div>
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6">
+          <h2 className="font-bold text-slate-900 mb-4">Payment History</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-slate-500"><tr><th className="text-left p-3">Invoice</th><th className="text-left p-3">Due</th><th className="text-left p-3">Amount</th><th className="text-left p-3">Status</th></tr></thead>
-              <tbody>
-                {(data?.invoices || []).map(inv => (
-                  <tr key={inv._id} className="border-t border-slate-100">
-                    <td className="p-3 font-semibold">{inv.invoiceNumber}</td>
-                    <td className="p-3">{fmtDate(inv.dueDate)}</td>
-                    <td className="p-3">{fmtMoney(inv.total, inv.currency)}</td>
-                    <td className="p-3"><span className={`px-2 py-1 rounded-full border text-xs ${statusClass(inv.status)}`}>{inv.status}</span></td>
-                  </tr>
-                ))}
-                {!data?.invoices?.length && <tr><td className="p-4 text-slate-500" colSpan="4">No invoices yet.</td></tr>}
-              </tbody>
+              <thead><tr className="text-left text-xs text-slate-400 border-b"><th className="py-2">Date</th><th>Amount</th><th>Reference</th><th>Status</th></tr></thead>
+              <tbody>{(data.payments || []).map(p => <tr key={p._id} className="border-b"><td className="py-3">{fmtDate(p.createdAt)}</td><td>{money(p.amount, p.currency)}</td><td>{p.reference || '-'}</td><td><Badge status={p.status}/></td></tr>)}</tbody>
             </table>
+            {(!data.payments || data.payments.length === 0) && <p className="text-center py-8 text-slate-400">No payments submitted yet.</p>}
           </div>
         </div>
-
-        <form onSubmit={submitPaymentRequest} className="bg-white rounded-3xl shadow-sm border border-slate-200 p-5 space-y-4">
-          <h2 className="font-bold text-lg">Submit Payment</h2>
-          <p className="text-sm text-slate-500">Submit bank transfer / manual payment details. Super Admin will verify and activate next period.</p>
-          <input className="w-full rounded-xl border border-slate-200 p-3" placeholder="Invoice ID" value={paymentForm.invoiceId} onChange={e=>setPaymentForm({...paymentForm, invoiceId:e.target.value})}/>
-          <input className="w-full rounded-xl border border-slate-200 p-3" placeholder="Amount" type="number" value={paymentForm.amount} onChange={e=>setPaymentForm({...paymentForm, amount:e.target.value})}/>
-          <select className="w-full rounded-xl border border-slate-200 p-3" value={paymentForm.method} onChange={e=>setPaymentForm({...paymentForm, method:e.target.value})}>
-            <option value="bank_transfer">Bank Transfer</option><option value="cash">Cash</option><option value="manual_request">Other Manual Payment</option>
-          </select>
-          <input className="w-full rounded-xl border border-slate-200 p-3" placeholder="Transaction / slip reference" value={paymentForm.transactionId} onChange={e=>setPaymentForm({...paymentForm, transactionId:e.target.value})}/>
-          <textarea className="w-full rounded-xl border border-slate-200 p-3" rows="3" placeholder="Notes" value={paymentForm.notes} onChange={e=>setPaymentForm({...paymentForm, notes:e.target.value})}/>
-          <button disabled={requesting} className="w-full rounded-xl bg-slate-900 text-white font-semibold py-3 disabled:opacity-60">{requesting ? 'Submitting...' : 'Submit Payment Request'}</button>
-        </form>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-5 border-b border-slate-100"><h2 className="font-bold text-lg">Payment History</h2></div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-slate-500"><tr><th className="text-left p-3">Date</th><th className="text-left p-3">Method</th><th className="text-left p-3">Amount</th><th className="text-left p-3">Status</th><th className="text-left p-3">Ref</th></tr></thead>
-            <tbody>
-              {(data?.payments || []).map(p => <tr key={p._id} className="border-t border-slate-100"><td className="p-3">{fmtDate(p.paidAt || p.createdAt)}</td><td className="p-3">{p.method}</td><td className="p-3">{fmtMoney(p.amount, p.currency)}</td><td className="p-3"><span className={`px-2 py-1 rounded-full border text-xs ${statusClass(p.status)}`}>{p.status}</span></td><td className="p-3">{p.transactionId || '—'}</td></tr>)}
-              {!data?.payments?.length && <tr><td className="p-4 text-slate-500" colSpan="5">No payments yet.</td></tr>}
-            </tbody>
-          </table>
-        </div>
+      <div className="bg-white rounded-2xl border border-slate-200 p-6">
+        <h2 className="font-bold text-slate-900 mb-4">Invoices</h2>
+        <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left text-xs text-slate-400 border-b"><th className="py-2">Invoice</th><th>Period</th><th>Due</th><th>Total</th><th>Status</th></tr></thead><tbody>{(data.invoices || []).map(i => <tr key={i._id} className="border-b"><td className="py-3 font-semibold">{i.invoiceNumber}</td><td>{fmtDate(i.periodStart)} → {fmtDate(i.periodEnd)}</td><td>{fmtDate(i.dueDate)}</td><td>{money(i.total, i.currency)}</td><td><Badge status={i.status}/></td></tr>)}</tbody></table></div>
       </div>
     </div>
   );
 }
+
+function Info({ label, value }) { return <div className="p-4 rounded-xl bg-slate-50"><p className="text-xs text-slate-400 font-bold uppercase">{label}</p><p className="text-sm font-bold text-slate-900 mt-1">{value}</p></div>; }
+function Field({ label, value, onChange, type='text', placeholder='', required=false }) { return <label className="grid gap-1.5 text-xs font-semibold text-slate-600">{label}<input className="h-10 border rounded-xl px-3 text-sm" type={type} value={value || ''} placeholder={placeholder} onChange={e=>onChange(e.target.value)} required={required}/></label>; }
+function Badge({ status }) { const cls = status === 'approved' || status === 'paid' ? 'bg-emerald-50 text-emerald-700' : status === 'pending' || status === 'pending_review' ? 'bg-amber-50 text-amber-700' : status === 'rejected' || status === 'failed' || status === 'overdue' ? 'bg-red-50 text-red-700' : 'bg-slate-50 text-slate-700'; return <span className={`px-2 py-1 rounded-full text-xs font-bold ${cls}`}>{String(status || 'unknown').replace('_',' ')}</span>; }

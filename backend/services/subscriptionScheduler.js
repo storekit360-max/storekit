@@ -1,22 +1,9 @@
 'use strict';
-
-let interval = null;
-
-function startSubscriptionScheduler() {
-  if (interval) return;
-  const everyMs = Number(process.env.SUBSCRIPTION_SCHEDULER_MS || 6 * 60 * 60 * 1000);
-  const { runBillingMaintenance } = require('./subscriptionBillingService');
-  const tick = async () => {
-    try {
-      const results = await runBillingMaintenance();
-      console.log(`[billing] maintenance completed for ${results.length} tenant(s)`);
-    } catch (err) {
-      console.warn('[billing] maintenance failed:', err.message);
-    }
-  };
-  setTimeout(tick, 30 * 1000);
-  interval = setInterval(tick, everyMs);
-  if (interval.unref) interval.unref();
+const { runMaintenance } = require('./subscriptionBillingService');
+let timer = null;
+function startSubscriptionScheduler(){
+  if (timer || process.env.DISABLE_SUBSCRIPTION_SCHEDULER === 'true') return;
+  timer = setInterval(() => runMaintenance().catch(err => console.error('[subscription-maintenance]', err.message)), 6 * 60 * 60 * 1000);
+  timer.unref?.();
 }
-
 module.exports = { startSubscriptionScheduler };

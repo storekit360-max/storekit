@@ -1,22 +1,17 @@
 'use strict';
-
 const mongoose = require('mongoose');
-
-const subscriptionPaymentSchema = new mongoose.Schema({
-  tenant: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true, index: true },
-  invoice: { type: mongoose.Schema.Types.ObjectId, ref: 'SubscriptionInvoice', default: null, index: true },
-  amount: { type: Number, required: true, min: 0 },
+const paymentSchema = new mongoose.Schema({
+  tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true, index: true },
+  invoiceId: { type: mongoose.Schema.Types.ObjectId, ref: 'SubscriptionInvoice', default: null, index: true },
+  amount: { type: Number, required: true },
   currency: { type: String, default: 'LKR' },
-  billingCycle: { type: String, enum: ['monthly', 'yearly', 'once'], default: 'monthly' },
-  method: { type: String, default: 'manual' },
-  transactionId: { type: String, default: '' },
-  status: { type: String, enum: ['pending', 'succeeded', 'failed', 'refunded'], default: 'succeeded', index: true },
-  failureReason: { type: String, default: '' },
-  recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
-  paidAt: { type: Date, default: Date.now },
-  notes: { type: String, default: '' },
+  method: { type: String, enum: ['manual_bank', 'cash', 'card', 'gateway', 'other'], default: 'manual_bank' },
+  reference: { type: String, default: '' },
+  proofUrl: { type: String, default: '' },
+  status: { type: String, enum: ['pending', 'approved', 'rejected', 'failed'], default: 'pending', index: true },
+  submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  reviewedAt: Date,
+  note: { type: String, default: '' },
 }, { timestamps: true });
-
-subscriptionPaymentSchema.index({ tenant: 1, createdAt: -1 });
-
-module.exports = mongoose.models.SubscriptionPayment || mongoose.model('SubscriptionPayment', subscriptionPaymentSchema);
+module.exports = mongoose.models.SubscriptionPayment || mongoose.model('SubscriptionPayment', paymentSchema);

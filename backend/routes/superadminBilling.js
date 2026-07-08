@@ -1,0 +1,23 @@
+'use strict';
+const express = require('express');
+const Tenant = require('../models/Tenant');
+const Plan = require('../models/Plan');
+const SubscriptionInvoice = require('../models/SubscriptionInvoice');
+const SubscriptionPayment = require('../models/SubscriptionPayment');
+const SubscriptionCoupon = require('../models/SubscriptionCoupon');
+const { auth } = require('../middleware/auth');
+const { initializeTenantSubscription, ensureOpenInvoice, approvePayment, rejectPayment, runMaintenance } = require('../services/subscriptionBillingService');
+const router = express.Router();
+function superOnly(req,res,next){ if(req.user?.role!=='superadmin') return res.status(403).json({message:'Super admin access required'}); next(); }
+router.use(auth, superOnly);
+router.get('/summary', async (_req,res,next)=>{ try{ const [tenants, invoices, payments, coupons] = await Promise.all([Tenant.find().populate('plan').sort({createdAt:-1}), SubscriptionInvoice.find().populate('tenantId','storeName domains').sort({createdAt:-1}).limit(100), SubscriptionPayment.find().populate('tenantId','storeName domains').populate('invoiceId').sort({createdAt:-1}).limit(100), SubscriptionCoupon.find().sort({createdAt:-1})]); const mrr = tenants.filter(t=>['active','trialing','grace','past_due'].includes(t.subscription?.status)).reduce((sum,t)=>sum+Number(t.plan?.monthlyPrice||t.plan?.price||0),0); const arr = tenants.filter(t=>['active','trialing','grace','past_due'].includes(t.subscription?.status)).reduce((sum,t)=>sum+Number(t.plan?.yearlyPrice || (t.plan?.monthlyPrice||t.plan?.price||0)*12),0); const counts = tenants.reduce((a,t)=>{ const s=t.subscription?.status||'unknown'; a[s]=(a[s]||0)+1; return a; },{}); res.json({metrics:{mrr,arr,totalTenants:tenants.length,active:counts.active||0,trialing:counts.trialing||0,pastDue:counts.past_due||0,grace:counts.grace||0,suspended:counts.suspended||0,pendingPayments:payments.filter(p=>p.status==='pending').length, unpaidInvoices:invoices.filter(i=>['unpaid','overdue','pending_review'].includes(i.status)).length}, tenants, invoices, payments, coupons}); }catch(e){next(e);} });
+router.post('/tenants/:id/initialize', async (req,res,next)=>{ try{ const tenant=await Tenant.findById(req.params.id); if(!tenant) return res.status(404).json({message:'Tenant not found'}); res.json(await initializeTenantSubscription(tenant)); }catch(e){next(e);} });
+router.post('/tenants/:id/change-plan', async (req,res,next)=>{ try{ const tenant=await Tenant.findById(req.params.id); const plan=await Plan.findById(req.body.planId); if(!tenant||!plan) return res.status(404).json({message:'Tenant or plan not found'}); tenant.plan=plan._id; tenant.subscription = { ...(tenant.subscription||{}), billingCycle:req.body.billingCycle||tenant.subscription?.billingCycle||plan.billingCycle||'monthly', status:req.body.status||tenant.subscription?.status||'active', autoRenew:req.body.autoRenew ?? plan.autoRenew }; await tenant.save(); await initializeTenantSubscription(tenant, plan); res.json(await Tenant.findById(tenant._id).populate('plan')); }catch(e){next(e);} });
+router.post('/tenants/:id/renew', async (req,res,next)=>{ try{ const tenant=await Tenant.findById(req.params.id).populate('plan'); if(!tenant) return res.status(404).json({message:'Tenant not found'}); const invoice=await ensureOpenInvoice(tenant); res.json(invoice); }catch(e){next(e);} });
+router.post('/payments/:id/approve', async (req,res,next)=>{ try{ res.json(await approvePayment(req.params.id, req.user._id)); }catch(e){next(e);} });
+router.post('/payments/:id/reject', async (req,res,next)=>{ try{ res.json(await rejectPayment(req.params.id, req.user._id, req.body.note)); }catch(e){next(e);} });
+router.post('/maintenance/run', async (_req,res,next)=>{ try{ res.json({results:await runMaintenance()}); }catch(e){next(e);} });
+router.post('/coupons', async (req,res,next)=>{ try{ const body={...req.body, code:String(req.body.code||'').toUpperCase().trim()}; if(!body.code) return res.status(400).json({message:'Coupon code is required'}); res.status(201).json(await SubscriptionCoupon.create(body)); }catch(e){next(e);} });
+router.put('/coupons/:id', async (req,res,next)=>{ try{ res.json(await SubscriptionCoupon.findByIdAndUpdate(req.params.id, {$set:req.body}, {new:true, runValidators:true})); }catch(e){next(e);} });
+router.delete('/coupons/:id', async (req,res,next)=>{ try{ await SubscriptionCoupon.findByIdAndDelete(req.params.id); res.json({message:'Coupon deleted'}); }catch(e){next(e);} });
+module.exports = router;

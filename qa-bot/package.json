@@ -1,0 +1,20 @@
+{
+  "name": "storekit-qa-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local end-to-end QA bot for React + Node + MongoDB + Cloudinary StoreKit project",
+  "scripts": {
+    "install:browsers": "playwright install --with-deps chromium",
+    "qa": "node src/run-qa.js",
+    "qa:headed": "HEADLESS=false node src/run-qa.js",
+    "qa:test": "playwright test",
+    "qa:test:headed": "playwright test --headed",
+    "qa:report": "playwright show-report reports/playwright-html"
+  },
+  "dependencies": {
+    "@playwright/test": "^1.54.2",
+    "dotenv": "^16.4.7",
+    "fs-extra": "^11.3.0"
+  },
+  "devDependencies": {}
+}
