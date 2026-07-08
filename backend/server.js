@@ -22,11 +22,14 @@
 
 const express    = require('express');
 const mongoose   = require('mongoose');
+const { tenantContextMiddleware, installTenantScope } = require('./middleware/tenantContext');
+installTenantScope(mongoose);
 const cors       = require('cors');
 const path       = require('path');
 require('dotenv').config();
 
 const app = express();
+const { resolveTenant } = require('./middleware/tenant');
 try { require('./services/subscriptionScheduler').startSubscriptionScheduler(); } catch (err) { console.warn('[subscription-scheduler]', err.message); }
 
 // Trust the Railway/Vercel proxy so express-rate-limit sees the real client IP
@@ -130,6 +133,11 @@ app.use('/api/auth',          require('./routes/auth'));
 app.use('/api/tenant',        require('./routes/tenant'));
 app.use('/api/superadmin/billing', require('./routes/superadminBilling'));
 app.use('/api/superadmin',    require('./routes/superadmin'));
+
+// Every storefront/admin API below this point is tenant-aware.
+// This MUST stay before products/categories/banners/settings/pages/coupons/admin routes.
+// Without this, all tenants read/write shared data.
+app.use('/api', resolveTenant, tenantContextMiddleware);
 
 // ─── Public routes ────────────────────────────────────────────────────────────
 app.use('/api/products',      require('./routes/products'));

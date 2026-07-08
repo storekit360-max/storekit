@@ -2,13 +2,6 @@
 
 const Tenant = require('../models/Tenant');
 
-let refreshTenantLifecycle = async () => {};
-try {
-  ({ refreshTenantLifecycle } = require('../services/subscriptionBillingService'));
-} catch (_) {
-  // Billing module may not be loaded during isolated scripts/tests.
-}
-
 function normalizeDomain(value) {
   return String(value || '')
     .toLowerCase()
@@ -37,12 +30,11 @@ function getHeaderDomainCandidates(req) {
     const domain = normalizeDomain(value);
     if (!domain) continue;
     domains.push(domain);
-    domains.push(`${domain}/`); // backward compatibility for old saved domains with trailing slash
     if (domain === 'localhost') domains.push('127.0.0.1');
     if (domain === '127.0.0.1') domains.push('localhost');
   }
 
-  return Array.from(new Set(domains.filter(Boolean)));
+  return Array.from(new Set(domains));
 }
 
 async function findTenantFromRequest(req) {
@@ -57,20 +49,6 @@ async function findTenantFromRequest(req) {
   return { tenant, lookupDomains };
 }
 
-async function attachTenant(req, tenant) {
-  if (!tenant) return;
-
-  try {
-    await refreshTenantLifecycle(tenant, tenant.plan);
-  } catch (_) {
-    // Tenant resolution must not crash public/superadmin requests if billing lifecycle fails.
-  }
-
-  req.tenant = tenant;
-  req.tenantId = tenant._id;
-  req.plan = tenant.plan;
-}
-
 async function resolveTenant(req, res, next) {
   try {
     const { tenant, lookupDomains } = await findTenantFromRequest(req);
@@ -82,17 +60,9 @@ async function resolveTenant(req, res, next) {
       });
     }
 
-    await attachTenant(req, tenant);
-
-    if (tenant.status !== 'active') {
-      return res.status(402).json({
-        message: 'Store subscription is not active',
-        status: tenant.status,
-        subscriptionStatus: tenant.subscription?.status,
-        reason: tenant.subscription?.suspendedReason || 'Subscription inactive',
-      });
-    }
-
+    req.tenant = tenant;
+    req.tenantId = tenant._id;
+    req.plan = tenant.plan;
     next();
   } catch (err) {
     next(err);
@@ -102,7 +72,11 @@ async function resolveTenant(req, res, next) {
 async function optionalTenant(req, _res, next) {
   try {
     const { tenant } = await findTenantFromRequest(req);
-    if (tenant && tenant.status === 'active') await attachTenant(req, tenant);
+    if (tenant) {
+      req.tenant = tenant;
+      req.tenantId = tenant._id;
+      req.plan = tenant.plan;
+    }
   } catch (_) {
     // Optional tenant resolution must never block auth/superadmin flows.
   }
@@ -124,5 +98,4 @@ module.exports = {
   requireFeature,
   normalizeDomain,
   getHeaderDomainCandidates,
-  findTenantFromRequest,
 };
