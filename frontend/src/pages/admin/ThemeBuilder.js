@@ -19,35 +19,91 @@ const ColorSwatch = ({ color, onChange, label }) => (
 );
 
 const TEMPLATE_PREVIEW = {
-  classic: ['#15803d', '#84cc16'],
-  modern: ['#2563eb', '#06b6d4'],
-  minimal: ['#f8fafc', '#cbd5e1'],
-  luxury: ['#111827', '#d4af37'],
-  fashion: ['#be123c', '#f9a8d4'],
-  electronics: ['#0f172a', '#38bdf8'],
-  mobile: ['#0f172a', '#38bdf8'],
-  grocery: ['#16a34a', '#bef264'],
-  beauty: ['#db2777', '#fbcfe8'],
-  furniture: ['#78350f', '#f59e0b'],
-  jewelry: ['#111827', '#d4af37'],
-  sports: ['#ea580c', '#fde047'],
-  automotive: ['#020617', '#22d3ee'],
-  kids: ['#7c3aed', '#facc15'],
-  books: ['#92400e', '#fde68a'],
-  pharmacy: ['#0f766e', '#99f6e4'],
-  b2b: ['#334155', '#94a3b8'],
-  marketplace: ['#4f46e5', '#f97316'],
-  neon: ['#020617', '#22d3ee'],
-  organic: ['#4d7c0f', '#bef264'],
-  premiumApple: ['#111827', '#e5e7eb'],
-  sriLanka: ['#b91c1c', '#facc15'],
-  wholesale: ['#334155', '#94a3b8'],
-  startup: ['#7c3aed', '#06b6d4'],
+  classic:      { colors:['#15803d','#84cc16'], hero:'bar',      grid:'three',    radius:12 },
+  modern:       { colors:['#2563eb','#06b6d4'], hero:'floating', grid:'masonry',  radius:18 },
+  minimal:      { colors:['#f8fafc','#cbd5e1'], hero:'line',     grid:'minimal',  radius:4 },
+  luxury:       { colors:['#111827','#d4af37'], hero:'split',    grid:'large',    radius:22, dark:true },
+  fashion:      { colors:['#be123c','#f9a8d4'], hero:'editorial',grid:'tall',     radius:2 },
+  electronics:  { colors:['#0f172a','#38bdf8'], hero:'tech',     grid:'compact',  radius:10, dark:true },
+  mobile:       { colors:['#1d4ed8','#93c5fd'], hero:'phone',    grid:'devices',  radius:18, dark:true },
+  grocery:      { colors:['#16a34a','#bef264'], hero:'coupon',   grid:'bubbles',  radius:20 },
+  beauty:       { colors:['#db2777','#fbcfe8'], hero:'soft',     grid:'pills',    radius:28 },
+  furniture:    { colors:['#78350f','#f59e0b'], hero:'room',     grid:'wide',     radius:6 },
+  jewelry:      { colors:['#312e81','#f5d0fe'], hero:'gem',      grid:'circles',  radius:999, dark:true },
+  sports:       { colors:['#ea580c','#fde047'], hero:'diagonal', grid:'score',    radius:8 },
+  automotive:   { colors:['#020617','#ef4444'], hero:'road',     grid:'stripes',  radius:3, dark:true },
+  kids:         { colors:['#7c3aed','#facc15'], hero:'play',     grid:'blocks',   radius:24 },
+  books:        { colors:['#92400e','#fde68a'], hero:'shelf',    grid:'books',    radius:3 },
+  pharmacy:     { colors:['#0f766e','#99f6e4'], hero:'medical',  grid:'clean',    radius:12 },
+  b2b:          { colors:['#334155','#cbd5e1'], hero:'table',    grid:'dense',    radius:2 },
+  marketplace:  { colors:['#4f46e5','#f97316'], hero:'search',   grid:'market',   radius:12 },
+  neon:         { colors:['#111827','#a855f7'], hero:'neon',     grid:'glow',     radius:14, dark:true },
+  organic:      { colors:['#4d7c0f','#d9f99d'], hero:'leaf',     grid:'natural',  radius:26 },
+  premiumApple: { colors:['#111827','#e5e7eb'], hero:'glass',    grid:'apple',    radius:30, dark:true },
+  sriLanka:     { colors:['#b91c1c','#facc15'], hero:'flag',     grid:'local',    radius:14 },
+  wholesale:    { colors:['#475569','#fbbf24'], hero:'deal',     grid:'bulk',     radius:5 },
+  startup:      { colors:['#7c3aed','#06b6d4'], hero:'saas',     grid:'cards',    radius:16 },
 };
 
 const TemplateCard = ({ id, template, active, onSelect }) => {
-  const [a, b] = TEMPLATE_PREVIEW[id] || ['#6366f1', '#22d3ee'];
-  const darkPreview = ['luxury', 'electronics', 'mobile', 'automotive', 'neon', 'premiumApple'].includes(id);
+  const preview = TEMPLATE_PREVIEW[id] || { colors:['#6366f1', '#22d3ee'], hero:'bar', grid:'three', radius:12 };
+  const [a, b] = preview.colors;
+  const cardBg = preview.dark ? 'rgba(15,23,42,0.70)' : 'rgba(255,255,255,0.80)';
+  const cardAlt = preview.dark ? 'rgba(255,255,255,0.18)' : 'rgba(15,23,42,0.12)';
+  const heroShape = {
+    bar: 'inset(0 0 0 0 round 12px)',
+    floating: 'circle(44% at 30% 48%)',
+    line: 'inset(44% 4% 44% 4% round 999px)',
+    split: 'polygon(0 0,100% 0,70% 100%,0 100%)',
+    editorial: 'polygon(0 0,70% 0,100% 100%,0 100%)',
+    tech: 'polygon(0 0,100% 0,86% 70%,16% 100%,0 80%)',
+    phone: 'inset(0 34% 0 34% round 14px)',
+    coupon: 'polygon(0 0,100% 0,92% 50%,100% 100%,0 100%,8% 50%)',
+    soft: 'ellipse(48% 42% at 50% 50%)',
+    room: 'inset(0 0 22% 0 round 4px)',
+    gem: 'polygon(50% 0,100% 38%,82% 100%,18% 100%,0 38%)',
+    diagonal: 'polygon(0 28%,100% 0,100% 72%,0 100%)',
+    road: 'polygon(10% 0,90% 0,62% 100%,38% 100%)',
+    play: 'circle(38% at 50% 50%)',
+    shelf: 'inset(0 0 0 0 round 2px)',
+    medical: 'polygon(38% 0,62% 0,62% 38%,100% 38%,100% 62%,62% 62%,62% 100%,38% 100%,38% 62%,0 62%,0 38%,38% 38%)',
+    table: 'inset(0 0 0 0 round 2px)',
+    search: 'circle(40% at 36% 45%)',
+    neon: 'polygon(12% 0,100% 0,88% 100%,0 100%)',
+    leaf: 'ellipse(34% 48% at 46% 50%)',
+    glass: 'inset(0 8% 0 8% round 24px)',
+    flag: 'polygon(0 0,100% 0,100% 70%,50% 100%,0 70%)',
+    deal: 'polygon(0 0,82% 0,100% 50%,82% 100%,0 100%)',
+    saas: 'inset(0 0 0 0 round 16px)',
+  }[preview.hero] || 'inset(0 0 0 0 round 12px)';
+
+  const gridStyles = {
+    three: ['1fr 1fr 1fr', [28,28,28]],
+    masonry: ['1.1fr .9fr 1fr', [34,22,30]],
+    minimal: ['1fr 1fr 1fr', [8,8,8]],
+    large: ['1.5fr .75fr .75fr', [36,28,28]],
+    tall: ['.8fr 1.2fr .8fr', [38,46,30]],
+    compact: ['1fr 1fr 1fr', [22,22,22]],
+    devices: ['.7fr 1fr .7fr', [34,44,34]],
+    bubbles: ['1fr 1fr 1fr', [26,32,24]],
+    pills: ['1fr 1fr 1fr', [18,18,18]],
+    wide: ['1.6fr .8fr .8fr', [28,28,28]],
+    circles: ['1fr 1fr 1fr', [28,28,28]],
+    score: ['1fr .6fr 1fr', [24,34,24]],
+    stripes: ['1fr 1fr 1fr', [12,28,12]],
+    blocks: ['1fr 1fr 1fr', [30,20,34]],
+    books: ['.7fr .7fr .7fr', [36,30,42]],
+    clean: ['1fr 1fr 1fr', [24,24,24]],
+    dense: ['1fr 1fr 1fr', [16,16,16]],
+    market: ['1fr 1fr 1fr', [26,30,26]],
+    glow: ['1fr 1fr 1fr', [28,20,28]],
+    natural: ['1fr 1fr 1fr', [30,26,34]],
+    apple: ['1.4fr .8fr .8fr', [34,24,24]],
+    local: ['1fr 1fr 1fr', [22,30,22]],
+    bulk: ['1.5fr .75fr .75fr', [18,18,18]],
+    cards: ['1fr 1fr 1fr', [30,30,30]],
+  }[preview.grid] || ['1fr 1fr 1fr', [28,28,28]];
+
   return (
     <button type="button" onClick={() => onSelect(id)}
       className={`text-left relative overflow-hidden rounded-2xl border-2 bg-white transition-all ${active ? 'border-primary shadow-lg scale-[1.02]' : 'border-gray-100 hover:border-gray-200 hover:shadow-md'}`}>
@@ -60,17 +116,20 @@ const TemplateCard = ({ id, template, active, onSelect }) => {
         <div
           className="h-8 rounded-xl mb-2"
           style={{
-            background: darkPreview ? 'rgba(15,23,42,0.72)' : 'rgba(255,255,255,0.82)',
+            background: cardBg,
             boxShadow: '0 10px 24px rgba(15,23,42,0.16)',
+            clipPath: heroShape,
           }}
         />
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid gap-2" style={{ gridTemplateColumns: gridStyles[0] }}>
           {[0, 1, 2].map(i => (
             <span
               key={i}
-              className="block h-8 rounded-lg"
+              className="block"
               style={{
-                background: darkPreview ? 'rgba(15,23,42,0.62)' : 'rgba(255,255,255,0.78)',
+                height: gridStyles[1][i],
+                borderRadius: preview.radius,
+                background: i === 1 ? cardBg : cardAlt,
                 boxShadow: '0 8px 18px rgba(15,23,42,0.12)',
               }}
             />
@@ -90,10 +149,12 @@ const TemplateCard = ({ id, template, active, onSelect }) => {
   );
 };
 
+const themeGradient = (theme) => theme?.gradient || `linear-gradient(135deg, ${theme?.primaryDark || '#4338ca'} 0%, ${theme?.primary || '#6366f1'} 52%, ${theme?.accent || '#22d3ee'} 100%)`;
+
 const ThemeCard = ({ id, theme, active, onSelect }) => (
   <div onClick={() => onSelect(id)}
     className={`relative cursor-pointer rounded-2xl overflow-hidden border-2 transition-all ${active ? 'border-primary shadow-lg scale-105' : 'border-transparent hover:border-gray-200'}`}>
-    <div className="h-20" style={{ background: theme.gradient }} />
+    <div className="h-20" style={{ background: themeGradient(theme) }} />
     <div className="absolute inset-0 flex items-end p-2">
       <div className="bg-white/90 backdrop-blur rounded-lg px-2 py-1 w-full">
         <p className="text-xs font-bold text-gray-800 truncate">{theme.name}</p>
@@ -209,9 +270,10 @@ export default function ThemeBuilder() {
         storeTemplate: selectedTemplate,
         customCSS,
       };
-      await API.put('/settings', payload);
-      writeCache({ ...settings, ...payload });
-      applyTheme({ ...settings, ...payload });
+      const { data } = await API.put('/settings', payload);
+      const saved = data?.settings || { ...settings, ...payload };
+      writeCache(saved);
+      applyTheme(saved);
       toast.success('Theme saved & applied!');
       refreshTheme();
     } catch {

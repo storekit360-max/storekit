@@ -54,9 +54,9 @@ function tenantSettingsResponse(tenant) {
 }
 
 async function findTenantFromRequest(req) {
+  if (req.user?.tenantId) return Tenant.findById(req.user.tenantId).populate('plan');
   if (req.tenant) return req.tenant;
   if (req.tenantId) return Tenant.findById(req.tenantId).populate('plan');
-  if (req.user?.tenantId) return Tenant.findById(req.user.tenantId).populate('plan');
 
   const candidates = typeof getHeaderDomainCandidates === 'function'
     ? getHeaderDomainCandidates(req)
