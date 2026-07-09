@@ -1,116 +1,235 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import API from '../../utils/api';
+import toast from 'react-hot-toast';
 
-function formatDate(value) { return value ? new Date(value).toLocaleDateString() : 'Not set'; }
-function statusColor(status) {
-  return status === 'active' ? 'bg-emerald-100 text-emerald-700' : status === 'trial' ? 'bg-blue-100 text-blue-700' : status === 'grace' ? 'bg-amber-100 text-amber-700' : status === 'suspended' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700';
+const STATUS_META = {
+  trial:      { label: 'Free Trial',        color: '#2563eb', bg: '#eff6ff' },
+  active:     { label: 'Active',            color: '#059669', bg: '#ecfdf5' },
+  past_due:   { label: 'Payment Due',       color: '#d97706', bg: '#fffbeb' },
+  suspended:  { label: 'Suspended',         color: '#dc2626', bg: '#fef2f2' },
+  cancelled:  { label: 'Cancelled',         color: '#6b7280', bg: '#f9fafb' },
+};
+
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function fmtMoney(amount, currency = 'LKR') {
+  const n = Number(amount || 0);
+  return `${currency} ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export default function Billing() {
-  const [data, setData] = useState(null);
-  const [proofUrl, setProofUrl] = useState('');
-  const [note, setNote] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [tenant, setTenant] = useState(null);
+  const [plan, setPlan] = useState(null);
+  const [billing, setBilling] = useState(null);
+  const [payments, setPayments] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [form, setForm] = useState({ method: 'bank_transfer', reference: '', amount: '', note: '' });
 
-  async function load() {
-    const res = await API.get('/admin/billing/status');
-    setData(res.data);
-    setProofUrl('');
-  }
-  useEffect(() => { load().catch(err => setMessage(err.response?.data?.message || err.message)); }, []);
-
-  const activeDateLabel = useMemo(() => {
-    const st = data?.subscription?.status;
-    if (st === 'trial') return 'Trial ends';
-    if (st === 'grace') return 'Grace ends';
-    return 'Next billing';
-  }, [data]);
-
-  async function uploadProof(file) {
-    if (!file) return;
-    const fd = new FormData();
-    fd.append('image', file);
-    setUploading(true);
+  async function loadAll() {
+    setLoading(true);
     try {
-      const { data: upload } = await API.post('/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      setProofUrl(upload.url);
-      setMessage('Payment proof uploaded. Submit it for review.');
-    } catch (err) { setMessage(err.response?.data?.message || err.message); }
-    finally { setUploading(false); }
+      const [statusRes, paymentsRes] = await Promise.all([
+        API.get('/billing/status'),
+        API.get('/billing/payments'),
+      ]);
+      setTenant(statusRes.data.tenant);
+      setPlan(statusRes.data.plan);
+      setBilling(statusRes.data.billing);
+      setPayments(paymentsRes.data || []);
+      setForm(f => ({ ...f, amount: statusRes.data.billing?.nextPaymentAmount || '' }));
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not load billing information');
+    } finally {
+      setLoading(false);
+    }
   }
 
-  async function submitProof(e) {
+  useEffect(() => { loadAll(); }, []);
+
+  async function submitPayment(e) {
     e.preventDefault();
-    setSaving(true);
+    if (!form.reference.trim()) return toast.error('Please enter a payment reference / slip number');
+    setSubmitting(true);
     try {
-      await API.post('/admin/billing/payment-proof', { proofUrl, note, amount: data?.amount });
-      setMessage('Payment proof submitted for Super Admin review.');
-      setNote('');
-      await load();
-    } catch (err) { setMessage(err.response?.data?.message || err.message); }
-    finally { setSaving(false); }
+      await API.post('/billing/payments', form);
+      toast.success('Payment submitted — awaiting super admin approval');
+      setForm(f => ({ ...f, reference: '', note: '' }));
+      loadAll();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not submit payment');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  if (!data) return <div className="p-6 bg-white rounded-2xl border border-slate-200">Loading billing details…</div>;
+  if (loading) {
+    return <div className="p-6 text-sm text-slate-400">Loading billing information…</div>;
+  }
+  if (!tenant || !plan) {
+    return <div className="p-6 text-sm text-slate-400">No billing information available.</div>;
+  }
+
+  const status = billing?.subscriptionStatus || 'trial';
+  const meta = STATUS_META[status] || STATUS_META.trial;
+  const currency = plan.currency || 'LKR';
+  const isFree = Number(plan.price || 0) === 0;
 
   return (
-    <div className="space-y-6">
-      {message && <div className="p-3 rounded-xl bg-blue-50 border border-blue-100 text-sm text-blue-700">{message}</div>}
-      <div className="bg-gradient-to-br from-slate-900 to-indigo-900 rounded-3xl p-6 text-white shadow-xl">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-sm text-indigo-200">Current subscription</p>
-            <h1 className="text-3xl font-black mt-1">{data.plan?.name || 'No plan assigned'}</h1>
-            <div className="flex flex-wrap gap-2 mt-3">
-              <span className={`px-3 py-1 rounded-full text-xs font-bold ${statusColor(data.subscription?.status)}`}>{data.subscription?.status || 'not set'}</span>
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-white/10">{data.billingCycle}</span>
-              <span className="px-3 py-1 rounded-full text-xs font-bold bg-white/10">{data.currency} {Number(data.amount || 0).toLocaleString()}</span>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-sm text-indigo-200">Days left</p>
-            <p className="text-5xl font-black">{data.daysLeft ?? '-'}</p>
-            <p className="text-xs text-indigo-200 mt-1">{activeDateLabel}: {formatDate(data.nextBillingAt || data.trialEndsAt || data.graceEndsAt)}</p>
+    <div className="p-4 sm:p-6 space-y-6 max-w-4xl">
+      <div>
+        <h1 className="text-xl font-bold text-slate-900">Billing & Subscription</h1>
+        <p className="text-sm text-slate-500 mt-1">Manage your plan and payments.</p>
+      </div>
+
+      {tenant.status === 'suspended' && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          Your store is currently <strong>suspended</strong>. Submit a payment below and your store will be
+          reactivated once the super admin approves it.
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <div className="text-xs font-semibold text-slate-500 mb-2">Current Plan</div>
+          <div className="text-lg font-extrabold text-slate-900">{plan.name}</div>
+          <div className="text-sm text-slate-500 mt-1">
+            {isFree ? 'Free' : `${fmtMoney(plan.price, currency)} / ${billing?.billingCycle || plan.billingCycle}`}
           </div>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Info label="Next billing" value={formatDate(data.nextBillingAt)} />
-        <Info label="Trial ends" value={formatDate(data.trialEndsAt)} />
-        <Info label="Grace ends" value={formatDate(data.graceEndsAt)} />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <form onSubmit={submitProof} className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-          <h2 className="font-bold text-slate-900">Submit monthly payment proof</h2>
-          <label className="grid gap-2 text-sm font-semibold text-slate-600">
-            Upload payment proof
-            <input type="file" accept="image/*,.pdf" onChange={e => uploadProof(e.target.files?.[0])} className="block w-full text-sm" />
-            {uploading && <span className="text-xs text-blue-600">Uploading…</span>}
-          </label>
-          <label className="grid gap-2 text-sm font-semibold text-slate-600">
-            Payment Proof URL
-            <input className="h-10 border rounded-lg px-3 text-sm" value={proofUrl} onChange={e=>setProofUrl(e.target.value)} placeholder="Upload file or paste URL" />
-          </label>
-          <label className="grid gap-2 text-sm font-semibold text-slate-600">
-            Note
-            <textarea className="border rounded-lg px-3 py-2 text-sm" rows={3} value={note} onChange={e=>setNote(e.target.value)} placeholder="Bank reference / month / notes" />
-          </label>
-          <button disabled={!proofUrl || saving} className="h-11 px-5 rounded-xl bg-indigo-600 disabled:opacity-50 text-white font-bold">{saving ? 'Submitting…' : 'Submit for Review'}</button>
-        </form>
 
         <div className="bg-white rounded-2xl border border-slate-200 p-5">
-          <h2 className="font-bold text-slate-900 mb-4">Payment history</h2>
-          <div className="space-y-3 max-h-[380px] overflow-auto">
-            {(data.payments || []).map(p => <div key={p._id} className="p-3 rounded-xl border border-slate-100 flex justify-between gap-3"><div><p className="font-semibold text-sm">{p.currency} {Number(p.amount).toLocaleString()}</p><p className="text-xs text-slate-500">{formatDate(p.createdAt)}</p>{p.proofUrl && <a className="text-xs text-indigo-600" href={p.proofUrl} target="_blank" rel="noreferrer">View proof</a>}</div><span className={`h-fit px-2 py-1 rounded-full text-xs font-bold ${statusColor(p.status)}`}>{p.status}</span></div>)}
-            {(!data.payments || data.payments.length === 0) && <p className="text-sm text-slate-400">No payments yet.</p>}
-          </div>
+          <div className="text-xs font-semibold text-slate-500 mb-2">Subscription Status</div>
+          <span
+            className="inline-block px-3 py-1 rounded-full text-xs font-bold"
+            style={{ color: meta.color, background: meta.bg }}
+          >
+            {meta.label}
+          </span>
+          {status === 'trial' && (
+            <div className="text-sm text-slate-500 mt-2">Trial ends {fmtDate(billing.trialEndsAt)}</div>
+          )}
+          {status === 'past_due' && (
+            <div className="text-sm text-amber-600 mt-2">Grace period ends {fmtDate(billing.gracePeriodEndsAt)}</div>
+          )}
         </div>
+
+        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <div className="text-xs font-semibold text-slate-500 mb-2">Next Payment</div>
+          {isFree ? (
+            <div className="text-sm text-slate-500">No payment required</div>
+          ) : (
+            <>
+              <div className="text-lg font-extrabold text-slate-900">{fmtMoney(billing?.nextPaymentAmount, currency)}</div>
+              <div className="text-sm text-slate-500 mt-1">Due {fmtDate(billing?.nextPaymentDate)}</div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {!isFree && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-6">
+          <h2 className="text-base font-bold text-slate-900 mb-4">Submit a Payment</h2>
+          <form onSubmit={submitPayment} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label className="grid gap-1.5 text-xs font-semibold text-slate-600">
+              Payment Method
+              <select
+                className="h-10 border border-slate-300 rounded-lg px-3 text-sm"
+                value={form.method}
+                onChange={e => setForm(f => ({ ...f, method: e.target.value }))}
+              >
+                <option value="bank_transfer">Bank Transfer</option>
+                <option value="payhere">PayHere</option>
+                <option value="cash">Cash / In Person</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label className="grid gap-1.5 text-xs font-semibold text-slate-600">
+              Amount Paid ({currency})
+              <input
+                type="number" step="0.01" min="0"
+                className="h-10 border border-slate-300 rounded-lg px-3 text-sm"
+                value={form.amount}
+                onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+              />
+            </label>
+            <label className="grid gap-1.5 text-xs font-semibold text-slate-600 sm:col-span-2">
+              Payment Reference / Slip Number
+              <input
+                className="h-10 border border-slate-300 rounded-lg px-3 text-sm"
+                placeholder="e.g. bank slip no. or transaction ID"
+                value={form.reference}
+                onChange={e => setForm(f => ({ ...f, reference: e.target.value }))}
+              />
+            </label>
+            <label className="grid gap-1.5 text-xs font-semibold text-slate-600 sm:col-span-2">
+              Note (optional)
+              <textarea
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
+                rows={2}
+                value={form.note}
+                onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
+              />
+            </label>
+            <div className="sm:col-span-2">
+              <button
+                disabled={submitting}
+                className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold text-sm transition-colors"
+              >
+                {submitting ? 'Submitting…' : 'Submit Payment'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <div className="bg-white rounded-2xl border border-slate-200 p-6">
+        <h2 className="text-base font-bold text-slate-900 mb-4">Payment History</h2>
+        {payments.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-6">No payments submitted yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs font-semibold text-slate-500 border-b border-slate-200">
+                  <th className="py-2 pr-3">Submitted</th>
+                  <th className="py-2 pr-3">Amount</th>
+                  <th className="py-2 pr-3">Method</th>
+                  <th className="py-2 pr-3">Reference</th>
+                  <th className="py-2 pr-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {payments.map(p => (
+                  <tr key={p._id}>
+                    <td className="py-3 pr-3 text-slate-600">{fmtDate(p.submittedAt || p.createdAt)}</td>
+                    <td className="py-3 pr-3 font-semibold text-slate-800">{fmtMoney(p.amount, p.currency)}</td>
+                    <td className="py-3 pr-3 text-slate-600 capitalize">{(p.method || '').replace('_', ' ')}</td>
+                    <td className="py-3 pr-3 text-slate-600">{p.reference || '-'}</td>
+                    <td className="py-3 pr-3">
+                      <span
+                        className="px-2 py-0.5 rounded-full text-xs font-bold"
+                        style={{
+                          color: p.status === 'approved' ? '#059669' : p.status === 'rejected' ? '#dc2626' : '#d97706',
+                          background: p.status === 'approved' ? '#ecfdf5' : p.status === 'rejected' ? '#fef2f2' : '#fffbeb',
+                        }}
+                      >
+                        {p.status}
+                      </span>
+                      {p.status === 'rejected' && p.rejectionReason && (
+                        <div className="text-xs text-red-500 mt-1">{p.rejectionReason}</div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
 }
-function Info({ label, value }) { return <div className="bg-white rounded-2xl border border-slate-200 p-5"><p className="text-xs font-bold uppercase text-slate-400">{label}</p><p className="text-lg font-black text-slate-900 mt-1">{value}</p></div>; }

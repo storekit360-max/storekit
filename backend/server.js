@@ -26,12 +26,57 @@ const cors       = require('cors');
 const path       = require('path');
 require('dotenv').config();
 
-const app = express();
+// ─── DIAGNOSTIC PATCH — pinpoints bad route handlers accurately ───────────────
+// Express's own errors ("Route.get() requires a callback function", "Router.use()
+// requires a middleware function") report the line where express-internals calls
+// back into your router, which after transpilation/minification-free plain JS
+// still sometimes points at a misleading line in module load order. This patch
+// wraps router.get/post/put/patch/delete/use so that if any argument isn't a
+// function, it throws BEFORE express does — with the real caller's file+line
+// (captured via a clean stack trace) and the index of the bad argument.
+// Remove this block once the crash is resolved; it's a debugging aid only.
+(function patchRouterForDiagnostics() {
+  const Router = express.Router;
+  const proto = Router.prototype;
+  const methodsToPatch = ['get', 'post', 'put', 'patch', 'delete', 'use', 'all'];
+  for (const method of methodsToPatch) {
+    const original = proto[method];
+    proto[method] = function (...args) {
+      args.forEach((arg, i) => {
+        // First arg to these methods is often a path string/regex — skip it.
+        if (i === 0 && (typeof arg === 'string' || arg instanceof RegExp || Array.isArray(arg))) return;
+        if (Array.isArray(arg)) {
+          arg.forEach((sub, j) => {
+            if (typeof sub !== 'function') {
+              const err = new Error(
+                `[router.${method}] argument ${i} (array item ${j}) is ${sub === undefined ? 'undefined' : typeof sub}, expected a function.`
+              );
+              Error.captureStackTrace(err, proto[method]);
+              throw err;
+            }
+          });
+          return;
+        }
+        if (typeof arg !== 'function') {
+          const err = new Error(
+            `[router.${method}] argument ${i} is ${arg === undefined ? 'undefined' : typeof arg}, expected a function or path.`
+          );
+          Error.captureStackTrace(err, proto[method]);
+          throw err;
+        }
+      });
+      return original.apply(this, args);
+    };
+  }
+})();
 
-const { optionalTenant } = require('./middleware/tenant');
 const { installTenantScope, tenantContextMiddleware } = require('./middleware/tenantContext');
 installTenantScope(mongoose);
+
+const { optionalTenant } = require('./middleware/tenant');
 const tenantScope = [optionalTenant, tenantContextMiddleware];
+
+const app = express();
 
 // Trust the Railway/Vercel proxy so express-rate-limit sees the real client IP
 // from X-Forwarded-For rather than the proxy's internal address.
@@ -100,6 +145,20 @@ const {
   errorHandler,
 } = require('./middleware/security');
 
+// ─── DIAGNOSTIC GUARD ─────────────────────────────────────────────────────────
+// "Router.use() requires a middleware function" almost always means one of
+// these four resolved to `undefined` (bad export name, wrong require path,
+// or middleware/security.js throwing before reaching module.exports). This
+// fails fast with the exact culprit instead of a bare Express internals error.
+for (const [name, val] of Object.entries({ applySecurityMiddleware, loginLimiter, auditLog, errorHandler })) {
+  if (typeof val !== 'function') {
+    throw new TypeError(
+      `[server.js] "${name}" from middleware/security.js is ${val === undefined ? 'undefined' : typeof val}, ` +
+      `expected a function. Check module.exports in middleware/security.js.`
+    );
+  }
+}
+
 applySecurityMiddleware(app);
 
 // ─── Body parsing ─────────────────────────────────────────────────────────────
@@ -126,34 +185,52 @@ app.use((req, _res, next) => {
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', time: new Date() }));
 
+// ─── DIAGNOSTIC GUARD ─────────────────────────────────────────────────────────
+// Wraps app.use for route-module mounts so that if any routes/*.js file's
+// module.exports isn't a valid Express router (e.g. it exports {} instead of
+// `module.exports = router`, or throws partway through and returns undefined
+// via a caught error), we get "which file" instead of an opaque Express
+// internals stack trace pointing at the wrong line.
+function safeMount(mountPath, routeModule, ...extraMiddleware) {
+  if (typeof routeModule !== 'function') {
+    throw new TypeError(
+      `[server.js] Route module for "${mountPath}" is ${routeModule === undefined ? 'undefined' : typeof routeModule}, ` +
+      `expected an Express router (function). That file is missing "module.exports = router" ` +
+      `or threw/returned early before reaching it.`
+    );
+  }
+  if (extraMiddleware.length) app.use(mountPath, ...extraMiddleware, routeModule);
+  else app.use(mountPath, routeModule);
+}
+
 // ─── Auth routes (login gets an extra, stricter limiter) ─────────────────────
 // SECURITY: /api/auth/login is capped at 10 req / 15 min per IP to resist
 //           credential-stuffing attacks independently of the global limiter.
 app.use('/api/auth/login', loginLimiter);
-app.use('/api/auth',          require('./routes/auth'));
-app.use('/api/tenant',        require('./routes/tenant'));
-app.use('/api/superadmin',    require('./routes/superadmin'));
+safeMount('/api/auth',          require('./routes/auth'));
+safeMount('/api/tenant',        require('./routes/tenant'));
+safeMount('/api/superadmin',    require('./routes/superadmin'));
 
 // ─── Public routes ────────────────────────────────────────────────────────────
-app.use('/api/products', ...tenantScope,      require('./routes/products'));
-app.use('/api/orders', ...tenantScope,        require('./routes/orders'));
-app.use('/api/categories', ...tenantScope,    require('./routes/categories'));
-app.use('/api/coupons', ...tenantScope,       require('./routes/coupons'));
-app.use('/api/banners', ...tenantScope,       require('./routes/banners'));
-app.use('/api/reviews', ...tenantScope,       require('./routes/reviews'));
-app.use('/api/notifications', ...tenantScope, require('./routes/notifications'));
-app.use('/api/settings', ...tenantScope,      require('./routes/settings'));
-app.use('/api/returns', ...tenantScope,       require('./routes/returns'));
-app.use('/api/gift-cards', ...tenantScope,    require('./routes/giftcards'));
-app.use('/api/seasonal', ...tenantScope,      require('./routes/seasonal'));
-app.use('/api/upload',        require('./routes/upload'));
-app.use('/api/scrape',        require('./routes/scrape'));
-app.use('/api/payments',      require('./routes/payments'));
-app.use('/api/delivery', ...tenantScope,      require('./routes/delivery'));
-app.use('/api/pages', ...tenantScope,         require('./routes/pages'));
-app.use('/api/subscribers', ...tenantScope,   require('./routes/subscribers'));
-app.use('/api/seo', ...tenantScope,           require('./routes/seo'));
-app.use('/api/meta',          require('./routes/meta'));   // Meta CAPI relay
+safeMount('/api/products',      require('./routes/products'), tenantScope);
+safeMount('/api/orders',        require('./routes/orders'), tenantScope);
+safeMount('/api/categories',    require('./routes/categories'), tenantScope);
+safeMount('/api/coupons',       require('./routes/coupons'), tenantScope);
+safeMount('/api/banners',       require('./routes/banners'), tenantScope);
+safeMount('/api/reviews',       require('./routes/reviews'), tenantScope);
+safeMount('/api/notifications', require('./routes/notifications'), tenantScope);
+safeMount('/api/settings',      require('./routes/settings'), tenantScope);
+safeMount('/api/returns',       require('./routes/returns'), tenantScope);
+safeMount('/api/gift-cards',    require('./routes/giftcards'), tenantScope);
+safeMount('/api/seasonal',      require('./routes/seasonal'), tenantScope);
+safeMount('/api/upload',        require('./routes/upload'));
+safeMount('/api/scrape',        require('./routes/scrape'));
+safeMount('/api/payments',      require('./routes/payments'));
+safeMount('/api/delivery',      require('./routes/delivery'), tenantScope);
+safeMount('/api/pages',         require('./routes/pages'), tenantScope);
+safeMount('/api/subscribers',   require('./routes/subscribers'), tenantScope);
+safeMount('/api/seo',           require('./routes/seo'), tenantScope);
+safeMount('/api/meta',          require('./routes/meta'));   // Meta CAPI relay
 
 // ─── SEO aliases ──────────────────────────────────────────────────────────────
 app.get('/sitemap.xml', (req, res) => res.redirect(301, '/api/seo/sitemap.xml'));
@@ -163,19 +240,20 @@ app.get('/robots.txt',  (req, res) => res.redirect(301, '/api/seo/robots.txt'));
 // SECURITY: auditLog writes one-line JSON to logs/audit.log for every mutating
 //           admin action (POST/PUT/PATCH/DELETE).  This is additive — all
 //           responses are identical to before.
-app.use('/api/admin/billing', ...tenantScope, auditLog, require('./routes/adminBilling'));
-app.use('/api/admin', ...tenantScope, auditLog, require('./routes/admin'));
-app.use('/api/admin/reset', require('./routes/reset'));
+safeMount('/api/admin/billing', require('./routes/adminBilling'), tenantScope, auditLog);
+safeMount('/api/admin', require('./routes/admin'), tenantScope, auditLog);
+safeMount('/api/admin/reset', require('./routes/reset'));
+safeMount('/api/billing', require('./routes/billing'), tenantScope);
 
 // ─── Other routes ─────────────────────────────────────────────────────────────
-app.use('/api/whatsapp', ...tenantScope,      require('./routes/whatsapp'));
-app.use('/api/social-media', ...tenantScope,  require('./routes/socialMedia'));
-app.use('/api/ai-post-creator', require('./routes/aiPostCreator'));
-app.use('/api/automation',    require('./routes/automation'));
-app.use('/api/deals', ...tenantScope,         require('./routes/deals'));
-app.use('/api/ai',            require('./routes/ai'));
-app.use('/api/monitoring',    require('./routes/monitoring'));
-app.use('/api/backup',        require('./routes/backup'));
+safeMount('/api/whatsapp',      require('./routes/whatsapp'), tenantScope);
+safeMount('/api/social-media',  require('./routes/socialMedia'), tenantScope);
+safeMount('/api/ai-post-creator', require('./routes/aiPostCreator'));
+safeMount('/api/automation',    require('./routes/automation'));
+safeMount('/api/deals',         require('./routes/deals'), tenantScope);
+safeMount('/api/ai',            require('./routes/ai'));
+safeMount('/api/monitoring',    require('./routes/monitoring'));
+safeMount('/api/backup',        require('./routes/backup'));
 
 // ─── Page SSR for crawlers ────────────────────────────────────────────────────
 const { seoRenderMiddleware } = require('./routes/seo');

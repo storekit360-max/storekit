@@ -2,6 +2,7 @@
 
 const { AsyncLocalStorage } = require('async_hooks');
 const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
 
 const tenantStorage = new AsyncLocalStorage();
 let installed = false;
@@ -25,8 +26,24 @@ function withoutTenantScope(fn) {
   return tenantStorage.run({ ...store, bypassTenantScope: true }, fn);
 }
 
-function tenantContextMiddleware(req, _res, next) {
-  runWithTenant(req.tenantId || req.tenant?._id || null, next);
+async function tenantContextMiddleware(req, _res, next) {
+  let tenantId = req.tenantId || req.tenant?._id || null;
+
+  if (!tenantId) {
+    try {
+      const token = req.header('Authorization')?.replace('Bearer ', '');
+      if (token) {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const User = require('../models/User');
+        const user = await User.findById(decoded.id).select('tenantId role').lean();
+        if (user?.role === 'admin' && user.tenantId) tenantId = user.tenantId;
+      }
+    } catch (_) {
+      // Auth middleware downstream owns invalid-token responses.
+    }
+  }
+
+  runWithTenant(tenantId, next);
 }
 
 function modelHasTenant(query) {

@@ -40,15 +40,6 @@ const featureSchema = new mongoose.Schema({
   maintenanceMode:    { type: Boolean, default: false },
 }, { _id: false });
 
-const billingSchema = new mongoose.Schema({
-  monthlyPrice: { type: Number, default: 0 },
-  yearlyPrice: { type: Number, default: 0 },
-  trialDays: { type: Number, default: 14 },
-  graceDays: { type: Number, default: 3 },
-  autoRenew: { type: Boolean, default: false },
-  autoSuspend: { type: Boolean, default: true },
-}, { _id: false });
-
 const limitSchema = new mongoose.Schema({
   products: { type: Number, default: 100 },
   ordersPerMonth: { type: Number, default: 500 },
@@ -63,10 +54,13 @@ const planSchema = new mongoose.Schema({
   price: { type: Number, default: 0 },
   currency: { type: String, default: 'LKR' },
   billingCycle: { type: String, enum: ['monthly', 'yearly', 'once'], default: 'monthly' },
+  // Number of days a new tenant runs free before the first payment is due.
+  // 0 = no trial (paid plans go straight to 'active' with payment due at
+  // the end of the first billing cycle); ignored for free (price 0) plans.
+  trialDays: { type: Number, default: 14, min: 0 },
   active: { type: Boolean, default: true },
-  billing: { type: billingSchema, default: () => ({}) },
   limits: { type: limitSchema, default: () => ({}) },
   features: { type: featureSchema, default: () => ({}) },
 }, { timestamps: true });
 
-module.exports = mongoose.models.Plan || mongoose.model('Plan', planSchema);
+module.exports = mongoose.model('Plan', planSchema);

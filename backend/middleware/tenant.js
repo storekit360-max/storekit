@@ -12,23 +12,30 @@ function normalizeDomain(value) {
     .trim();
 }
 
-function getRequestDomain(req) {
-  return normalizeDomain(
-    req.headers['x-tenant-domain'] ||
-    req.headers['x-forwarded-host'] ||
-    req.headers.origin ||
-    req.headers.referer ||
-    req.headers.host
-  );
+function getHeaderDomainCandidates(req) {
+  const values = [
+    req.headers['x-tenant-domain'],
+    req.headers['x-forwarded-host'],
+    req.headers.origin,
+    req.headers.referer,
+    req.headers.host,
+  ];
+
+  const domains = values
+    .flatMap(value => String(value || '').split(','))
+    .map(normalizeDomain)
+    .filter(Boolean);
+
+  return Array.from(new Set(domains.flatMap(domain => [
+    domain,
+    domain === 'localhost' ? '127.0.0.1' : null,
+    domain === '127.0.0.1' ? 'localhost' : null,
+  ].filter(Boolean))));
 }
 
-async function findTenantByDomain(domain) {
-  const normalized = normalizeDomain(domain);
-  if (!normalized) return null;
-  const lookupDomains = Array.from(new Set([
-    normalized,
-    normalized === 'localhost' ? '127.0.0.1' : 'localhost',
-  ]));
+async function findTenantByDomain(req) {
+  const lookupDomains = getHeaderDomainCandidates(req);
+  if (!lookupDomains.length) return null;
 
   return Tenant.findOne({
     status: 'active',
@@ -38,10 +45,10 @@ async function findTenantByDomain(domain) {
 
 async function resolveTenant(req, res, next) {
   try {
-    const domain = getRequestDomain(req);
-    const tenant = await findTenantByDomain(domain);
+    const tenant = await findTenantByDomain(req);
 
     if (!tenant) {
+      const domain = getHeaderDomainCandidates(req)[0] || '';
       return res.status(404).json({ message: 'Store not found for this domain', domain });
     }
 
@@ -56,8 +63,7 @@ async function resolveTenant(req, res, next) {
 
 async function optionalTenant(req, _res, next) {
   try {
-    const domain = getRequestDomain(req);
-    const tenant = await findTenantByDomain(domain);
+    const tenant = await findTenantByDomain(req);
     if (tenant) {
       req.tenant = tenant;
       req.tenantId = tenant._id;
@@ -78,4 +84,4 @@ function requireFeature(featureName) {
   };
 }
 
-module.exports = { resolveTenant, optionalTenant, requireFeature, normalizeDomain, getRequestDomain };
+module.exports = { resolveTenant, optionalTenant, requireFeature, normalizeDomain, getHeaderDomainCandidates };

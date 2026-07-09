@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import API from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
@@ -72,8 +72,7 @@ const emptyFeatures = FEATURE_CATALOG.reduce((acc, group) => {
 
 const emptyPlan = {
   name: '', description: '', price: 0, currency: 'LKR', billingCycle: 'monthly', active: true,
-  billing: { monthlyPrice: 0, yearlyPrice: 0, trialDays: 14, graceDays: 3, autoRenew: false, autoSuspend: true },
-  limits: { products: 100, ordersPerMonth: 500, admins: 2, storageMb: 500, templates: 1, coupons: 10, banners: 5 },
+  limits: { products: 100, ordersPerMonth: 500, admins: 2, storageMb: 500 },
   features: emptyFeatures,
 };
 
@@ -88,9 +87,31 @@ const TABS = [
   { key: 'overview', label: 'Overview', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
   { key: 'plans', label: 'Plans', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
   { key: 'tenants', label: 'Tenants', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
-  { key: 'billing', label: 'Billing', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-10v2m0 8v2m8-10h-2M6 12H4' },
   { key: 'domains', label: 'Domains', icon: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0zM3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18 15 15 0 010-18z' },
 ];
+
+function cleanDomain(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^https?:\/\//i, '')
+    .replace(/\/.*$/, '');
+}
+
+function storefrontUrl(domain, path = '') {
+  const clean = cleanDomain(domain);
+  if (!clean) return '';
+  const isLocal = clean.startsWith('localhost') || clean.startsWith('127.0.0.1');
+  return `${isLocal ? 'http' : 'https'}://${clean}${path}`;
+}
+
+function tenantStorefrontUrl(tenant, path = '') {
+  const domains = (tenant?.domains || []).filter(d => d?.active !== false && d?.domain);
+  const domain =
+    domains.find(d => d.type === 'primary') ||
+    domains.find(d => !['localhost', '127.0.0.1'].includes(cleanDomain(d.domain))) ||
+    domains[0];
+  return storefrontUrl(domain?.domain, path);
+}
 
 export default function SuperAdminDashboard() {
   const { user, logout } = useAuth();
@@ -106,23 +127,18 @@ export default function SuperAdminDashboard() {
   const [domainInput, setDomainInput] = useState('');
   const [toast, setToast] = useState(null); // { type: 'success' | 'error', text }
   const [loading, setLoading] = useState(false);
-  const [billing, setBilling] = useState({ metrics:{}, rows:[], payments:[], invoices:[] });
   const [savingPlan, setSavingPlan] = useState(false);
   const [savingTenant, setSavingTenant] = useState(false);
 
   const selectedTenant = useMemo(() => tenants.find(t => t._id === selectedTenantId), [tenants, selectedTenantId]);
 
-  const notify = React.useCallback((type, text) => {
+  function notify(type, text) {
     setToast({ type, text });
     window.clearTimeout(notify._t);
     notify._t = window.setTimeout(() => setToast(null), 4000);
-  }, []);
+  }
 
-  const loadBilling = React.useCallback(async () => {
-    try { const { data } = await API.get('/superadmin/billing/summary'); setBilling(data); } catch (_) {}
-  }, []);
-
-  const loadAll = React.useCallback(async () => {
+  const loadAll = useCallback(async function loadAll() {
     setLoading(true);
     try {
       const [statsRes, plansRes, tenantsRes] = await Promise.all([
@@ -133,18 +149,15 @@ export default function SuperAdminDashboard() {
       setStats(statsRes.data);
       setPlans(plansRes.data);
       setTenants(tenantsRes.data);
-      loadBilling();
       if (!tenantForm.plan && plansRes.data[0]?._id) setTenantForm(prev => ({ ...prev, plan: plansRes.data[0]._id }));
     } catch (err) {
       notify('error', err.response?.data?.message || err.message || 'Failed to load superadmin data');
     } finally {
       setLoading(false);
     }
-  }, [tenantForm.plan, loadBilling, notify]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    loadAll();
-  }, [loadAll]);
+  useEffect(() => { loadAll(); }, [loadAll]);
 
   function updatePlan(path, value) { setPlanForm(prev => setDeep(prev, path, value)); }
   function updateTenant(path, value) { setTenantForm(prev => setDeep(prev, path, value)); }
@@ -271,10 +284,10 @@ export default function SuperAdminDashboard() {
           </nav>
 
           <div className="p-3 border-t border-white/10">
-            <Link to="/" target="_blank" className="flex items-center gap-2 px-3 py-2 mb-1 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-white">
+            <a href={tenantStorefrontUrl(selectedTenant || tenants[0]) || '/'} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-2 mb-1 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-white">
               <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
               View storefront
-            </Link>
+            </a>
             <button onClick={logout} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10">
               <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
               Logout
@@ -322,6 +335,7 @@ export default function SuperAdminDashboard() {
                   plans={plans}
                   onUpdate={updateTenantRecord}
                   onResetPassword={resetAdminPassword}
+                  getStorefrontUrl={tenantStorefrontUrl}
                 />
                 {tenants.length === 0 && <p className="text-sm text-slate-400 py-6 text-center">No tenants yet — create one from the Tenants tab.</p>}
               </div>
@@ -335,19 +349,12 @@ export default function SuperAdminDashboard() {
                 <form onSubmit={savePlan} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <Input label="Plan Name" value={planForm.name} onChange={v => updatePlan('name', v)} required />
                   <Input label="Price" type="number" value={planForm.price} onChange={v => updatePlan('price', Number(v))} />
-                  <CurrencySelect label="Currency" value={planForm.currency} onChange={v => updatePlan('currency', v)} />
+                  <Input label="Currency" value={planForm.currency} onChange={v => updatePlan('currency', v)} />
                   <Input label="Description" value={planForm.description} onChange={v => updatePlan('description', v)} />
                   <Input label="Product Limit" type="number" value={planForm.limits.products} onChange={v => updatePlan('limits.products', Number(v))} />
                   <Input label="Orders / Month" type="number" value={planForm.limits.ordersPerMonth} onChange={v => updatePlan('limits.ordersPerMonth', Number(v))} />
                   <Input label="Admins" type="number" value={planForm.limits.admins} onChange={v => updatePlan('limits.admins', Number(v))} />
                   <Input label="Storage MB" type="number" value={planForm.limits.storageMb} onChange={v => updatePlan('limits.storageMb', Number(v))} />
-                  <Input label="Template Limit" type="number" value={planForm.limits.templates} onChange={v => updatePlan('limits.templates', Number(v))} />
-                  <Input label="Coupon Limit" type="number" value={planForm.limits.coupons} onChange={v => updatePlan('limits.coupons', Number(v))} />
-                  <Input label="Banner Limit" type="number" value={planForm.limits.banners} onChange={v => updatePlan('limits.banners', Number(v))} />
-                  <Input label="Trial Days" type="number" value={planForm.billing.trialDays} onChange={v => updatePlan('billing.trialDays', Number(v))} />
-                  <Input label="Grace Days" type="number" value={planForm.billing.graceDays} onChange={v => updatePlan('billing.graceDays', Number(v))} />
-                  <Input label="Monthly Price" type="number" value={planForm.billing.monthlyPrice} onChange={v => updatePlan('billing.monthlyPrice', Number(v))} />
-                  <Input label="Yearly Price" type="number" value={planForm.billing.yearlyPrice} onChange={v => updatePlan('billing.yearlyPrice', Number(v))} />
                   <div className="sm:col-span-2 lg:col-span-4">
                     <FeatureEditor features={planForm.features} onChange={(features) => setPlanForm(prev => ({ ...prev, features }))} />
                   </div>
@@ -397,14 +404,10 @@ export default function SuperAdminDashboard() {
 
               <div className="bg-white rounded-2xl border border-slate-200 p-6">
                 <h2 className="text-base font-bold text-slate-900 mb-4">Tenants</h2>
-                <TenantTable tenants={tenants} plans={plans} onUpdate={updateTenantRecord} onResetPassword={resetAdminPassword} />
+                <TenantTable tenants={tenants} plans={plans} onUpdate={updateTenantRecord} onResetPassword={resetAdminPassword} getStorefrontUrl={tenantStorefrontUrl} />
                 {tenants.length === 0 && <p className="text-sm text-slate-400 py-6 text-center">No tenants yet.</p>}
               </div>
             </div>
-          )}
-
-          {activeTab === 'billing' && (
-            <BillingPanel billing={billing} reload={loadBilling} notify={notify} />
           )}
 
           {activeTab === 'domains' && (
@@ -426,7 +429,9 @@ export default function SuperAdminDashboard() {
                     <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden">
                       {(selectedTenant.domains || []).map(d => (
                         <div key={d.domain} className="grid grid-cols-[2fr_1fr_1fr_auto] gap-3 items-center px-4 py-3 text-sm">
-                          <span className="font-medium text-slate-800">{d.domain}</span>
+                          <a href={storefrontUrl(d.domain)} target="_blank" rel="noreferrer" className="font-medium text-indigo-600 hover:text-indigo-800 hover:underline truncate">
+                            {d.domain}
+                          </a>
                           <span className={d.verified ? 'text-emerald-600' : 'text-amber-600'}>{d.verified ? 'Verified' : 'DNS Pending'}</span>
                           <span className="text-slate-500">{d.active ? 'Active' : 'Disabled'}</span>
                           <button onClick={() => removeDomain(d.domain)} className="justify-self-end h-8 px-3 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-xs font-semibold">Remove</button>
@@ -586,18 +591,7 @@ function PlanCard({ plan, onSave }) {
       <textarea className="min-h-[64px] border border-slate-300 rounded-lg p-3 text-sm" value={draft.description || ''} onChange={e => setDraft({ ...draft, description: e.target.value })} />
       <div className="flex items-center gap-3">
         <input className="h-10 border border-slate-300 rounded-lg px-3 text-sm w-32" type="number" value={draft.price} onChange={e => setDraft({ ...draft, price: Number(e.target.value) })} />
-        <CurrencySelect label="Currency" value={draft.currency} onChange={v => setDraft({ ...draft, currency: v })} />
-        <select className="h-10 border border-slate-300 rounded-lg px-3 text-sm" value={draft.billingCycle || 'monthly'} onChange={e => setDraft({ ...draft, billingCycle: e.target.value })}>
-          <option value="monthly">Monthly</option><option value="yearly">Yearly</option><option value="once">Once</option>
-        </select>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        {['products','admins','ordersPerMonth','storageMb','templates','coupons','banners'].map(k => (
-          <label key={k} className="grid gap-1 text-xs font-semibold text-slate-600">{k}<input className="h-9 border rounded-lg px-2" type="number" value={draft.limits?.[k] ?? 0} onChange={e=>setDraft({ ...draft, limits:{ ...(draft.limits||{}), [k]:Number(e.target.value) }})}/></label>
-        ))}
-        {['trialDays','graceDays','monthlyPrice','yearlyPrice'].map(k => (
-          <label key={k} className="grid gap-1 text-xs font-semibold text-slate-600">{k}<input className="h-9 border rounded-lg px-2" type="number" value={draft.billing?.[k] ?? 0} onChange={e=>setDraft({ ...draft, billing:{ ...(draft.billing||{}), [k]:Number(e.target.value) }})}/></label>
-        ))}
+        <span className="text-xs text-slate-500">{draft.currency} / {draft.billingCycle}</span>
       </div>
       <FeatureEditor features={draft.features || {}} onChange={(features) => setDraft({ ...draft, features })} />
       <button onClick={handleSave} disabled={saving} className="h-10 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold text-sm">
@@ -607,7 +601,7 @@ function PlanCard({ plan, onSave }) {
   );
 }
 
-function TenantTable({ tenants, plans, onUpdate, onResetPassword }) {
+function TenantTable({ tenants, plans, onUpdate, onResetPassword, getStorefrontUrl }) {
   if (!tenants || tenants.length === 0) return null;
   return (
     <div className="overflow-x-auto">
@@ -623,7 +617,9 @@ function TenantTable({ tenants, plans, onUpdate, onResetPassword }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {tenants.map(t => (
+          {tenants.map(t => {
+            const url = getStorefrontUrl ? getStorefrontUrl(t) : '';
+            return (
             <tr key={t._id}>
               <td className="py-3 pr-3">
                 <div className="font-semibold text-slate-800">{t.storeName}</div>
@@ -655,49 +651,20 @@ function TenantTable({ tenants, plans, onUpdate, onResetPassword }) {
                   <button onClick={() => onResetPassword(t._id)} className="h-8 px-2.5 rounded-lg bg-slate-800 text-white text-xs font-semibold whitespace-nowrap">
                     Reset Password
                   </button>
+                  {url ? (
+                    <a href={url} target="_blank" rel="noreferrer" className="h-8 px-2.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-semibold whitespace-nowrap inline-flex items-center">
+                      Open Store
+                    </a>
+                  ) : null}
                 </div>
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
-}
-
-
-const CURRENCIES = ['LKR','USD','EUR','GBP','AUD','CAD','INR','AED','SGD'];
-function CurrencySelect({ label, value, onChange }) {
-  return (
-    <label className="grid gap-1.5 text-xs font-semibold text-slate-600">
-      {label}
-      <select className="h-10 border border-slate-300 rounded-lg px-3 text-sm" value={value || 'LKR'} onChange={e => onChange(e.target.value)}>
-        {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-      </select>
-    </label>
-  );
-}
-function fmtDate(v){ return v ? new Date(v).toLocaleDateString() : 'Not set'; }
-function BillingPanel({ billing, reload, notify }) {
-  const metrics = billing?.metrics || {};
-  async function approve(id){ await API.post(`/superadmin/billing/payments/${id}/approve`); notify('success','Payment approved and tenant renewed'); reload(); }
-  async function reject(id){ const note = window.prompt('Rejection note') || ''; await API.post(`/superadmin/billing/payments/${id}/reject`, { note }); notify('success','Payment rejected'); reload(); }
-  return <div className="space-y-6">
-    <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-      <Stat label="MRR" value={metrics.mrr || 0} accent="text-emerald-600" icon="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2" />
-      <Stat label="Trials" value={metrics.trials || 0} icon="M12 8v4l3 3" />
-      <Stat label="Grace" value={metrics.grace || 0} accent="text-amber-600" icon="M12 9v2m0 4h.01" />
-      <Stat label="Suspended" value={metrics.suspended || 0} accent="text-red-600" icon="M18.364 18.364A9 9 0 115.636 5.636" />
-      <Stat label="Pending Payments" value={metrics.pendingPayments || 0} accent="text-blue-600" icon="M15 17h5l-1.405-1.405" />
-    </div>
-    <div className="bg-white rounded-2xl border border-slate-200 p-6">
-      <h2 className="font-bold text-slate-900 mb-4">Payment Proof Review</h2>
-      <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left text-xs text-slate-500 border-b"><th className="py-2">Store</th><th>Amount</th><th>Status</th><th>Proof</th><th>Date</th><th>Actions</th></tr></thead><tbody className="divide-y">
-        {(billing?.payments || []).map(p => <tr key={p._id}><td className="py-3 font-semibold">{p.tenantId?.storeName || '-'}</td><td>{p.currency} {Number(p.amount||0).toLocaleString()}</td><td>{p.status}</td><td>{p.proofUrl ? <a className="text-indigo-600" href={p.proofUrl} target="_blank" rel="noreferrer">Open</a> : '-'}</td><td>{fmtDate(p.createdAt)}</td><td>{p.status==='pending' ? <div className="flex gap-2"><button onClick={()=>approve(p._id)} className="px-3 py-1 rounded-lg bg-emerald-600 text-white text-xs font-bold">Approve</button><button onClick={()=>reject(p._id)} className="px-3 py-1 rounded-lg bg-red-600 text-white text-xs font-bold">Reject</button></div> : '-'}</td></tr>)}
-      </tbody></table></div>
-    </div>
-    <div className="bg-white rounded-2xl border border-slate-200 p-6"><h2 className="font-bold mb-4">Tenant Subscription Status</h2><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left text-xs text-slate-500 border-b"><th className="py-2">Store</th><th>Plan</th><th>Status</th><th>Next Billing</th><th>Trial Ends</th><th>Grace Ends</th><th>Days</th></tr></thead><tbody className="divide-y">{(billing?.rows||[]).map(r=><tr key={r.tenantId}><td className="py-3 font-semibold">{r.storeName}</td><td>{r.plan?.name||'-'}</td><td>{r.subscription?.status||'-'}</td><td>{fmtDate(r.nextBillingAt)}</td><td>{fmtDate(r.trialEndsAt)}</td><td>{fmtDate(r.graceEndsAt)}</td><td>{r.daysLeft ?? '-'}</td></tr>)}</tbody></table></div></div>
-  </div>;
 }
 
 function setDeep(obj, path, value) {

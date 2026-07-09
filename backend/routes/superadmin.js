@@ -4,9 +4,10 @@ const express = require('express');
 const Plan = require('../models/Plan');
 const Tenant = require('../models/Tenant');
 const User = require('../models/User');
+const TenantPayment = require('../models/TenantPayment');
 const { auth } = require('../middleware/auth');
 const { normalizeDomain } = require('../middleware/tenant');
-const { initializeTenantSubscription } = require('../services/subscriptionBillingService');
+const subscriptionService = require('../services/subscriptionService');
 
 const router = express.Router();
 
@@ -110,11 +111,7 @@ router.post('/tenants', async (req, res, next) => {
     const domains = [];
     if (domain) domains.push({ domain: normalizeDomain(domain), type: 'primary', verified: false, active: true });
 
-    const planDoc = await Plan.findById(plan);
-    if (!planDoc) return res.status(400).json({ message: 'Selected plan not found' });
-
     const tenant = await Tenant.create({ storeName, slug: cleanSlug, plan, domains, settings: settings || {}, theme: theme || {} });
-    await initializeTenantSubscription(tenant, planDoc);
 
     const user = await User.create({
       firstName: adminFirstName || 'Store',
@@ -130,13 +127,19 @@ router.post('/tenants', async (req, res, next) => {
     tenant.owner = user._id;
     await tenant.save();
 
+    // Billing automation kicks in right here: the tenant now starts its
+    // trial (or goes straight to 'active' for free/no-trial plans) with no
+    // further manual configuration needed.
+    const planDoc = await Plan.findById(plan);
+    if (planDoc) await subscriptionService.startSubscription(tenant, planDoc);
+
     res.status(201).json(await Tenant.findById(tenant._id).populate('plan').populate('owner', 'firstName lastName email username role'));
   } catch (err) { next(err); }
 });
 
 router.put('/tenants/:id', async (req, res, next) => {
   try {
-    const allowed = ['storeName', 'plan', 'status', 'settings', 'theme', 'domains', 'subscription'];
+    const allowed = ['storeName', 'plan', 'status', 'settings', 'theme', 'domains'];
     const patch = {};
     for (const key of allowed) if (Object.prototype.hasOwnProperty.call(req.body, key)) patch[key] = req.body[key];
     if (patch.domains) {
@@ -147,10 +150,105 @@ router.put('/tenants/:id', async (req, res, next) => {
         active: d.active !== false,
       }));
     }
-    const tenant = await Tenant.findByIdAndUpdate(req.params.id, { $set: patch }, { new: true, runValidators: true }).populate('plan').populate('owner', 'firstName lastName email username role');
+
+    const existing = await Tenant.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Tenant not found' });
+
+    // Detect plan/status transitions BEFORE saving so we know what changed.
+    const planChanged = patch.plan && String(patch.plan) !== String(existing.plan);
+    const statusChanged = patch.status && patch.status !== existing.status;
+
+    let tenant = await Tenant.findByIdAndUpdate(req.params.id, { $set: patch }, { new: true, runValidators: true }).populate('plan').populate('owner', 'firstName lastName email username role');
     if (!tenant) return res.status(404).json({ message: 'Tenant not found' });
+
+    // Re-assigning a plan re-prices (or restarts) the tenant's billing cycle
+    // automatically — no separate "configure billing" step needed.
+    if (planChanged) {
+      await subscriptionService.handlePlanChange(tenant._id, tenant.plan);
+    }
+
+    // The existing Status dropdown IS the manual activate/deactivate control:
+    //  - switching to 'suspended' = admin decided to stop the business
+    //  - switching to 'active'    = super admin manually reactivates the store
+    if (statusChanged) {
+      if (patch.status === 'suspended') {
+        await subscriptionService.deactivateTenant(tenant._id, 'Deactivated by super admin', 'superadmin');
+      } else if (patch.status === 'active') {
+        await subscriptionService.reactivateTenant(tenant._id);
+      }
+    }
+
+    if (planChanged || statusChanged) {
+      tenant = await Tenant.findById(tenant._id).populate('plan').populate('owner', 'firstName lastName email username role');
+    }
+
     res.json(tenant);
   } catch (err) { next(err); }
+});
+
+// ── Billing dashboard — income, pending payments, upcoming payments ───────
+router.get('/billing/overview', async (_req, res, next) => {
+  try { res.json(await subscriptionService.getOverview()); }
+  catch (err) { next(err); }
+});
+
+// ── Billing — list submitted tenant payments (optionally filter by status) ─
+router.get('/billing/payments', async (req, res, next) => {
+  try {
+    const filter = {};
+    if (req.query.status) filter.status = req.query.status;
+    const payments = await TenantPayment.find(filter)
+      .populate('tenant', 'storeName slug status billing')
+      .populate('plan', 'name price currency billingCycle')
+      .populate('reviewedBy', 'firstName lastName email')
+      .sort({ createdAt: -1 });
+    res.json(payments);
+  } catch (err) { next(err); }
+});
+
+// ── Billing — approve a payment: this is the one manual step that reactivates
+//    / renews the plan after the admin has actually paid ──────────────────
+router.post('/billing/payments/:id/approve', async (req, res, next) => {
+  try {
+    const payment = await subscriptionService.approvePayment(req.params.id, req.user._id);
+    res.json(payment);
+  } catch (err) {
+    if (err.message === 'Payment not found') return res.status(404).json({ message: err.message });
+    if (err.message === 'Payment already reviewed') return res.status(400).json({ message: err.message });
+    next(err);
+  }
+});
+
+router.post('/billing/payments/:id/reject', async (req, res, next) => {
+  try {
+    const payment = await subscriptionService.rejectPayment(req.params.id, req.user._id, req.body.reason);
+    res.json(payment);
+  } catch (err) {
+    if (err.message === 'Payment not found') return res.status(404).json({ message: err.message });
+    if (err.message === 'Payment already reviewed') return res.status(400).json({ message: err.message });
+    next(err);
+  }
+});
+
+// ── Manual "stop the business" / manual reactivate, as explicit endpoints
+//    too (in addition to the status dropdown above), for a dedicated Billing
+//    tab UI that doesn't want to touch the general tenant-edit form ────────
+router.post('/tenants/:id/deactivate', async (req, res, next) => {
+  try {
+    const tenant = await subscriptionService.deactivateTenant(req.params.id, req.body.reason, 'superadmin');
+    if (!tenant) return res.status(404).json({ message: 'Tenant not found' });
+    res.json(await Tenant.findById(tenant._id).populate('plan').populate('owner', 'firstName lastName email username role'));
+  } catch (err) { next(err); }
+});
+
+router.post('/tenants/:id/reactivate', async (req, res, next) => {
+  try {
+    const tenant = await subscriptionService.reactivateTenant(req.params.id);
+    res.json(await Tenant.findById(tenant._id).populate('plan').populate('owner', 'firstName lastName email username role'));
+  } catch (err) {
+    if (err.message === 'Tenant not found') return res.status(404).json({ message: err.message });
+    next(err);
+  }
 });
 
 router.post('/tenants/:id/domains', async (req, res, next) => {

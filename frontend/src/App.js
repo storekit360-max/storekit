@@ -41,6 +41,7 @@ const AdminOrders        = lazy(() => import('./pages/admin/Orders'));
 const AdminOrderDetail   = lazy(() => import('./pages/admin/OrderDetail'));
 
 const AdminSettings      = lazy(() => import('./pages/admin/Settings'));
+const AdminBilling       = lazy(() => import('./pages/admin/Billing'));
 const AdminReturns       = lazy(() => import('./pages/admin/Returns'));
 const AdminGiftCards     = lazy(() => import('./pages/admin/GiftCards'));
 const AdminSeasonal      = lazy(() => import('./pages/admin/Seasonal'));
@@ -56,7 +57,6 @@ const AIPostCreator      = lazy(() => import('./pages/admin/AIPostCreator'));
 const AutomationRules    = lazy(() => import('./pages/admin/AutomationRules'));
 const BackupCenter       = lazy(() => import('./pages/admin/BackupCenter'));
 const AdminDeals         = lazy(() => import('./pages/admin/Deals'));
-const AdminBilling       = lazy(() => import('./pages/admin/Billing'));
 
 const SuperAdminLogin = lazy(() => import('./pages/superadmin/SuperAdminLogin'));
 const SuperAdminDashboard = lazy(() => import('./pages/superadmin/SuperAdminDashboard'));
@@ -261,6 +261,7 @@ export default function App() {
                       <Route path="subscribers"      element={<AdminSubscribers/>}/>
                       <Route path="seo"              element={<AdminSEO/>}/>
                       <Route path="settings"         element={<AdminSettings/>}/>
+                      <Route path="billing"          element={<AdminBilling/>}/>
                       <Route path="layout"           element={<LayoutEditor/>}/>
                       <Route path="animations"       element={<AnimationSettings/>}/>
                       <Route path="theme-builder"    element={<ThemeBuilder/>}/>
@@ -270,7 +271,6 @@ export default function App() {
                       <Route path="deals"            element={<AdminDeals/>}/>
                       <Route path="monitoring"       element={<Monitoring/>}/>
                       <Route path="backup"           element={<BackupCenter/>}/>
-                      <Route path="billing"          element={<AdminBilling/>}/>
                     </Route>
                   </Routes>
                 </Suspense>

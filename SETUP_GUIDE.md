@@ -238,7 +238,7 @@ git commit -m "feat: StoreKit v2 — fixed theme flash, home customizations, pro
 Replace `YOUR_USERNAME` and `YOUR_REPO_NAME` with your actual GitHub details:
 
 ```bash
-git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
+git remote add origin https://github.com/storekit360-max/storekit.git
 ```
 
 ### 3.6 Force push (this replaces the old code)

@@ -39,9 +39,34 @@ const bcrypt   = require('bcryptjs');
 const { OAuth2Client } = require('google-auth-library');
 const User     = require('../models/User');
 const { auth, generateToken, recordFailedLogin, clearFailedLogin, isAccountLocked } = require('../middleware/auth');
-const { optionalTenant } = require('../middleware/tenant');
 const { Notification, OTP, Coupon } = require('../models/index');
 const { sendMail, otpEmailHtml }    = require('../utils/mailer');
+
+// ─── DIAGNOSTIC GUARD ─────────────────────────────────────────────────────────
+// A "Router.use() requires a middleware function" crash means one of the
+// values below resolved to `undefined` instead of a function/model — usually
+// a bad export path, a typo'd named export, or a circular require. Any
+// router.get/post/put call below that receives `auth` as middleware will
+// throw this exact Express error if `auth` came back undefined.
+// This fails fast with a clear message naming the culprit instead of letting
+// Express throw an opaque internal error with a misleading line number.
+const __deps = { auth, generateToken, recordFailedLogin, clearFailedLogin, isAccountLocked, sendMail, otpEmailHtml };
+for (const [name, val] of Object.entries(__deps)) {
+  if (typeof val !== 'function') {
+    throw new TypeError(
+      `[routes/auth.js] "${name}" is ${val === undefined ? 'undefined' : typeof val}, expected a function. ` +
+      `Check that middleware/auth.js / utils/mailer.js actually exports "${name}" and that the require() path ` +
+      `above is correct (paths are case-sensitive on Linux/CI even when they work on macOS).`
+    );
+  }
+}
+{
+  const missingModels = { Notification, OTP, Coupon };
+  const missing = Object.keys(missingModels).filter(n => !missingModels[n]);
+  if (missing.length) {
+    throw new TypeError(`[routes/auth.js] Missing model export(s) from models/index.js: ${missing.join(', ')}`);
+  }
+}
 
 // SECURITY: Use the shared generateToken so issuer/audience are embedded
 //           when JWT_ISSUER / JWT_AUDIENCE are configured in .env.
@@ -53,21 +78,8 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 //           measuring response time.
 const DUMMY_HASH = '$2a$12$dummyhashtopreventtimingattacks.onloginendpoint.padded';
 
-// Resolve tenant for auth routes before checking tenant-specific credentials.
-router.use(optionalTenant);
-
 // ─── Password strength validator ─────────────────────────────────────────────
 // Returns { valid: Boolean, errors: String[] } — unchanged from original.
-
-function sameTenant(user, tenantId) {
-  // Super admin is global and must be able to login from the platform/admin domain.
-  if (user?.role === 'superadmin') return true;
-
-  // Normal admin/customer users must belong to the tenant resolved from the domain.
-  if (!tenantId || !user?.tenantId) return false;
-  return String(user.tenantId) === String(tenantId);
-}
-
 function validatePasswordStrength(password) {
   const errors = [];
   if (!password || password.length < 8)      errors.push('At least 8 characters');
@@ -91,27 +103,22 @@ router.post('/register', async (req, res, next) => {
       return res.status(400).json({ message: 'Password is too weak', errors: pwCheck.errors });
     }
 
-    if (!req.tenantId) return res.status(400).json({ message: 'Store tenant could not be resolved for this domain' });
-
-    const normalizedEmail = String(email || '').toLowerCase().trim();
-    const exists = await User.findOne({ tenantId: req.tenantId, $or: [{ email: normalizedEmail }, { username }] });
+    const exists = await User.findOne({ $or: [{ email }, { username }] });
     if (exists) {
       return res.status(400).json({
         message: exists.email === email ? 'Email already registered' : 'Username already taken',
       });
     }
 
-    const user = await User.create({ firstName, lastName, username, email: normalizedEmail, password, phone, tenantId: req.tenantId });
+    const user = await User.create({ firstName, lastName, username, email, password, phone });
 
     const newUserCoupon = await Coupon.findOne({
-      tenantId: req.tenantId,
       isNewUserOnly: true,
       isActive:      true,
       validUntil:    { $gte: new Date() },
     });
 
     await Notification.create({
-      tenantId: req.tenantId,
       type:    'new_user',
       title:   'New Customer Registered',
       message: `${firstName} ${lastName} just created an account`,
@@ -137,20 +144,14 @@ router.post('/register', async (req, res, next) => {
 router.post('/login', async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    const normalizedEmail = String(email || '').toLowerCase().trim();
 
     // SECURITY: Find user; if not found, run a dummy bcrypt compare to make
     //           timing indistinguishable from a wrong-password scenario.
-    const user = await User.findOne({ email: normalizedEmail });
+    const user = await User.findOne({ email });
 
     if (!user) {
       // SECURITY: Timing-safe — always do a bcrypt comparison so response time
       //           is the same whether the email exists or not.
-      await bcrypt.compare(password || '', DUMMY_HASH).catch(() => {});
-      return res.status(401).json({ message: 'Invalid email or password' });
-    }
-
-    if (!sameTenant(user, req.tenantId)) {
       await bcrypt.compare(password || '', DUMMY_HASH).catch(() => {});
       return res.status(401).json({ message: 'Invalid email or password' });
     }
@@ -219,18 +220,13 @@ router.post('/google', async (req, res, next) => {
     const { email, given_name, family_name, picture, sub: googleId } = payload;
 
     let user = await User.findOne({ googleId });
-    if (!user) user = await User.findOne({ email: String(email || '').toLowerCase().trim() });
-
-    if (user && !sameTenant(user, req.tenantId)) {
-      return res.status(401).json({ message: 'Invalid email or password' });
-    }
+    if (!user) user = await User.findOne({ email });
 
     if (!user) {
-      if (!req.tenantId) return res.status(400).json({ message: 'Store tenant could not be resolved for this domain' });
       const base = (email.split('@')[0]).replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20) || 'user';
       let username = base;
       let attempt  = 0;
-      while (await User.findOne({ tenantId: req.tenantId, username })) {
+      while (await User.findOne({ username })) {
         attempt++;
         username = `${base}_${attempt}`;
       }
@@ -239,8 +235,7 @@ router.post('/google', async (req, res, next) => {
         firstName:  given_name  || 'User',
         lastName:   family_name || '',
         username,
-        email: String(email || '').toLowerCase().trim(),
-        tenantId: req.tenantId,
+        email,
         password:   crypto.randomBytes(32).toString('hex'),
         googleId,
         avatar:     picture || '',
