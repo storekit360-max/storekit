@@ -112,17 +112,17 @@ export default function SuperAdminDashboard() {
 
   const selectedTenant = useMemo(() => tenants.find(t => t._id === selectedTenantId), [tenants, selectedTenantId]);
 
-  function notify(type, text) {
+  const notify = React.useCallback((type, text) => {
     setToast({ type, text });
     window.clearTimeout(notify._t);
     notify._t = window.setTimeout(() => setToast(null), 4000);
-  }
+  }, []);
 
-  async function loadBilling() {
+  const loadBilling = React.useCallback(async () => {
     try { const { data } = await API.get('/superadmin/billing/summary'); setBilling(data); } catch (_) {}
-  }
+  }, []);
 
-  async function loadAll() {
+  const loadAll = React.useCallback(async () => {
     setLoading(true);
     try {
       const [statsRes, plansRes, tenantsRes] = await Promise.all([
@@ -140,9 +140,11 @@ export default function SuperAdminDashboard() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [tenantForm.plan, loadBilling, notify]);
 
-  useEffect(() => { loadAll(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
 
   function updatePlan(path, value) { setPlanForm(prev => setDeep(prev, path, value)); }
   function updateTenant(path, value) { setTenantForm(prev => setDeep(prev, path, value)); }
