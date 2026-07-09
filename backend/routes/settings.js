@@ -39,6 +39,10 @@ function normalizeTheme(theme = {}) {
   return t;
 }
 
+function isLocalDomain(domain) {
+  return ['localhost', '127.0.0.1'].includes(normalizeDomain(domain));
+}
+
 function tenantSettingsResponse(tenant) {
   const settings = toPlain(tenant.settings);
   const theme = normalizeTheme(toPlain(tenant.theme));
@@ -70,12 +74,13 @@ async function findTenantFromRequest(req) {
 }
 
 async function getLogoUrl(req) {
+  if (req.storeUnavailable) return null;
   const tenant = await findTenantFromRequest(req);
   if (tenant) {
     const settings = toPlain(tenant.settings);
     return settings.faviconUrl || settings.logoUrl || null;
   }
-  const row = await Settings.findOne({ key: 'faviconUrl' }) || await Settings.findOne({ key: 'logoUrl' });
+  const row = await Settings.findOne({ key: 'faviconUrl', tenantId: null }) || await Settings.findOne({ key: 'logoUrl', tenantId: null });
   return row?.value || null;
 }
 
@@ -134,14 +139,30 @@ router.get('/', async (req, res) => {
   try {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 
+    if (req.storeUnavailable) {
+      return res.status(503).json({
+        code: 'STORE_UNAVAILABLE',
+        message: 'This store is currently unavailable.',
+      });
+    }
+
     const tenant = await findTenantFromRequest(req);
     if (tenant) return res.json(tenantSettingsResponse(tenant));
+
+    const domain = getHeaderDomainCandidates(req)[0] || '';
+    if (domain && !isLocalDomain(domain)) {
+      return res.status(404).json({
+        code: 'STORE_NOT_FOUND',
+        message: 'Store not found for this domain.',
+        domain,
+      });
+    }
 
     const cacheKey = 'global';
     const cached = _settingsCache.get(cacheKey);
     if (cached && Date.now() - cached.at < SETTINGS_CACHE_TTL) return res.json(cached.value);
 
-    const settings = await Settings.find();
+    const settings = await Settings.find({ tenantId: null });
     const obj = {};
     settings.forEach(s => { obj[s.key] = s.value; });
     _settingsCache.set(cacheKey, { at: Date.now(), value: obj });

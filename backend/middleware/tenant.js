@@ -33,23 +33,43 @@ function getHeaderDomainCandidates(req) {
   ].filter(Boolean))));
 }
 
-async function findTenantByDomain(req) {
+function isLocalDomain(domain) {
+  return ['localhost', '127.0.0.1'].includes(normalizeDomain(domain));
+}
+
+function isTenantAvailable(tenant) {
+  if (!tenant) return false;
+  const subscriptionStatus = tenant.subscription?.status || tenant.billing?.subscriptionStatus;
+  return tenant.status === 'active' && !['suspended', 'cancelled'].includes(subscriptionStatus);
+}
+
+async function findTenantByDomain(req, { includeInactive = false } = {}) {
   const lookupDomains = getHeaderDomainCandidates(req);
   if (!lookupDomains.length) return null;
 
-  return Tenant.findOne({
-    status: 'active',
+  const filter = {
     domains: { $elemMatch: { domain: { $in: lookupDomains }, active: true } },
-  }).populate('plan');
+  };
+  if (!includeInactive) filter.status = 'active';
+
+  return Tenant.findOne(filter).populate('plan');
 }
 
 async function resolveTenant(req, res, next) {
   try {
-    const tenant = await findTenantByDomain(req);
+    const tenant = await findTenantByDomain(req, { includeInactive: true });
 
     if (!tenant) {
       const domain = getHeaderDomainCandidates(req)[0] || '';
       return res.status(404).json({ message: 'Store not found for this domain', domain });
+    }
+    if (!isTenantAvailable(tenant)) {
+      const domain = getHeaderDomainCandidates(req)[0] || '';
+      return res.status(503).json({
+        code: 'STORE_UNAVAILABLE',
+        message: 'This store is currently unavailable.',
+        domain,
+      });
     }
 
     req.tenant = tenant;
@@ -63,15 +83,53 @@ async function resolveTenant(req, res, next) {
 
 async function optionalTenant(req, _res, next) {
   try {
-    const tenant = await findTenantByDomain(req);
-    if (tenant) {
+    const tenant = await findTenantByDomain(req, { includeInactive: true });
+    if (tenant && isTenantAvailable(tenant)) {
       req.tenant = tenant;
       req.tenantId = tenant._id;
       req.plan = tenant.plan;
+    } else if (tenant) {
+      req.storeUnavailable = {
+        code: 'STORE_UNAVAILABLE',
+        message: 'This store is currently unavailable.',
+        tenantId: tenant._id,
+        status: tenant.status,
+        subscriptionStatus: tenant.subscription?.status || tenant.billing?.subscriptionStatus,
+      };
     }
   } catch (_) {
     // Optional tenant resolution must never block auth/superadmin/system routes.
   }
+  next();
+}
+
+function blockUnavailableStore(req, res, next) {
+  const path = req.originalUrl || req.path || '';
+  const isAdminOrBilling =
+    path.startsWith('/api/admin') ||
+    path.startsWith('/api/billing') ||
+    path.startsWith('/api/superadmin');
+
+  if (isAdminOrBilling) return next();
+
+  if (req.storeUnavailable) {
+    return res.status(503).json({
+      code: 'STORE_UNAVAILABLE',
+      message: 'This store is currently unavailable.',
+    });
+  }
+
+  if (!req.tenantId) {
+    const domain = getHeaderDomainCandidates(req)[0] || '';
+    if (domain && !isLocalDomain(domain)) {
+      return res.status(404).json({
+        code: 'STORE_NOT_FOUND',
+        message: 'Store not found for this domain.',
+        domain,
+      });
+    }
+  }
+
   next();
 }
 
@@ -84,4 +142,12 @@ function requireFeature(featureName) {
   };
 }
 
-module.exports = { resolveTenant, optionalTenant, requireFeature, normalizeDomain, getHeaderDomainCandidates };
+module.exports = {
+  resolveTenant,
+  optionalTenant,
+  blockUnavailableStore,
+  requireFeature,
+  normalizeDomain,
+  getHeaderDomainCandidates,
+  isTenantAvailable,
+};

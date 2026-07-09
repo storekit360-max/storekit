@@ -937,7 +937,7 @@ const Footer = ({ settings }) => {
 /* ── Main Layout ───────────────────────────────────────────────── */
 export default function CustomerLayout() {
   const { campaign } = useSeasonal();
-  const { settings }  = useTheme();
+  const { settings, storeStatus }  = useTheme();
 
   React.useEffect(() => {
     if (settings?.googleSearchConsole) {
@@ -950,6 +950,32 @@ export default function CustomerLayout() {
       el.content = settings.googleSearchConsole;
     }
   }, [settings?.googleSearchConsole]);
+
+  if (!storeStatus?.checked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-6" style={{fontFamily:'var(--font-body)'}}>
+        <div className="w-10 h-10 rounded-full border-4 border-slate-200 border-t-slate-500 animate-spin" />
+      </div>
+    );
+  }
+
+  if (storeStatus?.unavailable) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-6" style={{fontFamily:'var(--font-body)'}}>
+        <div className="max-w-md text-center">
+          <div className="mx-auto mb-5 h-14 w-14 rounded-2xl bg-slate-900 text-white flex items-center justify-center">
+            <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Store currently unavailable</h1>
+          <p className="text-slate-500 text-sm leading-6">
+            {storeStatus.message || 'This store is currently unavailable. Please check again later.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col" style={{background:'var(--body-bg)',fontFamily:'var(--font-body)',overflowX:'hidden',maxWidth:'100vw'}}>

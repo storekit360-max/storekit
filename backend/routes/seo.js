@@ -29,7 +29,7 @@ const path     = require('path');
 const Product          = require('../models/Product');
 const { Category, Settings, Review } = require('../models/index');
 const Tenant           = require('../models/Tenant');
-const { normalizeDomain } = require('../middleware/tenant');
+const { normalizeDomain, isTenantAvailable } = require('../middleware/tenant');
 
 // ── XML helpers ───────────────────────────────────────────────────────────────
 function xe(str) {
@@ -97,13 +97,25 @@ async function resolveTenantForSEO(req) {
   let tenant = null;
   if (rawDomain && rawDomain !== 'localhost' && rawDomain !== '127.0.0.1') {
     tenant = await Tenant.findOne({
-      status: 'active',
       domains: { $elemMatch: { domain: rawDomain, active: true } },
     }).populate('plan').lean();
   }
 
+  if (tenant && !isTenantAvailable(tenant)) {
+    return {
+      tenant,
+      tenantId: tenant._id,
+      siteUrl: `https://${rawDomain}`,
+      storeName: tenant.storeName || 'Store',
+      logoUrl: '',
+      ogImage: '',
+      tenantSettings: null,
+      unavailable: true,
+    };
+  }
+
   // Fallback: global settings
-  const seoConfig = await Settings.findOne({ key: 'seo_config' }).lean();
+  const seoConfig = await Settings.findOne({ key: 'seo_config', tenantId: null }).lean();
   const globalSiteUrl = (seoConfig?.value?.siteUrl || process.env.FRONTEND_URL || 'https://storekit.lk').replace(/\/$/, '');
 
   if (!tenant) {
@@ -144,10 +156,10 @@ async function resolveTenantForSEO(req) {
 /**
  * Build a tenant-scoped MongoDB query filter.
  * Products/Categories/etc. must have a tenantId field to scope queries.
- * If no tenant is resolved (single-tenant mode), query is unscoped.
+ * If no tenant is resolved, keep queries on legacy/global rows only.
  */
 function tenantFilter(tenantId, extra = {}) {
-  if (!tenantId) return extra;
+  if (!tenantId) return { tenantId: null, ...extra };
   return { tenantId, ...extra };
 }
 
@@ -558,6 +570,25 @@ const seoRenderMiddleware = async (req, res) => {
   // Resolve tenant from the request domain
   const tenantInfo = await resolveTenantForSEO(req);
   const { siteUrl, storeName, tenantId, logoUrl, ogImage: defaultOgImage } = tenantInfo;
+
+  if (tenantInfo.unavailable) {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(503).send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Store currently unavailable</title>
+  <style>
+    body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f8fafc;color:#0f172a;font-family:Inter,Arial,sans-serif}
+    main{max-width:420px;padding:32px;text-align:center}
+    h1{font-size:28px;margin:0 0 10px}
+    p{margin:0;color:#64748b;line-height:1.6}
+  </style>
+</head>
+<body><main><h1>Store currently unavailable</h1><p>This store is currently unavailable. Please check again later.</p></main></body>
+</html>`);
+  }
 
   res.setHeader('Access-Control-Allow-Origin', siteUrl);
   res.setHeader('Access-Control-Allow-Credentials', 'true');

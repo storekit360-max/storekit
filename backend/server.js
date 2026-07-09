@@ -73,8 +73,8 @@ require('dotenv').config();
 const { installTenantScope, tenantContextMiddleware } = require('./middleware/tenantContext');
 installTenantScope(mongoose);
 
-const { optionalTenant } = require('./middleware/tenant');
-const tenantScope = [optionalTenant, tenantContextMiddleware];
+const { optionalTenant, blockUnavailableStore } = require('./middleware/tenant');
+const tenantScope = [optionalTenant, blockUnavailableStore, tenantContextMiddleware];
 
 const app = express();
 

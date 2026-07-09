@@ -135,6 +135,9 @@ const readCache = () => {
 export const writeCache = (data) => {
   try { localStorage.setItem(getTenantThemeCacheKey(), JSON.stringify(data)); } catch {}
 };
+export const clearThemeLocalCache = () => {
+  try { localStorage.removeItem(getTenantThemeCacheKey()); } catch {}
+};
 
 
 const templateMetrics = {
@@ -269,6 +272,7 @@ export const ThemeProvider = ({ children }) => {
   const [settings, setSettings] = useState(() => readCache());
   const [themeKey, setThemeKey] = useState(() => readCache()?.theme || 'default');
   const [darkMode, setDarkModeState] = useState(() => readCache()?.darkMode || false);
+  const [storeStatus, setStoreStatus] = useState({ checked: false, unavailable: false, message: '' });
 
   useLayoutEffect(() => {
     const boot = window.__STOREKIT_BOOTSTRAP_SETTINGS__ || readCache();
@@ -282,7 +286,8 @@ export const ThemeProvider = ({ children }) => {
     // Don't overwrite a theme that was just saved (5s grace period)
     if (Date.now() - lastSaveRef.current < 5000) return;
     try {
-      const { data } = await API.get('/settings', { cacheTTL: 5 * 60 * 1000 });
+      const { data } = await API.get('/settings', { skipCache: true });
+      setStoreStatus({ checked: true, unavailable: false, message: '' });
       if (!data || typeof data !== 'object' || Array.isArray(data)) return;
       if (!('storeName' in data || 'theme' in data)) return;
       setSettings(data);
@@ -318,6 +323,31 @@ export const ThemeProvider = ({ children }) => {
       };
       window.dispatchEvent(new CustomEvent('storekit:seo-ready'));
     } catch (err) {
+      if (err?.response?.data?.code === 'STORE_UNAVAILABLE' || err?.response?.status === 503) {
+        clearThemeLocalCache();
+        setSettings(null);
+        setStoreStatus({
+          checked: true,
+          unavailable: true,
+          message: err.response?.data?.message || 'This store is currently unavailable.',
+        });
+        document.title = 'Store currently unavailable';
+        document.documentElement.classList.add('storekit-theme-ready');
+        return;
+      }
+      if (err?.response?.data?.code === 'STORE_NOT_FOUND' || err?.response?.status === 404) {
+        clearThemeLocalCache();
+        setSettings(null);
+        setStoreStatus({
+          checked: true,
+          unavailable: true,
+          message: err.response?.data?.message || 'Store not found for this domain.',
+        });
+        document.title = 'Store currently unavailable';
+        document.documentElement.classList.add('storekit-theme-ready');
+        return;
+      }
+      setStoreStatus(prev => ({ ...prev, checked: true }));
       // Silently ignore ECONNREFUSED / network errors (backend not yet started)
       // The interval will retry automatically
       if (err?.code !== 'ERR_NETWORK' && err?.response) {
@@ -380,7 +410,7 @@ export const ThemeProvider = ({ children }) => {
   }, [loadAndApply]);
 
   return (
-    <ThemeContext.Provider value={{ settings, themeKey, darkMode, setDarkMode, saveTheme, THEMES, THEME_CATEGORIES, FONTS, STORE_TEMPLATES, TEMPLATE_CATEGORIES, refreshTheme, applyTheme }}>
+    <ThemeContext.Provider value={{ settings, themeKey, darkMode, storeStatus, setDarkMode, saveTheme, THEMES, THEME_CATEGORIES, FONTS, STORE_TEMPLATES, TEMPLATE_CATEGORIES, refreshTheme, applyTheme }}>
       {children}
     </ThemeContext.Provider>
   );
