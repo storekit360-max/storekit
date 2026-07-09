@@ -22,14 +22,18 @@
 
 const express    = require('express');
 const mongoose   = require('mongoose');
-const { installTenantScope, tenantContextMiddleware } = require('./middleware/tenantContext');
-const { optionalTenant } = require('./middleware/tenant');
-installTenantScope(mongoose);
 const cors       = require('cors');
 const path       = require('path');
 require('dotenv').config();
 
 const app = express();
+
+const { resolveTenant, optionalTenant } = require('./middleware/tenant');
+const { installTenantScope, tenantContextMiddleware } = require('./middleware/tenantContext');
+installTenantScope(mongoose);
+
+const tenantPipeline = [resolveTenant, tenantContextMiddleware];
+const optionalTenantPipeline = [optionalTenant, tenantContextMiddleware];
 
 // Trust the Railway/Vercel proxy so express-rate-limit sees the real client IP
 // from X-Forwarded-For rather than the proxy's internal address.
@@ -121,16 +125,6 @@ app.use((req, _res, next) => {
   next();
 });
 
-// ─── Tenant resolution + automatic tenant query scope ────────────────────────
-// Every storefront/admin API request carries the real tenant domain in Origin or
-// X-Tenant-Domain. This middleware attaches req.tenantId and AsyncLocalStorage
-// then automatically scopes all tenant-aware Mongoose models. Superadmin routes
-// intentionally bypass this to manage all tenants globally.
-app.use('/api', (req, res, next) => {
-  if (req.path.startsWith('/superadmin') || req.path === '/health') return next();
-  optionalTenant(req, res, () => tenantContextMiddleware(req, res, next));
-});
-
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', time: new Date() }));
 
@@ -138,29 +132,29 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok', time: new Date() 
 // SECURITY: /api/auth/login is capped at 10 req / 15 min per IP to resist
 //           credential-stuffing attacks independently of the global limiter.
 app.use('/api/auth/login', loginLimiter);
-app.use('/api/auth',          require('./routes/auth'));
+app.use('/api/auth',          ...optionalTenantPipeline, require('./routes/auth'));
 app.use('/api/tenant',        require('./routes/tenant'));
 app.use('/api/superadmin',    require('./routes/superadmin'));
 
 // ─── Public routes ────────────────────────────────────────────────────────────
-app.use('/api/products',      require('./routes/products'));
-app.use('/api/orders',        require('./routes/orders'));
-app.use('/api/categories',    require('./routes/categories'));
-app.use('/api/coupons',       require('./routes/coupons'));
-app.use('/api/banners',       require('./routes/banners'));
-app.use('/api/reviews',       require('./routes/reviews'));
-app.use('/api/notifications', require('./routes/notifications'));
-app.use('/api/settings',      require('./routes/settings'));
-app.use('/api/returns',       require('./routes/returns'));
-app.use('/api/gift-cards',    require('./routes/giftcards'));
-app.use('/api/seasonal',      require('./routes/seasonal'));
-app.use('/api/upload',        require('./routes/upload'));
+app.use('/api/products',         ...tenantPipeline, require('./routes/products'));
+app.use('/api/orders',         ...tenantPipeline, require('./routes/orders'));
+app.use('/api/categories',         ...tenantPipeline, require('./routes/categories'));
+app.use('/api/coupons',         ...tenantPipeline, require('./routes/coupons'));
+app.use('/api/banners',         ...tenantPipeline, require('./routes/banners'));
+app.use('/api/reviews',         ...tenantPipeline, require('./routes/reviews'));
+app.use('/api/notifications',         ...tenantPipeline, require('./routes/notifications'));
+app.use('/api/settings',         ...tenantPipeline, require('./routes/settings'));
+app.use('/api/returns',         ...tenantPipeline, require('./routes/returns'));
+app.use('/api/gift-cards',         ...tenantPipeline, require('./routes/giftcards'));
+app.use('/api/seasonal',         ...tenantPipeline, require('./routes/seasonal'));
+app.use('/api/upload',         ...optionalTenantPipeline, require('./routes/upload'));
 app.use('/api/scrape',        require('./routes/scrape'));
-app.use('/api/payments',      require('./routes/payments'));
-app.use('/api/delivery',      require('./routes/delivery'));
-app.use('/api/pages',         require('./routes/pages'));
-app.use('/api/subscribers',   require('./routes/subscribers'));
-app.use('/api/seo',           require('./routes/seo'));
+app.use('/api/payments',         ...optionalTenantPipeline, require('./routes/payments'));
+app.use('/api/delivery',         ...tenantPipeline, require('./routes/delivery'));
+app.use('/api/pages',         ...tenantPipeline, require('./routes/pages'));
+app.use('/api/subscribers',         ...tenantPipeline, require('./routes/subscribers'));
+app.use('/api/seo',         ...tenantPipeline, require('./routes/seo'));
 app.use('/api/meta',          require('./routes/meta'));   // Meta CAPI relay
 
 // ─── SEO aliases ──────────────────────────────────────────────────────────────
@@ -171,18 +165,18 @@ app.get('/robots.txt',  (req, res) => res.redirect(301, '/api/seo/robots.txt'));
 // SECURITY: auditLog writes one-line JSON to logs/audit.log for every mutating
 //           admin action (POST/PUT/PATCH/DELETE).  This is additive — all
 //           responses are identical to before.
-app.use('/api/admin', auditLog, require('./routes/admin'));
-app.use('/api/admin/reset', require('./routes/reset'));
+app.use('/api/admin', ...tenantPipeline, auditLog, require('./routes/admin'));
+app.use('/api/admin/reset', ...tenantPipeline, require('./routes/reset'));
 
 // ─── Other routes ─────────────────────────────────────────────────────────────
-app.use('/api/whatsapp',      require('./routes/whatsapp'));
-app.use('/api/social-media',  require('./routes/socialMedia'));
-app.use('/api/ai-post-creator', require('./routes/aiPostCreator'));
-app.use('/api/automation',    require('./routes/automation'));
-app.use('/api/deals',         require('./routes/deals'));
+app.use('/api/whatsapp',         ...tenantPipeline, require('./routes/whatsapp'));
+app.use('/api/social-media',         ...tenantPipeline, require('./routes/socialMedia'));
+app.use('/api/ai-post-creator',         ...tenantPipeline, require('./routes/aiPostCreator'));
+app.use('/api/automation',         ...tenantPipeline, require('./routes/automation'));
+app.use('/api/deals',         ...tenantPipeline, require('./routes/deals'));
 app.use('/api/ai',            require('./routes/ai'));
-app.use('/api/monitoring',    require('./routes/monitoring'));
-app.use('/api/backup',        require('./routes/backup'));
+app.use('/api/monitoring',         ...tenantPipeline, require('./routes/monitoring'));
+app.use('/api/backup',         ...tenantPipeline, require('./routes/backup'));
 
 // ─── Page SSR for crawlers ────────────────────────────────────────────────────
 const { seoRenderMiddleware } = require('./routes/seo');

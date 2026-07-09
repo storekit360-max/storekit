@@ -6,67 +6,63 @@ function normalizeDomain(value) {
   return String(value || '')
     .toLowerCase()
     .replace(/^https?:\/\//, '')
-    .replace(/\/.*$/, '')
     .replace(/:\d+$/, '')
     .replace(/^www\./, '')
+    .replace(/\/.*$/, '')
     .trim();
 }
 
-function getRequestDomain(req) {
-  const explicit = req.headers['x-tenant-domain'] || req.headers['x-store-domain'];
+function firstHeaderValue(value) {
+  return String(value || '').split(',')[0].trim();
+}
+
+function getTenantDomainFromRequest(req) {
+  const explicit = firstHeaderValue(req.headers['x-tenant-domain']);
   if (explicit) return normalizeDomain(explicit);
 
-  // Railway receives host=storekit1-production.up.railway.app. The real store
-  // domain is usually in Origin/Referer from the Vercel storefront.
-  const origin = req.headers.origin || req.headers.referer;
+  // Browser requests hit the Railway API domain, so req.host can be the backend
+  // domain. In that case the storefront domain is only available in Origin or
+  // Referer. Prefer those before falling back to host.
+  const origin = firstHeaderValue(req.headers.origin);
   if (origin) return normalizeDomain(origin);
 
-  return normalizeDomain(req.headers['x-forwarded-host'] || req.headers.host);
+  const referer = firstHeaderValue(req.headers.referer || req.headers.referrer);
+  if (referer) return normalizeDomain(referer);
+
+  const forwardedHost = firstHeaderValue(req.headers['x-forwarded-host']);
+  if (forwardedHost) return normalizeDomain(forwardedHost);
+
+  return normalizeDomain(req.headers.host);
 }
 
-async function findTenantForRequest(req) {
-  const domain = getRequestDomain(req);
-  if (!domain) return { tenant: null, domain };
+function domainCandidates(domain) {
+  const normalized = normalizeDomain(domain);
+  const candidates = new Set();
+  if (normalized) candidates.add(normalized);
+  if (normalized === 'localhost') candidates.add('127.0.0.1');
+  if (normalized === '127.0.0.1') candidates.add('localhost');
+  return Array.from(candidates);
+}
 
-  const candidates = new Set([domain]);
-  if (domain === 'localhost') candidates.add('127.0.0.1');
-  if (domain === '127.0.0.1') candidates.add('localhost');
+async function findTenantByDomain(domain) {
+  const candidates = domainCandidates(domain);
+  if (!candidates.length) return null;
 
-  // Some old tenant rows were saved with trailing slash. Match both normalized
-  // and legacy forms so existing tenants keep working.
-  candidates.add(`${domain}/`);
-
-  const tenant = await Tenant.findOne({
-    status: { $ne: 'deleted' },
-    domains: {
-      $elemMatch: {
-        active: true,
-        domain: { $in: Array.from(candidates) },
-      },
-    },
+  return Tenant.findOne({
+    status: 'active',
+    domains: { $elemMatch: { domain: { $in: candidates }, active: true } },
   }).populate('plan');
-
-  return { tenant, domain };
-}
-
-async function attachTenant(req, _res, next) {
-  try {
-    const { tenant } = await findTenantForRequest(req);
-    if (tenant) {
-      req.tenant = tenant;
-      req.tenantId = tenant._id;
-      req.plan = tenant.plan;
-    }
-    next();
-  } catch (err) {
-    next(err);
-  }
 }
 
 async function resolveTenant(req, res, next) {
   try {
-    const { tenant, domain } = await findTenantForRequest(req);
-    if (!tenant) return res.status(404).json({ message: 'Store not found for this domain', domain });
+    const domain = getTenantDomainFromRequest(req);
+    const tenant = await findTenantByDomain(domain);
+
+    if (!tenant) {
+      return res.status(404).json({ message: 'Store not found for this domain', domain });
+    }
+
     req.tenant = tenant;
     req.tenantId = tenant._id;
     req.plan = tenant.plan;
@@ -78,14 +74,15 @@ async function resolveTenant(req, res, next) {
 
 async function optionalTenant(req, _res, next) {
   try {
-    const { tenant } = await findTenantForRequest(req);
+    const domain = getTenantDomainFromRequest(req);
+    const tenant = await findTenantByDomain(domain);
     if (tenant) {
       req.tenant = tenant;
       req.tenantId = tenant._id;
       req.plan = tenant.plan;
     }
   } catch (_) {
-    // Optional tenant resolution must never block auth/superadmin/health routes.
+    // Optional tenant resolution must never block auth/superadmin/system routes.
   }
   next();
 }
@@ -99,4 +96,10 @@ function requireFeature(featureName) {
   };
 }
 
-module.exports = { resolveTenant, optionalTenant, attachTenant, requireFeature, normalizeDomain, getRequestDomain };
+module.exports = {
+  resolveTenant,
+  optionalTenant,
+  requireFeature,
+  normalizeDomain,
+  getTenantDomainFromRequest,
+};

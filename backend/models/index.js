@@ -17,7 +17,7 @@ categorySchema.pre('save', function(next) {
   next();
 });
 categorySchema.index({ tenantId: 1, slug: 1 }, { unique: true, sparse: true });
-const Category = mongoose.model('Category', categorySchema);
+const Category = mongoose.models.Category || mongoose.model('Category', categorySchema);
 
 // Coupon
 const couponSchema = new mongoose.Schema({
@@ -57,7 +57,7 @@ const couponSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 couponSchema.index({ tenantId: 1, code: 1 }, { unique: true, sparse: true });
-const Coupon = mongoose.model('Coupon', couponSchema);
+const Coupon = mongoose.models.Coupon || mongoose.model('Coupon', couponSchema);
 
 // Banner - Enhanced with full banner system support
 const bannerSchema = new mongoose.Schema({
@@ -94,7 +94,7 @@ const bannerSchema = new mongoose.Schema({
   endDate: Date,
   createdAt: { type: Date, default: Date.now }
 });
-const Banner = mongoose.model('Banner', bannerSchema);
+const Banner = mongoose.models.Banner || mongoose.model('Banner', bannerSchema);
 
 // Review
 const reviewSchema = new mongoose.Schema({
@@ -109,8 +109,8 @@ const reviewSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 // One review per product per order — prevents duplicate reviews from the same purchase
-reviewSchema.index({ product: 1, user: 1, order: 1 }, { unique: true });
-const Review = mongoose.model('Review', reviewSchema);
+reviewSchema.index({ tenantId: 1, product: 1, user: 1, order: 1 }, { unique: true });
+const Review = mongoose.models.Review || mongoose.model('Review', reviewSchema);
 
 // Notification
 const notificationSchema = new mongoose.Schema({
@@ -131,7 +131,7 @@ const notificationSchema = new mongoose.Schema({
   data: mongoose.Schema.Types.Mixed,
   createdAt: { type: Date, default: Date.now }
 });
-const Notification = mongoose.model('Notification', notificationSchema);
+const Notification = mongoose.models.Notification || mongoose.model('Notification', notificationSchema);
 
 // Settings
 const settingsSchema = new mongoose.Schema({
@@ -142,12 +142,12 @@ const settingsSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 settingsSchema.index({ tenantId: 1, key: 1 }, { unique: true, sparse: true });
-const Settings = mongoose.model('Settings', settingsSchema);
+const Settings = mongoose.models.Settings || mongoose.model('Settings', settingsSchema);
 
 // GiftCard
 const giftCardSchema = new mongoose.Schema({
   tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
-  code: { type: String, unique: true, uppercase: true, required: true },
+  code: { type: String, uppercase: true, required: true },
   initialValue: { type: Number, required: true },
   balance: { type: Number, required: true },
   purchasedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -181,7 +181,7 @@ const giftCardSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 giftCardSchema.index({ tenantId: 1, code: 1 }, { unique: true, sparse: true });
-const GiftCard = mongoose.model('GiftCard', giftCardSchema);
+const GiftCard = mongoose.models.GiftCard || mongoose.model('GiftCard', giftCardSchema);
 
 // ── ReturnRequest ─────────────────────────────────────────────────────────────
 // ENHANCED: item condition tracking, courier charge deduction, order integration
@@ -236,7 +236,7 @@ const returnRequestSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
-const ReturnRequest = mongoose.model('ReturnRequest', returnRequestSchema);
+const ReturnRequest = mongoose.models.ReturnRequest || mongoose.model('ReturnRequest', returnRequestSchema);
 
 // OTP
 const otpSchema = new mongoose.Schema({
@@ -247,7 +247,7 @@ const otpSchema = new mongoose.Schema({
   used: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
-const OTP = mongoose.model('OTP', otpSchema);
+const OTP = mongoose.models.OTP || mongoose.model('OTP', otpSchema);
 
 // SeasonalCampaign
 const seasonalCampaignSchema = new mongoose.Schema({
@@ -292,7 +292,7 @@ const seasonalCampaignSchema = new mongoose.Schema({
   featuredBannerSubtitle: String,
   createdAt: { type: Date, default: Date.now }
 });
-const SeasonalCampaign = mongoose.model('SeasonalCampaign', seasonalCampaignSchema);
+const SeasonalCampaign = mongoose.models.SeasonalCampaign || mongoose.model('SeasonalCampaign', seasonalCampaignSchema);
 
 // PaymentGateway config
 const paymentGatewaySchema = new mongoose.Schema({
@@ -308,13 +308,13 @@ const paymentGatewaySchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 paymentGatewaySchema.index({ tenantId: 1, gateway: 1 }, { unique: true, sparse: true });
-const PaymentGateway = mongoose.model('PaymentGateway', paymentGatewaySchema);
+const PaymentGateway = mongoose.models.PaymentGateway || mongoose.model('PaymentGateway', paymentGatewaySchema);
 
 // DeliveryService
 const deliveryServiceSchema = new mongoose.Schema({
   tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   name: { type: String, required: true },
-  code: { type: String, required: true, unique: true },
+  code: { type: String, required: true },
   isEnabled: { type: Boolean, default: false },
   codAllowed: { type: Boolean, default: true },
   sortOrder: { type: Number, default: 0 },
@@ -340,12 +340,13 @@ const deliveryServiceSchema = new mongoose.Schema({
   updatedAt: Date,
   createdAt: { type: Date, default: Date.now }
 });
-const DeliveryService = mongoose.model('DeliveryService', deliveryServiceSchema);
+deliveryServiceSchema.index({ tenantId: 1, code: 1 }, { unique: true, sparse: true });
+const DeliveryService = mongoose.models.DeliveryService || mongoose.model('DeliveryService', deliveryServiceSchema);
 
 // BusinessPage
 const businessPageSchema = new mongoose.Schema({
   tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
-  slug: { type: String, required: true },
+  slug: { type: String },
   title: { type: String, required: true },
   content: String,
   metaTitle: String,
@@ -357,7 +358,7 @@ const businessPageSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 businessPageSchema.index({ tenantId: 1, slug: 1 }, { unique: true, sparse: true });
-const BusinessPage = mongoose.model('BusinessPage', businessPageSchema);
+const BusinessPage = mongoose.models.BusinessPage || mongoose.model('BusinessPage', businessPageSchema);
 
 // Newsletter subscriber
 const subscriberSchema = new mongoose.Schema({
@@ -369,7 +370,7 @@ const subscriberSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 subscriberSchema.index({ tenantId: 1, email: 1 }, { unique: true, sparse: true });
-const Subscriber = mongoose.model('Subscriber', subscriberSchema);
+const Subscriber = mongoose.models.Subscriber || mongoose.model('Subscriber', subscriberSchema);
 
 module.exports = {
   Category, Coupon, Banner, Review, Notification, Settings, GiftCard,
