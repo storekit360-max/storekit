@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const categorySchema = new mongoose.Schema({
   tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   name: { type: String, required: true },
-  slug: { type: String },
+  slug: { type: String, required: true },
   description: String,
   image: String,
   parent: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', default: null },
@@ -109,7 +109,7 @@ const reviewSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 // One review per product per order — prevents duplicate reviews from the same purchase
-reviewSchema.index({ tenantId: 1, product: 1, user: 1, order: 1 }, { unique: true });
+reviewSchema.index({ product: 1, user: 1, order: 1 }, { unique: true });
 const Review = mongoose.models.Review || mongoose.model('Review', reviewSchema);
 
 // Notification
@@ -346,7 +346,7 @@ const DeliveryService = mongoose.models.DeliveryService || mongoose.model('Deliv
 // BusinessPage
 const businessPageSchema = new mongoose.Schema({
   tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
-  slug: { type: String },
+  slug: { type: String, required: true },
   title: { type: String, required: true },
   content: String,
   metaTitle: String,

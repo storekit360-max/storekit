@@ -1,106 +1,53 @@
 'use strict';
 
-/**
- * Tenant isolation audit + index hardening.
- *
- * Run after deploying tenant-isolation code:
- *   cd backend
- *   node scripts/tenant-isolation-audit-fix.js
- *
- * This script does NOT move tenant data between tenants. It only:
- *   - normalizes tenant domains
- *   - removes unsafe legacy global settings with tenantId:null/missing
- *   - drops legacy single-field unique indexes that cause cross-tenant conflicts
- *   - creates tenant-scoped indexes
- *   - prints per-collection tenant counts for verification
- */
-const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+require('dotenv').config();
 const mongoose = require('mongoose');
 const Tenant = require('../models/Tenant');
-const { normalizeDomain } = require('../middleware/tenant');
+require('../models/Product');
+require('../models/index');
 
 const COLLECTIONS = [
-  { name: 'products', unique: [['slug']] },
-  { name: 'categories', unique: [['slug']] },
-  { name: 'coupons', unique: [['code']] },
-  { name: 'banners' },
-  { name: 'reviews' },
-  { name: 'notifications' },
-  { name: 'settings', unique: [['key']] },
-  { name: 'giftcards', unique: [['code']] },
-  { name: 'returnrequests' },
-  { name: 'otps' },
-  { name: 'seasonalcampaigns' },
-  { name: 'paymentgateways', unique: [['gateway']] },
-  { name: 'deliveryservices', unique: [['code']] },
-  { name: 'businesspages', unique: [['slug']] },
-  { name: 'subscribers', unique: [['email']] },
-  { name: 'deals' },
-  { name: 'socialmedias' },
+  'products','categories','banners','coupons','settings','businesspages','deals','socialmedias',
+  'seasonalcampaigns','giftcards','subscribers','notifications','orders','reviews','returnrequests',
+  'paymentgateways','deliveryservices','otps'
 ];
 
-async function safeDropIndex(collection, indexName) {
+async function safeDropIndex(col, name) {
   try {
-    const indexes = await collection.indexes();
-    if (indexes.some(i => i.name === indexName)) {
-      await collection.dropIndex(indexName);
-      console.log(`Dropped legacy index ${collection.collectionName}.${indexName}`);
+    const indexes = await col.indexes();
+    if (indexes.some(i => i.name === name)) {
+      await col.dropIndex(name);
+      console.log(`Dropped legacy index ${col.collectionName}.${name}`);
     }
   } catch (err) {
     if (!/index not found|ns not found/i.test(err.message)) throw err;
   }
 }
 
-async function ensureIndexes(db) {
-  for (const item of COLLECTIONS) {
-    const col = db.collection(item.name);
-    await col.createIndex({ tenantId: 1 });
-
-    for (const fields of item.unique || []) {
-      const legacyName = fields.map(f => `${f}_1`).join('_');
-      await safeDropIndex(col, legacyName);
-      const key = { tenantId: 1 };
-      fields.forEach(f => { key[f] = 1; });
-      await col.createIndex(key, { unique: true, sparse: true });
+async function safeCreateIndex(col, keys, options = {}) {
+  try {
+    await col.createIndex(keys, options);
+  } catch (err) {
+    if (err.code === 86) {
+      console.log(`Index already exists: ${col.collectionName}.${options.name || 'custom'}`);
+      return;
     }
+    throw err;
   }
 }
 
-async function normalizeTenantDomains() {
-  const tenants = await Tenant.find({});
-  for (const tenant of tenants) {
-    let changed = false;
-    tenant.domains = (tenant.domains || []).map(d => {
-      const normalized = normalizeDomain(d.domain);
-      if (d.domain !== normalized) changed = true;
-      return { ...d.toObject?.() || d, domain: normalized };
-    });
-    if (changed) await tenant.save();
-  }
-}
-
-async function deleteUnsafeGlobalSettings(db) {
-  const result = await db.collection('settings').deleteMany({
-    $or: [{ tenantId: null }, { tenantId: { $exists: false } }],
-  });
-  if (result.deletedCount) console.log(`Deleted unsafe global/null settings: ${result.deletedCount}`);
-}
-
-async function printAudit(db) {
-  const tenants = await Tenant.find({}, { storeName: 1, domains: 1, status: 1 }).lean();
-  console.log('TENANTS:', tenants.map(t => ({
-    id: String(t._id),
-    storeName: t.storeName,
-    status: t.status,
-    domains: (t.domains || []).map(d => d.domain),
-  })));
-
-  for (const item of COLLECTIONS) {
-    const rows = await db.collection(item.name).aggregate([
-      { $group: { _id: '$tenantId', count: { $sum: 1 } } },
-    ]).toArray();
-    console.log(item.name, rows.map(r => ({ tenantId: r._id ? String(r._id) : null, count: r.count })));
+async function summarize(db, tenants) {
+  console.log('TENANTS:', tenants.map(t => ({ id: String(t._id), storeName: t.storeName, domains: (t.domains || []).map(d => d.domain) })));
+  for (const name of COLLECTIONS) {
+    try {
+      const rows = await db.collection(name).aggregate([
+        { $group: { _id: '$tenantId', count: { $sum: 1 } } },
+        { $project: { _id: 0, tenantId: { $toString: '$_id' }, count: 1 } },
+      ]).toArray();
+      console.log(name, rows);
+    } catch (err) {
+      if (!/ns does not exist/i.test(err.message)) console.warn(name, err.message);
+    }
   }
 }
 
@@ -108,10 +55,25 @@ async function main() {
   if (!process.env.MONGODB_URI) throw new Error('MONGODB_URI is required');
   await mongoose.connect(process.env.MONGODB_URI);
   const db = mongoose.connection.db;
-  await normalizeTenantDomains();
-  await ensureIndexes(db);
-  await deleteUnsafeGlobalSettings(db);
-  await printAudit(db);
+
+  await safeDropIndex(db.collection('products'), 'slug_1');
+  await safeDropIndex(db.collection('categories'), 'slug_1');
+  await safeDropIndex(db.collection('coupons'), 'code_1');
+  await safeDropIndex(db.collection('settings'), 'key_1');
+  await safeDropIndex(db.collection('businesspages'), 'slug_1');
+  await safeDropIndex(db.collection('giftcards'), 'code_1');
+  await safeDropIndex(db.collection('subscribers'), 'email_1');
+  await safeDropIndex(db.collection('paymentgateways'), 'gateway_1');
+  await safeDropIndex(db.collection('deliveryservices'), 'code_1');
+
+  await safeCreateIndex(db.collection('products'), { tenantId: 1, slug: 1 }, { unique: true, sparse: true, name: 'tenantId_1_slug_1' });
+  await safeCreateIndex(db.collection('categories'), { tenantId: 1, slug: 1 }, { unique: true, sparse: true, name: 'tenantId_1_slug_1' });
+  await safeCreateIndex(db.collection('coupons'), { tenantId: 1, code: 1 }, { unique: true, sparse: true, name: 'tenantId_1_code_1' });
+  await safeCreateIndex(db.collection('settings'), { tenantId: 1, key: 1 }, { unique: true, sparse: true, name: 'tenantId_1_key_1' });
+  await safeCreateIndex(db.collection('businesspages'), { tenantId: 1, slug: 1 }, { unique: true, sparse: true, name: 'tenantId_1_slug_1' });
+
+  const tenants = await Tenant.find({}).lean();
+  await summarize(db, tenants);
   await mongoose.disconnect();
 }
 

@@ -4,19 +4,20 @@ const { AsyncLocalStorage } = require('async_hooks');
 const mongoose = require('mongoose');
 
 const tenantStorage = new AsyncLocalStorage();
+let installed = false;
 
 function currentTenantId() {
   const store = tenantStorage.getStore();
-  return store?.tenantId || null;
+  return store && store.tenantId ? String(store.tenantId) : null;
 }
 
 function isBypassed() {
   const store = tenantStorage.getStore();
-  return !!store?.bypassTenantScope;
+  return !!(store && store.bypassTenantScope);
 }
 
 function runWithTenant(tenantId, fn) {
-  return tenantStorage.run({ tenantId: tenantId ? String(tenantId) : null }, fn);
+  return tenantStorage.run({ tenantId: tenantId ? String(tenantId) : null, bypassTenantScope: false }, fn);
 }
 
 function withoutTenantScope(fn) {
@@ -25,36 +26,26 @@ function withoutTenantScope(fn) {
 }
 
 function tenantContextMiddleware(req, _res, next) {
-  runWithTenant(req.tenantId, next);
+  runWithTenant(req.tenantId || req.tenant?._id || null, next);
 }
 
-function tenantObjectId() {
-  const tenantId = currentTenantId();
-  if (!tenantId || isBypassed()) return null;
-  try { return new mongoose.Types.ObjectId(tenantId); } catch (_) { return null; }
-}
-
-function hasTenantPredicate(filter = {}) {
-  if (Object.prototype.hasOwnProperty.call(filter, 'tenantId')) return true;
-  for (const key of ['$and', '$or', '$nor']) {
-    if (Array.isArray(filter[key]) && filter[key].some(hasTenantPredicate)) return true;
-  }
-  return false;
+function modelHasTenant(query) {
+  return !!query.model?.schema?.path('tenantId');
 }
 
 function addTenantToQuery(query) {
-  const oid = tenantObjectId();
-  if (!oid) return;
+  if (isBypassed() || !modelHasTenant(query)) return;
+  const tenantId = currentTenantId();
+  if (!tenantId) return;
 
-  const schema = query.model?.schema;
-  if (!schema?.path('tenantId')) return;
-
+  const oid = new mongoose.Types.ObjectId(tenantId);
   const filter = query.getFilter() || {};
-  if (!hasTenantPredicate(filter)) {
+
+  if (!Object.prototype.hasOwnProperty.call(filter, 'tenantId')) {
     query.where({ tenantId: oid });
   }
 
-  if (query.options?.upsert) {
+  if (query.options && query.options.upsert) {
     const update = query.getUpdate() || {};
     update.$setOnInsert = { ...(update.$setOnInsert || {}), tenantId: oid };
     query.setUpdate(update);
@@ -65,51 +56,34 @@ function tenantScopePlugin(schema) {
   if (!schema.path('tenantId')) return;
 
   schema.pre('validate', function tenantValidate(next) {
-    const oid = tenantObjectId();
-    if (oid && !this.tenantId) this.tenantId = oid;
+    const tenantId = currentTenantId();
+    if (tenantId && !isBypassed() && !this.tenantId) this.tenantId = tenantId;
     next();
   });
 
   schema.pre('insertMany', function tenantInsertMany(next, docs) {
-    const oid = tenantObjectId();
-    if (oid && Array.isArray(docs)) {
-      docs.forEach(doc => { if (!doc.tenantId) doc.tenantId = oid; });
+    const tenantId = currentTenantId();
+    if (tenantId && !isBypassed() && Array.isArray(docs)) {
+      docs.forEach(doc => { if (!doc.tenantId) doc.tenantId = tenantId; });
     }
     next();
   });
 
-  const ops = [
+  [
     'count', 'countDocuments', 'deleteMany', 'deleteOne', 'distinct',
     'find', 'findOne', 'findOneAndDelete', 'findOneAndRemove',
     'findOneAndReplace', 'findOneAndUpdate', 'replaceOne',
     'updateMany', 'updateOne',
-  ];
-  ops.forEach(op => schema.pre(op, function tenantQuery(next) {
-    addTenantToQuery(this);
-    next();
-  }));
-
-  schema.pre('aggregate', function tenantAggregate(next) {
-    const oid = tenantObjectId();
-    if (!oid || isBypassed()) return next();
-
-    const modelSchema = this.model()?.schema;
-    if (!modelSchema?.path('tenantId')) return next();
-
-    const pipeline = this.pipeline();
-    const alreadyScoped = pipeline.some(stage => stage.$match && hasTenantPredicate(stage.$match));
-    if (!alreadyScoped) {
-      const firstStage = pipeline[0] || {};
-      const insertAt = firstStage.$geoNear || firstStage.$search ? 1 : 0;
-      pipeline.splice(insertAt, 0, { $match: { tenantId: oid } });
-    }
-    next();
+  ].forEach(op => {
+    schema.pre(op, function tenantQuery(next) {
+      addTenantToQuery(this);
+      next();
+    });
   });
 
   schema.index({ tenantId: 1 });
 }
 
-let installed = false;
 function installTenantScope(mongooseInstance) {
   if (installed) return;
   installed = true;
