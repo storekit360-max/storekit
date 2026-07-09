@@ -3,6 +3,20 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const Plan = require('../models/Plan');
 const Tenant = require('../models/Tenant');
-const { initializeTenantSubscription } = require('../services/subscriptionBillingService');
-function slugify(v){return String(v||'plan').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'')||'plan'}
-(async()=>{ await mongoose.connect(process.env.MONGODB_URI); const plans=await Plan.find(); for(const p of plans){ let changed=false; if(!p.slug){p.slug=slugify(p.name); changed=true} if(!p.monthlyPrice){p.monthlyPrice=p.price||0; changed=true} if(!p.yearlyPrice){p.yearlyPrice=Math.round((p.monthlyPrice||0)*12*0.9); changed=true} if(p.trialDays==null){p.trialDays=14; changed=true} if(p.graceDays==null){p.graceDays=7; changed=true} if(changed) await p.save(); console.log('Plan billing ready:', p.name); } const tenants=await Tenant.find().populate('plan'); const out=[]; for(const t of tenants){ await initializeTenantSubscription(t,t.plan); out.push({tenantId:t._id,storeName:t.storeName,status:t.status,subscriptionStatus:t.subscription.status}); } console.log('Billing maintenance:', out); await mongoose.disconnect(); })().catch(async e=>{console.error(e); await mongoose.disconnect().catch(()=>{}); process.exit(1);});
+const { initializeTenantSubscription, runMaintenance } = require('../services/subscriptionBillingService');
+function slugify(v){ return String(v||'plan').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || 'plan'; }
+(async()=>{
+  await mongoose.connect(process.env.MONGODB_URI);
+  const plans = await Plan.find({});
+  for (const plan of plans) {
+    if (!plan.slug) plan.slug = slugify(plan.name);
+    plan.billing = { monthlyPrice: plan.billing?.monthlyPrice ?? plan.price ?? 0, yearlyPrice: plan.billing?.yearlyPrice ?? Math.round((plan.price || 0) * 10), trialDays: plan.billing?.trialDays ?? 0, graceDays: plan.billing?.graceDays ?? 3, autoRenew: !!plan.billing?.autoRenew, autoSuspend: plan.billing?.autoSuspend !== false };
+    plan.limits = { products: plan.limits?.products ?? 100, admins: plan.limits?.admins ?? 2, ordersPerMonth: plan.limits?.ordersPerMonth ?? 500, storageMb: plan.limits?.storageMb ?? 500, templates: plan.limits?.templates ?? 1, coupons: plan.limits?.coupons ?? 10, banners: plan.limits?.banners ?? 5 };
+    await plan.save();
+    console.log('Plan billing ready:', plan.name);
+  }
+  const tenants = await Tenant.find({}).populate('plan');
+  for (const tenant of tenants) if (!tenant.subscription || !tenant.subscription.status) await initializeTenantSubscription(tenant, tenant.plan);
+  console.log('Billing maintenance:', await runMaintenance());
+  await mongoose.disconnect();
+})().catch(async err=>{ console.error(err); await mongoose.disconnect().catch(()=>{}); process.exit(1); });

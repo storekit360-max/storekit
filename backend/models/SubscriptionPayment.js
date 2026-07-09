@@ -1,17 +1,22 @@
 'use strict';
 const mongoose = require('mongoose');
-const paymentSchema = new mongoose.Schema({
+
+const subscriptionPaymentSchema = new mongoose.Schema({
   tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true, index: true },
-  invoiceId: { type: mongoose.Schema.Types.ObjectId, ref: 'SubscriptionInvoice', default: null, index: true },
-  amount: { type: Number, required: true },
-  currency: { type: String, default: 'LKR' },
-  method: { type: String, enum: ['manual_bank', 'cash', 'card', 'gateway', 'other'], default: 'manual_bank' },
-  reference: { type: String, default: '' },
+  planId: { type: mongoose.Schema.Types.ObjectId, ref: 'Plan' },
+  amount: { type: Number, required: true, min: 0 },
+  currency: { type: String, default: 'LKR', uppercase: true },
+  billingCycle: { type: String, enum: ['monthly','yearly','once'], default: 'monthly' },
+  status: { type: String, enum: ['pending','approved','rejected','failed'], default: 'pending', index: true },
   proofUrl: { type: String, default: '' },
-  status: { type: String, enum: ['pending', 'approved', 'rejected', 'failed'], default: 'pending', index: true },
-  submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
-  reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
-  reviewedAt: Date,
   note: { type: String, default: '' },
+  adminNote: { type: String, default: '' },
+  submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  submittedAt: { type: Date, default: Date.now },
+  reviewedAt: Date,
+  periodStart: Date,
+  periodEnd: Date,
 }, { timestamps: true });
-module.exports = mongoose.models.SubscriptionPayment || mongoose.model('SubscriptionPayment', paymentSchema);
+
+module.exports = mongoose.models.SubscriptionPayment || mongoose.model('SubscriptionPayment', subscriptionPaymentSchema);

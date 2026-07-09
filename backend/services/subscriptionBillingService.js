@@ -2,115 +2,122 @@
 const Tenant = require('../models/Tenant');
 const Plan = require('../models/Plan');
 const SubscriptionInvoice = require('../models/SubscriptionInvoice');
-const SubscriptionPayment = require('../models/SubscriptionPayment');
+const { Notification } = require('../models/index');
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-function addDays(date, days) { return new Date(new Date(date).getTime() + Number(days || 0) * DAY_MS); }
-function addMonths(date, months) { const d = new Date(date); d.setMonth(d.getMonth() + Number(months || 1)); return d; }
-function addYears(date, years) { const d = new Date(date); d.setFullYear(d.getFullYear() + Number(years || 1)); return d; }
-function moneyForPlan(plan, cycle) { return Number(cycle === 'yearly' ? (plan.yearlyPrice || plan.price || 0) : (plan.monthlyPrice || plan.price || 0)); }
-function makeInvoiceNumber() { return `INV-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`; }
-
+const DAY = 24 * 60 * 60 * 1000;
+function addDays(date, days) { return new Date(new Date(date).getTime() + Number(days || 0) * DAY); }
+function addMonths(date, months) { const d = new Date(date); d.setMonth(d.getMonth() + months); return d; }
+function daysLeft(date) { if (!date) return null; return Math.ceil((new Date(date).getTime() - Date.now()) / DAY); }
+function amountForPlan(plan, cycle) {
+  if (!plan) return 0;
+  if (cycle === 'yearly') return Number(plan.billing?.yearlyPrice ?? plan.price ?? 0);
+  return Number(plan.billing?.monthlyPrice ?? plan.price ?? 0);
+}
+function nextDate(from, cycle) {
+  if (cycle === 'yearly') return addMonths(from, 12);
+  if (cycle === 'once') return null;
+  return addMonths(from, 1);
+}
+async function createInvoice(tenant, periodStart, periodEnd) {
+  const plan = tenant.plan?._id ? tenant.plan : await Plan.findById(tenant.plan);
+  const invoiceNumber = `SK-${Date.now()}-${String(tenant._id).slice(-5)}`;
+  return SubscriptionInvoice.create({
+    tenantId: tenant._id,
+    planId: plan?._id,
+    invoiceNumber,
+    amount: tenant.subscription?.amount ?? amountForPlan(plan, tenant.subscription?.billingCycle || plan?.billingCycle || 'monthly'),
+    currency: tenant.subscription?.currency || plan?.currency || 'LKR',
+    billingCycle: tenant.subscription?.billingCycle || plan?.billingCycle || 'monthly',
+    dueAt: tenant.subscription?.nextBillingAt || periodEnd,
+    periodStart,
+    periodEnd,
+  });
+}
 async function initializeTenantSubscription(tenant, planDoc) {
   const plan = planDoc || await Plan.findById(tenant.plan);
   const now = new Date();
-  const cycle = (tenant.subscription?.billingCycle || plan?.billingCycle) === 'yearly' ? 'yearly' : 'monthly';
-  const trialDays = Number(plan?.trialDays ?? 14);
-  const trialEndsAt = trialDays > 0 ? addDays(now, trialDays) : now;
+  const cycle = plan?.billingCycle || 'monthly';
+  const trialDays = Number(plan?.billing?.trialDays || 0);
+  const amount = amountForPlan(plan, cycle);
   tenant.subscription = {
     ...(tenant.subscription || {}),
-    status: trialDays > 0 ? 'trialing' : 'active',
+    status: trialDays > 0 ? 'trial' : 'active',
     billingCycle: cycle,
-    trialStartedAt: tenant.subscription?.trialStartedAt || now,
-    trialEndsAt: tenant.subscription?.trialEndsAt || trialEndsAt,
-    currentPeriodStart: tenant.subscription?.currentPeriodStart || now,
-    currentPeriodEnd: tenant.subscription?.currentPeriodEnd || (cycle === 'yearly' ? addYears(now, 1) : addMonths(now, 1)),
-    nextBillingAt: tenant.subscription?.nextBillingAt || trialEndsAt,
-    autoRenew: !!plan?.autoRenew,
-    reminders: tenant.subscription?.reminders || {},
+    currency: plan?.currency || tenant.settings?.currency || 'LKR',
+    amount,
+    trialStartedAt: trialDays > 0 ? now : tenant.subscription?.trialStartedAt,
+    trialEndsAt: trialDays > 0 ? addDays(now, trialDays) : tenant.subscription?.trialEndsAt,
+    currentPeriodStartedAt: now,
+    nextBillingAt: trialDays > 0 ? addDays(now, trialDays) : nextDate(now, cycle),
+    graceEndsAt: null,
+    autoRenew: !!plan?.billing?.autoRenew,
+    autoSuspend: plan?.billing?.autoSuspend !== false,
   };
   await tenant.save();
   return tenant;
 }
-
-async function ensureOpenInvoice(tenant) {
-  const plan = await Plan.findById(tenant.plan);
-  if (!plan) return null;
-  const cycle = tenant.subscription?.billingCycle || 'monthly';
-  const existing = await SubscriptionInvoice.findOne({ tenantId: tenant._id, status: { $in: ['unpaid','pending_review','overdue'] } }).sort({ createdAt: -1 });
-  if (existing) return existing;
-  const start = tenant.subscription?.currentPeriodStart || new Date();
-  const end = tenant.subscription?.nextBillingAt || (cycle === 'yearly' ? addYears(start, 1) : addMonths(start, 1));
-  const subtotal = moneyForPlan(plan, cycle);
-  return SubscriptionInvoice.create({
-    tenantId: tenant._id, planId: plan._id, invoiceNumber: makeInvoiceNumber(), billingCycle: cycle,
-    periodStart: start, periodEnd: end, dueDate: end, currency: plan.currency || 'LKR', subtotal, total: subtotal, status: 'unpaid'
-  });
-}
-
-async function approvePayment(paymentId, reviewerId) {
-  const payment = await SubscriptionPayment.findById(paymentId);
-  if (!payment) throw new Error('Payment not found');
-  const tenant = await Tenant.findById(payment.tenantId).populate('plan');
+async function renewTenant(tenantId, reviewerId) {
+  const tenant = await Tenant.findById(tenantId).populate('plan');
   if (!tenant) throw new Error('Tenant not found');
-  const invoice = payment.invoiceId ? await SubscriptionInvoice.findById(payment.invoiceId) : null;
-  payment.status = 'approved'; payment.reviewedBy = reviewerId; payment.reviewedAt = new Date();
-  await payment.save();
-  if (invoice) { invoice.status = 'paid'; invoice.paidAt = new Date(); invoice.reviewedAt = new Date(); invoice.reviewedBy = reviewerId; await invoice.save(); }
-  const cycle = tenant.subscription?.billingCycle || 'monthly';
   const now = new Date();
+  const cycle = tenant.subscription?.billingCycle || tenant.plan?.billingCycle || 'monthly';
+  const periodEnd = nextDate(now, cycle);
   tenant.status = 'active';
-  tenant.subscription.status = 'active';
-  tenant.subscription.lastPaidAt = now;
-  tenant.subscription.currentPeriodStart = now;
-  tenant.subscription.currentPeriodEnd = cycle === 'yearly' ? addYears(now, 1) : addMonths(now, 1);
-  tenant.subscription.nextBillingAt = tenant.subscription.currentPeriodEnd;
-  tenant.subscription.graceEndsAt = null;
-  tenant.subscription.suspendedAt = null;
-  tenant.subscription.reminders = {};
+  tenant.subscription = {
+    ...(tenant.subscription || {}),
+    status: 'active',
+    currentPeriodStartedAt: now,
+    nextBillingAt: periodEnd,
+    graceEndsAt: null,
+    lastPaymentAt: now,
+    amount: amountForPlan(tenant.plan, cycle),
+    currency: tenant.plan?.currency || tenant.subscription?.currency || 'LKR',
+  };
   await tenant.save();
-  return { payment, tenant, invoice };
+  await createInvoice(tenant, now, periodEnd);
+  await Notification.create({ type:'payment_confirmed', title:'Subscription renewed', message:`${tenant.storeName} subscription was renewed.`, link:'/superadmin', data:{ tenantId, reviewerId } }).catch(()=>{});
+  return tenant;
 }
-
-async function rejectPayment(paymentId, reviewerId, note='') {
-  const payment = await SubscriptionPayment.findById(paymentId);
-  if (!payment) throw new Error('Payment not found');
-  payment.status = 'rejected'; payment.reviewedBy = reviewerId; payment.reviewedAt = new Date(); payment.note = note || payment.note;
-  await payment.save();
-  if (payment.invoiceId) await SubscriptionInvoice.findByIdAndUpdate(payment.invoiceId, { $set: { status: 'rejected', reviewedBy: reviewerId, reviewedAt: new Date(), notes: note } });
-  return payment;
-}
-
-async function runMaintenance({ createInvoices = true } = {}) {
+async function runMaintenance() {
+  const tenants = await Tenant.find({}).populate('plan');
   const now = new Date();
-  const tenants = await Tenant.find().populate('plan');
-  const results = [];
+  const updates = [];
   for (const tenant of tenants) {
-    if (!tenant.subscription) await initializeTenantSubscription(tenant, tenant.plan);
-    const plan = tenant.plan;
-    const graceDays = Number(plan?.graceDays ?? 7);
-    let changed = false;
-    const next = tenant.subscription?.nextBillingAt ? new Date(tenant.subscription.nextBillingAt) : null;
-    const trialEnd = tenant.subscription?.trialEndsAt ? new Date(tenant.subscription.trialEndsAt) : null;
-    if (tenant.subscription.status === 'trialing' && trialEnd && trialEnd <= now) {
-      tenant.subscription.status = 'past_due';
-      tenant.subscription.nextBillingAt = trialEnd;
-      changed = true;
+    const sub = tenant.subscription || {};
+    const graceDays = Number(tenant.plan?.billing?.graceDays ?? 3);
+    if (!sub.nextBillingAt) {
+      await initializeTenantSubscription(tenant, tenant.plan);
+    } else if (sub.status !== 'suspended' && sub.nextBillingAt && new Date(sub.nextBillingAt) < now) {
+      if (!sub.graceEndsAt) {
+        tenant.subscription.status = 'grace';
+        tenant.subscription.graceEndsAt = addDays(now, graceDays);
+        await tenant.save();
+      } else if (new Date(sub.graceEndsAt) < now && sub.autoSuspend !== false) {
+        tenant.subscription.status = 'suspended';
+        tenant.status = 'suspended';
+        await tenant.save();
+      }
     }
-    if (['active','past_due'].includes(tenant.subscription.status) && next && next <= now) {
-      tenant.subscription.status = graceDays > 0 ? 'grace' : 'suspended';
-      tenant.subscription.graceEndsAt = graceDays > 0 ? addDays(now, graceDays) : now;
-      if (tenant.subscription.status === 'suspended') { tenant.status = 'suspended'; tenant.subscription.suspendedAt = now; }
-      changed = true;
-      if (createInvoices) await ensureOpenInvoice(tenant);
-    }
-    if (tenant.subscription.status === 'grace' && tenant.subscription.graceEndsAt && new Date(tenant.subscription.graceEndsAt) <= now) {
-      tenant.subscription.status = 'suspended'; tenant.subscription.suspendedAt = now; tenant.status = 'suspended'; changed = true;
-    }
-    if (changed) await tenant.save();
-    results.push({ tenantId: tenant._id, storeName: tenant.storeName, status: tenant.status, subscriptionStatus: tenant.subscription.status });
+    updates.push({ tenantId: tenant._id, storeName: tenant.storeName, status: tenant.status, subscriptionStatus: tenant.subscription?.status, nextBillingAt: tenant.subscription?.nextBillingAt, daysLeft: daysLeft(tenant.subscription?.nextBillingAt) });
   }
-  return results;
+  return updates;
 }
-
-module.exports = { addDays, addMonths, addYears, moneyForPlan, initializeTenantSubscription, ensureOpenInvoice, approvePayment, rejectPayment, runMaintenance };
+function subscriptionView(tenant) {
+  const plan = tenant?.plan || null;
+  const sub = tenant?.subscription || {};
+  return {
+    tenantId: tenant?._id,
+    storeName: tenant?.storeName,
+    status: tenant?.status,
+    plan,
+    subscription: sub,
+    nextBillingAt: sub.nextBillingAt || null,
+    trialEndsAt: sub.trialEndsAt || null,
+    graceEndsAt: sub.graceEndsAt || null,
+    daysLeft: daysLeft(sub.nextBillingAt || sub.trialEndsAt || sub.graceEndsAt),
+    amount: sub.amount ?? amountForPlan(plan, sub.billingCycle || plan?.billingCycle || 'monthly'),
+    currency: sub.currency || plan?.currency || 'LKR',
+    billingCycle: sub.billingCycle || plan?.billingCycle || 'monthly',
+  };
+}
+module.exports = { addDays, daysLeft, amountForPlan, initializeTenantSubscription, renewTenant, runMaintenance, subscriptionView };

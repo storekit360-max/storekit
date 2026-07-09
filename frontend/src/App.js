@@ -268,9 +268,9 @@ export default function App() {
                       <Route path="ai-post-creator"  element={<AIPostCreator/>}/>
                       <Route path="automation"       element={<AutomationRules/>}/>
                       <Route path="deals"            element={<AdminDeals/>}/>
-                      <Route path="billing"          element={<AdminBilling/>}/>
                       <Route path="monitoring"       element={<Monitoring/>}/>
                       <Route path="backup"           element={<BackupCenter/>}/>
+                      <Route path="billing"          element={<AdminBilling/>}/>
                     </Route>
                   </Routes>
                 </Suspense>

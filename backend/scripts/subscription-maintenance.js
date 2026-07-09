@@ -2,4 +2,4 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const { runMaintenance } = require('../services/subscriptionBillingService');
-(async()=>{ await mongoose.connect(process.env.MONGODB_URI); const results=await runMaintenance(); console.log(JSON.stringify(results,null,2)); await mongoose.disconnect(); })().catch(async e=>{console.error(e); await mongoose.disconnect().catch(()=>{}); process.exit(1);});
+(async()=>{ await mongoose.connect(process.env.MONGODB_URI); console.log(JSON.stringify(await runMaintenance(), null, 2)); await mongoose.disconnect(); })().catch(async err=>{ console.error(err); await mongoose.disconnect().catch(()=>{}); process.exit(1); });

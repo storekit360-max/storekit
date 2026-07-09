@@ -9,30 +9,6 @@ const domainSchema = new mongoose.Schema({
   active: { type: Boolean, default: true },
 }, { _id: false });
 
-const subscriptionSchema = new mongoose.Schema({
-  status: { type: String, enum: ['trialing', 'active', 'past_due', 'grace', 'suspended', 'cancelled'], default: 'trialing' },
-  billingCycle: { type: String, enum: ['monthly', 'yearly'], default: 'monthly' },
-  trialStartedAt: { type: Date, default: null },
-  trialEndsAt: { type: Date, default: null },
-  currentPeriodStart: { type: Date, default: null },
-  currentPeriodEnd: { type: Date, default: null },
-  nextBillingAt: { type: Date, default: null },
-  graceEndsAt: { type: Date, default: null },
-  lastPaidAt: { type: Date, default: null },
-  suspendedAt: { type: Date, default: null },
-  cancelledAt: { type: Date, default: null },
-  autoRenew: { type: Boolean, default: false },
-  reminders: {
-    trial7: { type: Boolean, default: false },
-    trial3: { type: Boolean, default: false },
-    renewal7: { type: Boolean, default: false },
-    renewal3: { type: Boolean, default: false },
-    dueToday: { type: Boolean, default: false },
-    grace: { type: Boolean, default: false },
-    suspended: { type: Boolean, default: false },
-  },
-}, { _id: false });
-
 const tenantSchema = new mongoose.Schema({
   storeName: { type: String, required: true, trim: true },
   slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
@@ -40,7 +16,6 @@ const tenantSchema = new mongoose.Schema({
   plan: { type: mongoose.Schema.Types.ObjectId, ref: 'Plan', required: true },
   status: { type: String, enum: ['active', 'suspended', 'pending'], default: 'active' },
   domains: { type: [domainSchema], default: [] },
-  subscription: { type: subscriptionSchema, default: () => ({}) },
   settings: {
     storeEmail: { type: String, default: '' },
     phone: { type: String, default: '' },
@@ -58,11 +33,24 @@ const tenantSchema = new mongoose.Schema({
     accentColor: { type: String, default: '#84cc16' },
     darkColor: { type: String, default: '#0f172a' },
     fontFamily: { type: String, default: 'Inter' },
-    template: { type: String, default: 'modern-pro' },
+  },
+  subscription: {
+    status: { type: String, enum: ['trial','active','past_due','grace','suspended','cancelled'], default: 'trial' },
+    billingCycle: { type: String, enum: ['monthly','yearly','once'], default: 'monthly' },
+    currency: { type: String, default: 'LKR' },
+    amount: { type: Number, default: 0 },
+    trialStartedAt: Date,
+    trialEndsAt: Date,
+    currentPeriodStartedAt: Date,
+    nextBillingAt: Date,
+    graceEndsAt: Date,
+    cancelledAt: Date,
+    lastPaymentAt: Date,
+    autoRenew: { type: Boolean, default: false },
+    autoSuspend: { type: Boolean, default: true },
   },
 }, { timestamps: true });
 
 tenantSchema.index({ 'domains.domain': 1 }, { unique: true, sparse: true });
-tenantSchema.index({ 'subscription.status': 1, 'subscription.nextBillingAt': 1 });
 
 module.exports = mongoose.models.Tenant || mongoose.model('Tenant', tenantSchema);

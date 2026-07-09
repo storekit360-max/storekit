@@ -22,15 +22,11 @@
 
 const express    = require('express');
 const mongoose   = require('mongoose');
-const { tenantContextMiddleware, installTenantScope } = require('./middleware/tenantContext');
-installTenantScope(mongoose);
 const cors       = require('cors');
 const path       = require('path');
 require('dotenv').config();
 
 const app = express();
-const { resolveTenant } = require('./middleware/tenant');
-try { require('./services/subscriptionScheduler').startSubscriptionScheduler(); } catch (err) { console.warn('[subscription-scheduler]', err.message); }
 
 // Trust the Railway/Vercel proxy so express-rate-limit sees the real client IP
 // from X-Forwarded-For rather than the proxy's internal address.
@@ -131,13 +127,8 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok', time: new Date() 
 app.use('/api/auth/login', loginLimiter);
 app.use('/api/auth',          require('./routes/auth'));
 app.use('/api/tenant',        require('./routes/tenant'));
-app.use('/api/superadmin/billing', require('./routes/superadminBilling'));
 app.use('/api/superadmin',    require('./routes/superadmin'));
-
-// Every storefront/admin API below this point is tenant-aware.
-// This MUST stay before products/categories/banners/settings/pages/coupons/admin routes.
-// Without this, all tenants read/write shared data.
-app.use('/api', resolveTenant, tenantContextMiddleware);
+app.use('/api/superadmin/billing', require('./routes/superadminBilling'));
 
 // ─── Public routes ────────────────────────────────────────────────────────────
 app.use('/api/products',      require('./routes/products'));
@@ -168,9 +159,9 @@ app.get('/robots.txt',  (req, res) => res.redirect(301, '/api/seo/robots.txt'));
 // SECURITY: auditLog writes one-line JSON to logs/audit.log for every mutating
 //           admin action (POST/PUT/PATCH/DELETE).  This is additive — all
 //           responses are identical to before.
-app.use('/api/admin/billing', require('./routes/adminBilling'));
 app.use('/api/admin', auditLog, require('./routes/admin'));
 app.use('/api/admin/reset', require('./routes/reset'));
+app.use('/api/admin/billing', require('./routes/adminBilling'));
 
 // ─── Other routes ─────────────────────────────────────────────────────────────
 app.use('/api/whatsapp',      require('./routes/whatsapp'));

@@ -23,11 +23,11 @@ const NAV = [
   { path:'/admin/theme-builder',label:'Theme Builder',              icon:'M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01' },
   { path:'/admin/animations',   label:'Animations',                 icon:'M7 4v16M17 4v16M3 8h4m10 0h4M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z' },
   { path:'/admin/backup',        label:'Backup Center',              icon:'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4' },
+  { path:'/admin/billing',      label:'Billing',                    icon:'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-10v2m0 8v2m8-10h-2M6 12H4' },
   { path:'/admin/settings',     label:'Settings',                   icon:'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
   { path:'/admin/social-media', label:'Social Media', icon:'M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z' },
   { path:'/admin/ai-post-creator', label:'AI Post Creator', icon:'M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.456-2.456L14.25 6l1.035-.259a3.375 3.375 0 002.456-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z' },
   { path:'/admin/automation',   label:'Automation Rules',           icon:'M13 10V3L4 14h7v7l9-11h-7z' },
-  { path:'/admin/billing',      label:'Billing',                    icon:'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1' },
 ];
 
 // Maps a sidebar item's path to the Plan.features key that must be enabled
@@ -54,7 +54,7 @@ const NAV_FEATURE_MAP = {
   '/admin/backup':          'backup',
   '/admin/ai-post-creator': 'aiPostCreator',
   '/admin/automation':      'automation',
-  '/admin/billing':         'billing',
+  '/admin/billing':         'payments',
 };
 
 // ── Core notification types (6 only) ─────────────────────────────────────────
@@ -224,15 +224,6 @@ export default function AdminLayout() {
     API.get('/admin/dashboard')
       .then(r => setBadges({ orders: r.data.stats.pendingOrders, returns: 0 }))
       .catch(() => {});
-    API.get('/admin/billing/status')
-      .then(r => setBillingStatus({
-        status: r.data.subscription?.status || 'unknown',
-        plan: r.data.plan?.name || 'Plan',
-        nextBillingAt: r.data.subscription?.nextBillingAt,
-        currentPeriodEnd: r.data.subscription?.currentPeriodEnd,
-        daysLeft: r.data.planDates?.daysUntilNextBilling,
-      }))
-      .catch(() => setBillingStatus(null));
     const id = setInterval(fetchNotifications, 30000);
     return () => clearInterval(id);
   }, [fetchNotifications]);
@@ -242,7 +233,10 @@ export default function AdminLayout() {
   useEffect(() => {
     API.get('/tenant/my')
       .then(r => setPlanFeatures(r.data?.plan?.features || null))
-      .catch(() => setPlanFeatures(null)); // fail open — don't hide the whole sidebar on a network error
+      .catch(() => setPlanFeatures(null));
+    API.get('/admin/billing/status')
+      .then(r => setBillingStatus(r.data))
+      .catch(() => setBillingStatus(null)); // fail open — don't hide the whole sidebar on a network error
   }, []);
 
   const visibleNav = useMemo(() => {
@@ -361,6 +355,13 @@ export default function AdminLayout() {
           {/* Right: dark mode + notifications + view store */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
 
+            {billingStatus && (
+              <Link to="/admin/billing" className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-100 hover:bg-indigo-100 transition-colors" title="Subscription billing">
+                <span className="text-xs font-bold">{billingStatus.plan?.name || 'Plan'}</span>
+                <span className="text-[11px] bg-white px-2 py-0.5 rounded-full font-bold">{billingStatus.daysLeft ?? '-'} days left</span>
+              </Link>
+            )}
+
             {/* Dark mode toggle */}
             <button
               onClick={() => setDarkMode(!darkMode)}
@@ -370,19 +371,6 @@ export default function AdminLayout() {
             >
               <span style={{ fontSize: 18, lineHeight: 1 }}>{darkMode ? '☀️' : '🌙'}</span>
             </button>
-
-            {/* Billing status near notifications */}
-            {billingStatus && (
-              <Link
-                to="/admin/billing"
-                className="hidden md:flex items-center gap-2 px-3 py-2 rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors"
-                title={`Plan ends: ${billingStatus.currentPeriodEnd ? new Date(billingStatus.currentPeriodEnd).toLocaleDateString() : 'Not set'}`}
-              >
-                <span className="text-sm">💳</span>
-                <span className="text-xs font-black">{billingStatus.plan}</span>
-                <span className="text-[10px] uppercase font-black bg-white/70 px-2 py-0.5 rounded-full">{String(billingStatus.status).replace('_',' ')}</span>
-              </Link>
-            )}
 
             {/* Notifications */}
             <div style={{ position: 'relative', flexShrink: 0 }}>
