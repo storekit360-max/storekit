@@ -28,6 +28,7 @@ export default function Billing() {
   const [payments, setPayments] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ method: 'bank_transfer', reference: '', amount: '', note: '' });
+  const [proofFile, setProofFile] = useState(null);
 
   async function loadAll() {
     setLoading(true);
@@ -53,11 +54,16 @@ export default function Billing() {
   async function submitPayment(e) {
     e.preventDefault();
     if (!form.reference.trim()) return toast.error('Please enter a payment reference / slip number');
+    if (!proofFile) return toast.error('Please upload the payment slip/proof file');
     setSubmitting(true);
     try {
-      await API.post('/billing/payments', form);
+      const payload = new FormData();
+      Object.entries(form).forEach(([key, value]) => payload.append(key, value ?? ''));
+      payload.append('proof', proofFile);
+      await API.post('/billing/payments', payload);
       toast.success('Payment submitted — awaiting super admin approval');
       setForm(f => ({ ...f, reference: '', note: '' }));
+      setProofFile(null);
       loadAll();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Could not submit payment');
@@ -166,6 +172,16 @@ export default function Billing() {
               />
             </label>
             <label className="grid gap-1.5 text-xs font-semibold text-slate-600 sm:col-span-2">
+              Upload Payment Slip / Proof
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                className="h-10 border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"
+                onChange={e => setProofFile(e.target.files?.[0] || null)}
+              />
+              {proofFile && <span className="text-xs text-slate-400">{proofFile.name}</span>}
+            </label>
+            <label className="grid gap-1.5 text-xs font-semibold text-slate-600 sm:col-span-2">
               Note (optional)
               <textarea
                 className="border border-slate-300 rounded-lg px-3 py-2 text-sm"
@@ -199,6 +215,7 @@ export default function Billing() {
                   <th className="py-2 pr-3">Amount</th>
                   <th className="py-2 pr-3">Method</th>
                   <th className="py-2 pr-3">Reference</th>
+                  <th className="py-2 pr-3">Proof</th>
                   <th className="py-2 pr-3">Status</th>
                 </tr>
               </thead>
@@ -209,6 +226,15 @@ export default function Billing() {
                     <td className="py-3 pr-3 font-semibold text-slate-800">{fmtMoney(p.amount, p.currency)}</td>
                     <td className="py-3 pr-3 text-slate-600 capitalize">{(p.method || '').replace('_', ' ')}</td>
                     <td className="py-3 pr-3 text-slate-600">{p.reference || '-'}</td>
+                    <td className="py-3 pr-3">
+                      {p.proofUrl ? (
+                        <a href={p.proofUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-800 font-semibold text-xs">
+                          Open file
+                        </a>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </td>
                     <td className="py-3 pr-3">
                       <span
                         className="px-2 py-0.5 rounded-full text-xs font-bold"

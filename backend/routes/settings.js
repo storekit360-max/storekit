@@ -12,6 +12,7 @@ const THEME_KEYS = new Set([
   'theme', 'primaryColor', 'primaryDarkColor', 'primaryLightColor',
   'secondaryColor', 'accentColor', 'darkBgColor', 'darkColor',
   'fontStyle', 'fontFamily', 'darkMode', 'customCSS', 'logoSize',
+  'storeTemplate', 'template', 'layoutTemplate',
 ]);
 
 const SETTINGS_CACHE_TTL = 30 * 1000;

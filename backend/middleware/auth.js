@@ -26,6 +26,7 @@
 
 const jwt  = require('jsonwebtoken');
 const User = require('../models/User');
+const Tenant = require('../models/Tenant');
 
 // ─── Account lockout constants ────────────────────────────────────────────────
 // SECURITY: After 5 wrong passwords the account is locked for 15 minutes.
@@ -97,12 +98,22 @@ const auth = async (req, res, next) => {
 
 // ─── adminAuth middleware ─────────────────────────────────────────────────────
 const adminAuth = async (req, res, next) => {
-  await auth(req, res, () => {
-    // SECURITY: Check role after auth has verified the token AND the user record.
-    if (req.user?.role !== 'admin') {
-      return res.status(403).json({ message: 'Admin access required' });
+  await auth(req, res, async () => {
+    try {
+      // SECURITY: Check role after auth has verified the token AND the user record.
+      if (req.user?.role !== 'admin') {
+        return res.status(403).json({ message: 'Admin access required' });
+      }
+      if (req.user.tenantId) {
+        const tenant = await Tenant.findById(req.user.tenantId).select('status billing.subscriptionStatus');
+        if (!tenant || tenant.status !== 'active' || tenant.billing?.subscriptionStatus === 'suspended' || tenant.billing?.subscriptionStatus === 'cancelled') {
+          return res.status(403).json({ message: 'Store is inactive. Please settle billing or contact the super admin.' });
+        }
+      }
+      next();
+    } catch (err) {
+      next(err);
     }
-    next();
   });
 };
 

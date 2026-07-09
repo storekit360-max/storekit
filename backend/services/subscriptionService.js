@@ -46,6 +46,11 @@ function daysFromNow(days) {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 }
 
+function graceEndsFrom(date, plan) {
+  const days = Number(plan?.graceDays ?? GRACE_PERIOD_DAYS);
+  return new Date(new Date(date).getTime() + days * 24 * 60 * 60 * 1000);
+}
+
 // ── Start a brand-new subscription (called right after super admin creates a
 //    tenant + assigns a plan, or assigns a plan to a tenant that never had a
 //    billing state, e.g. a free-plan tenant upgrading to a paid plan) ───────
@@ -134,7 +139,7 @@ async function handlePlanChange(tenantId, newPlan) {
 }
 
 // ── Tenant admin submits proof of payment for the current amount owed ──────
-async function submitPayment(tenantId, { method, reference, note, amount } = {}) {
+async function submitPayment(tenantId, { method, reference, proofUrl, note, amount } = {}) {
   const tenant = await Tenant.findById(tenantId).populate('plan');
   if (!tenant) throw new Error('Tenant not found');
   const plan = tenant.plan;
@@ -143,17 +148,27 @@ async function submitPayment(tenantId, { method, reference, note, amount } = {})
   const cycle = tenant.billing?.billingCycle || plan.billingCycle || 'monthly';
   const periodStart = tenant.billing?.currentPeriodEnd || tenant.billing?.trialEndsAt || new Date();
   const periodEnd = addCycle(periodStart, cycle);
+  const paymentAmount = amount != null && amount !== ''
+    ? Number(amount)
+    : Number(tenant.billing?.nextPaymentAmount ?? plan.price ?? 0);
+
+  if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+    const err = new Error('Payment amount must be greater than zero');
+    err.statusCode = 400;
+    throw err;
+  }
 
   return TenantPayment.create({
     tenant: tenant._id,
     plan: plan._id,
-    amount: amount != null && amount !== '' ? Number(amount) : Number(tenant.billing?.nextPaymentAmount ?? plan.price ?? 0),
+    amount: paymentAmount,
     currency: plan.currency || 'LKR',
     billingCycle: cycle,
     periodStart,
     periodEnd,
     method: method || 'bank_transfer',
     reference: reference || '',
+    proofUrl: proofUrl || '',
     note: note || '',
     status: 'pending',
     submittedAt: new Date(),
@@ -249,7 +264,7 @@ async function reactivateTenant(tenantId) {
 
 // ── Dashboard aggregates for the super admin billing view ──────────────────
 async function getOverview() {
-  const [pendingAgg, incomeAgg, byStatus, upcoming] = await Promise.all([
+  const [pendingAgg, incomeAgg, byBillingStatus, tenants, upcoming] = await Promise.all([
     TenantPayment.aggregate([
       { $match: { status: 'pending' } },
       { $group: { _id: null, count: { $sum: 1 }, total: { $sum: '$amount' } } },
@@ -261,6 +276,11 @@ async function getOverview() {
     Tenant.aggregate([
       { $group: { _id: '$billing.subscriptionStatus', count: { $sum: 1 } } },
     ]),
+    Tenant.find({})
+      .select('storeName slug domains billing status plan owner createdAt')
+      .populate('plan', 'name price currency billingCycle trialDays graceDays limits features')
+      .populate('owner', 'firstName lastName email')
+      .sort({ createdAt: -1 }),
     Tenant.find({ 'billing.nextPaymentDate': { $ne: null, $lte: daysFromNow(7) } })
       .select('storeName slug billing plan status')
       .populate('plan', 'name price currency billingCycle')
@@ -271,10 +291,28 @@ async function getOverview() {
   return {
     pendingPayments: { count: pendingAgg[0]?.count || 0, total: pendingAgg[0]?.total || 0 },
     totalIncome: { count: incomeAgg[0]?.count || 0, total: incomeAgg[0]?.total || 0 },
-    tenantsByStatus: byStatus.reduce((acc, row) => {
+    tenantsByStatus: byBillingStatus.reduce((acc, row) => {
       acc[row._id || 'unknown'] = row.count;
       return acc;
     }, {}),
+    tenantStatus: {
+      active: tenants.filter(t => t.status === 'active').length,
+      suspended: tenants.filter(t => t.status === 'suspended').length,
+      pending: tenants.filter(t => t.status === 'pending').length,
+    },
+    recurring: {
+      monthly: tenants.reduce((sum, t) => (
+        t.status === 'active' && t.plan?.billingCycle === 'monthly'
+          ? sum + Number(t.billing?.nextPaymentAmount || t.plan?.price || 0)
+          : sum
+      ), 0),
+      yearly: tenants.reduce((sum, t) => (
+        t.status === 'active' && t.plan?.billingCycle === 'yearly'
+          ? sum + Number(t.billing?.nextPaymentAmount || t.plan?.price || 0)
+          : sum
+      ), 0),
+    },
+    tenants,
     upcomingPayments: upcoming,
   };
 }
@@ -282,24 +320,23 @@ async function getOverview() {
 // ── Scheduler tick — trial/period expiry and grace-period auto-suspend ─────
 async function tick() {
   const now = new Date();
-  const graceDeadline = daysFromNow(GRACE_PERIOD_DAYS);
 
   // 1. Trials that have ended -> past_due, grace period starts
-  await Tenant.updateMany(
-    { 'billing.subscriptionStatus': 'trial', 'billing.trialEndsAt': { $lte: now } },
-    { $set: { 'billing.subscriptionStatus': 'past_due', 'billing.gracePeriodEndsAt': graceDeadline } }
-  );
+  const endedTrials = await Tenant.find({ 'billing.subscriptionStatus': 'trial', 'billing.trialEndsAt': { $lte: now } }).populate('plan');
+  await Promise.all(endedTrials.map(tenant => Tenant.findByIdAndUpdate(tenant._id, {
+    $set: { 'billing.subscriptionStatus': 'past_due', 'billing.gracePeriodEndsAt': graceEndsFrom(now, tenant.plan) },
+  })));
 
   // 2. Active PAID subscriptions whose period has ended -> past_due, grace period starts
   //    (nextPaymentAmount > 0 excludes free plans, which never expire this way)
-  await Tenant.updateMany(
-    {
-      'billing.subscriptionStatus': 'active',
-      'billing.currentPeriodEnd': { $ne: null, $lte: now },
-      'billing.nextPaymentAmount': { $gt: 0 },
-    },
-    { $set: { 'billing.subscriptionStatus': 'past_due', 'billing.gracePeriodEndsAt': graceDeadline } }
-  );
+  const endedPeriods = await Tenant.find({
+    'billing.subscriptionStatus': 'active',
+    'billing.currentPeriodEnd': { $ne: null, $lte: now },
+    'billing.nextPaymentAmount': { $gt: 0 },
+  }).populate('plan');
+  await Promise.all(endedPeriods.map(tenant => Tenant.findByIdAndUpdate(tenant._id, {
+    $set: { 'billing.subscriptionStatus': 'past_due', 'billing.gracePeriodEndsAt': graceEndsFrom(now, tenant.plan) },
+  })));
 
   // 3. past_due tenants whose grace period has expired -> auto-suspend
   await Tenant.updateMany(

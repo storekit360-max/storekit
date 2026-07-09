@@ -64,10 +64,22 @@ const tenantSchema = new mongoose.Schema({
   },
 
   theme: {
+    theme: { type: String, default: 'default' },
     primaryColor: { type: String, default: '#15803d' },
+    primaryDarkColor: { type: String, default: '' },
+    primaryLightColor: { type: String, default: '' },
+    secondaryColor: { type: String, default: '' },
     accentColor: { type: String, default: '#84cc16' },
     darkColor: { type: String, default: '#0f172a' },
-    fontFamily: { type: String, default: 'Inter' },
+    darkBgColor: { type: String, default: '' },
+    fontStyle: { type: String, default: 'default' },
+    fontFamily: { type: String, default: 'default' },
+    darkMode: { type: Boolean, default: false },
+    storeTemplate: { type: String, default: 'classic' },
+    template: { type: String, default: '' },
+    layoutTemplate: { type: String, default: '' },
+    customCSS: { type: String, default: '' },
+    logoSize: { type: Number, default: 48 },
   },
 }, { timestamps: true });
 

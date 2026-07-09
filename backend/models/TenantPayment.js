@@ -25,6 +25,7 @@ const tenantPaymentSchema = new mongoose.Schema({
   // (bank transfer, PayHere, manual cash, etc.) and slip/reference number.
   method:    { type: String, default: 'bank_transfer', trim: true },
   reference: { type: String, default: '', trim: true },
+  proofUrl:  { type: String, default: '', trim: true },
   note:      { type: String, default: '', trim: true },
 
   status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending', index: true },

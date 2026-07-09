@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import API from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
+import SuperAdminBilling from './SuperAdminBilling';
 
 // ── Full feature catalog ─────────────────────────────────────────────────
 // Every toggle a tenant's storefront/admin can possibly use, grouped into
@@ -71,7 +72,7 @@ const emptyFeatures = FEATURE_CATALOG.reduce((acc, group) => {
 }, {});
 
 const emptyPlan = {
-  name: '', description: '', price: 0, currency: 'LKR', billingCycle: 'monthly', active: true,
+  name: '', description: '', price: 0, currency: 'LKR', billingCycle: 'monthly', trialDays: 14, graceDays: 3, active: true,
   limits: { products: 100, ordersPerMonth: 500, admins: 2, storageMb: 500 },
   features: emptyFeatures,
 };
@@ -87,6 +88,7 @@ const TABS = [
   { key: 'overview', label: 'Overview', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
   { key: 'plans', label: 'Plans', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
   { key: 'tenants', label: 'Tenants', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
+  { key: 'billing', label: 'Billing', icon: 'M3 10h18M7 15h.01M11 15h2M3 6h18a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V7a1 1 0 011-1z' },
   { key: 'domains', label: 'Domains', icon: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0zM3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18 15 15 0 010-18z' },
 ];
 
@@ -350,7 +352,16 @@ export default function SuperAdminDashboard() {
                   <Input label="Plan Name" value={planForm.name} onChange={v => updatePlan('name', v)} required />
                   <Input label="Price" type="number" value={planForm.price} onChange={v => updatePlan('price', Number(v))} />
                   <Input label="Currency" value={planForm.currency} onChange={v => updatePlan('currency', v)} />
+                  <label className="grid gap-1.5 text-xs font-semibold text-slate-600">
+                    Billing Cycle
+                    <select className="h-10 border border-slate-300 rounded-lg px-3 text-sm" value={planForm.billingCycle} onChange={e => updatePlan('billingCycle', e.target.value)}>
+                      <option value="monthly">Monthly</option>
+                      <option value="yearly">Yearly</option>
+                    </select>
+                  </label>
                   <Input label="Description" value={planForm.description} onChange={v => updatePlan('description', v)} />
+                  <Input label="Trial Days" type="number" value={planForm.trialDays} onChange={v => updatePlan('trialDays', Number(v))} />
+                  <Input label="Grace Days" type="number" value={planForm.graceDays} onChange={v => updatePlan('graceDays', Number(v))} />
                   <Input label="Product Limit" type="number" value={planForm.limits.products} onChange={v => updatePlan('limits.products', Number(v))} />
                   <Input label="Orders / Month" type="number" value={planForm.limits.ordersPerMonth} onChange={v => updatePlan('limits.ordersPerMonth', Number(v))} />
                   <Input label="Admins" type="number" value={planForm.limits.admins} onChange={v => updatePlan('limits.admins', Number(v))} />
@@ -408,6 +419,10 @@ export default function SuperAdminDashboard() {
                 {tenants.length === 0 && <p className="text-sm text-slate-400 py-6 text-center">No tenants yet.</p>}
               </div>
             </div>
+          )}
+
+          {activeTab === 'billing' && (
+            <SuperAdminBilling notify={notify} />
           )}
 
           {activeTab === 'domains' && (
@@ -589,9 +604,24 @@ function PlanCard({ plan, onSave }) {
     <div className="border border-slate-200 rounded-2xl p-4 grid gap-3">
       <input className="h-10 border border-slate-300 rounded-lg px-3 text-sm font-semibold" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} />
       <textarea className="min-h-[64px] border border-slate-300 rounded-lg p-3 text-sm" value={draft.description || ''} onChange={e => setDraft({ ...draft, description: e.target.value })} />
-      <div className="flex items-center gap-3">
-        <input className="h-10 border border-slate-300 rounded-lg px-3 text-sm w-32" type="number" value={draft.price} onChange={e => setDraft({ ...draft, price: Number(e.target.value) })} />
-        <span className="text-xs text-slate-500">{draft.currency} / {draft.billingCycle}</span>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <label className="grid gap-1 text-xs font-semibold text-slate-600">Price<input className="h-9 border rounded-lg px-2" type="number" value={draft.price ?? 0} onChange={e => setDraft({ ...draft, price: Number(e.target.value) })} /></label>
+        <label className="grid gap-1 text-xs font-semibold text-slate-600">Currency<input className="h-9 border rounded-lg px-2" value={draft.currency || 'LKR'} onChange={e => setDraft({ ...draft, currency: e.target.value })} /></label>
+        <label className="grid gap-1 text-xs font-semibold text-slate-600">
+          Cycle
+          <select className="h-9 border rounded-lg px-2" value={draft.billingCycle || 'monthly'} onChange={e => setDraft({ ...draft, billingCycle: e.target.value })}>
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+          </select>
+        </label>
+        <label className="grid gap-1 text-xs font-semibold text-slate-600">Trial Days<input className="h-9 border rounded-lg px-2" type="number" value={draft.trialDays ?? 0} onChange={e => setDraft({ ...draft, trialDays: Number(e.target.value) })} /></label>
+        <label className="grid gap-1 text-xs font-semibold text-slate-600">Grace Days<input className="h-9 border rounded-lg px-2" type="number" value={draft.graceDays ?? 3} onChange={e => setDraft({ ...draft, graceDays: Number(e.target.value) })} /></label>
+        {['products', 'ordersPerMonth', 'admins', 'storageMb'].map(key => (
+          <label key={key} className="grid gap-1 text-xs font-semibold text-slate-600">
+            {key}
+            <input className="h-9 border rounded-lg px-2" type="number" value={draft.limits?.[key] ?? 0} onChange={e => setDraft({ ...draft, limits: { ...(draft.limits || {}), [key]: Number(e.target.value) } })} />
+          </label>
+        ))}
       </div>
       <FeatureEditor features={draft.features || {}} onChange={(features) => setDraft({ ...draft, features })} />
       <button onClick={handleSave} disabled={saving} className="h-10 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold text-sm">

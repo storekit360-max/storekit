@@ -58,6 +58,8 @@ const planSchema = new mongoose.Schema({
   // 0 = no trial (paid plans go straight to 'active' with payment due at
   // the end of the first billing cycle); ignored for free (price 0) plans.
   trialDays: { type: Number, default: 14, min: 0 },
+  // Days after a due date before the scheduler auto-suspends the tenant.
+  graceDays: { type: Number, default: 3, min: 0 },
   active: { type: Boolean, default: true },
   limits: { type: limitSchema, default: () => ({}) },
   features: { type: featureSchema, default: () => ({}) },

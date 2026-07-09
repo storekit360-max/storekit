@@ -529,6 +529,9 @@ router.post('/', orderRateLimiter, async (req, res) => {
       return res.status(400).json({ message: 'No items in order' });
     if (items.length > 50)
       return res.status(400).json({ message: 'Too many items in one order' });
+    if (!req.tenantId) {
+      return res.status(404).json({ message: 'Store not found or inactive' });
+    }
 
     // Validate quantities — prevent negative/zero/huge quantities
     for (const item of items) {
@@ -654,6 +657,7 @@ router.post('/', orderRateLimiter, async (req, res) => {
     const hasGiftCard = totals.giftCardDeduction > 0;
 
     const orderData = {
+      tenantId: req.tenantId,
       items:    orderItems,
       billing,
       shipping: shipToDifferentAddress ? shipping : billing,
@@ -714,6 +718,18 @@ router.post('/', orderRateLimiter, async (req, res) => {
     };
 
     if (userId) orderData.customer = userId;
+
+    const monthlyOrderLimit = Number(req.plan?.limits?.ordersPerMonth || req.tenant?.plan?.limits?.ordersPerMonth || 0);
+    if (monthlyOrderLimit) {
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+      const tenantFilter = req.tenantId ? { tenantId: req.tenantId } : {};
+      const ordersThisMonth = await Order.countDocuments({ ...tenantFilter, createdAt: { $gte: monthStart } });
+      if (ordersThisMonth >= monthlyOrderLimit) {
+        return res.status(403).json({ message: 'This store has reached its monthly order limit. Please contact the store owner.' });
+      }
+    }
 
     const order = await Order.create(orderData);
 

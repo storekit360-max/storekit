@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { THEMES, THEME_CATEGORIES, FONTS, STORE_TEMPLATES, TEMPLATE_CATEGORIES, applyTheme, writeCache } from '../../context/ThemeContext';
 import { useTheme } from '../../context/ThemeContext';
 import API from '../../utils/api';
@@ -18,27 +18,77 @@ const ColorSwatch = ({ color, onChange, label }) => (
   </div>
 );
 
+const TEMPLATE_PREVIEW = {
+  classic: ['#15803d', '#84cc16'],
+  modern: ['#2563eb', '#06b6d4'],
+  minimal: ['#f8fafc', '#cbd5e1'],
+  luxury: ['#111827', '#d4af37'],
+  fashion: ['#be123c', '#f9a8d4'],
+  electronics: ['#0f172a', '#38bdf8'],
+  mobile: ['#0f172a', '#38bdf8'],
+  grocery: ['#16a34a', '#bef264'],
+  beauty: ['#db2777', '#fbcfe8'],
+  furniture: ['#78350f', '#f59e0b'],
+  jewelry: ['#111827', '#d4af37'],
+  sports: ['#ea580c', '#fde047'],
+  automotive: ['#020617', '#22d3ee'],
+  kids: ['#7c3aed', '#facc15'],
+  books: ['#92400e', '#fde68a'],
+  pharmacy: ['#0f766e', '#99f6e4'],
+  b2b: ['#334155', '#94a3b8'],
+  marketplace: ['#4f46e5', '#f97316'],
+  neon: ['#020617', '#22d3ee'],
+  organic: ['#4d7c0f', '#bef264'],
+  premiumApple: ['#111827', '#e5e7eb'],
+  sriLanka: ['#b91c1c', '#facc15'],
+  wholesale: ['#334155', '#94a3b8'],
+  startup: ['#7c3aed', '#06b6d4'],
+};
 
-const TemplateCard = ({ id, template, active, onSelect }) => (
-  <button type="button" onClick={() => onSelect(id)}
-    className={`text-left relative overflow-hidden rounded-2xl border-2 bg-white transition-all ${active ? 'border-primary shadow-lg scale-[1.02]' : 'border-gray-100 hover:border-gray-200 hover:shadow-md'}`}>
-    <div className={`h-24 p-3 store-template-preview store-template-preview-${id}`}>
-      <div className="preview-hero" />
-      <div className="preview-grid">
-        <span /><span /><span />
-      </div>
-    </div>
-    <div className="p-3">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-sm font-bold text-gray-900">{template.name}</p>
-          <p className="text-xs text-gray-500 mt-1 leading-snug">{template.description}</p>
+const TemplateCard = ({ id, template, active, onSelect }) => {
+  const [a, b] = TEMPLATE_PREVIEW[id] || ['#6366f1', '#22d3ee'];
+  const darkPreview = ['luxury', 'electronics', 'mobile', 'automotive', 'neon', 'premiumApple'].includes(id);
+  return (
+    <button type="button" onClick={() => onSelect(id)}
+      className={`text-left relative overflow-hidden rounded-2xl border-2 bg-white transition-all ${active ? 'border-primary shadow-lg scale-[1.02]' : 'border-gray-100 hover:border-gray-200 hover:shadow-md'}`}>
+      <div
+        className="h-24 p-3"
+        style={{
+          background: `radial-gradient(circle at 18% 18%, rgba(255,255,255,0.55), transparent 34%), linear-gradient(135deg, ${a}, ${b})`,
+        }}
+      >
+        <div
+          className="h-8 rounded-xl mb-2"
+          style={{
+            background: darkPreview ? 'rgba(15,23,42,0.72)' : 'rgba(255,255,255,0.82)',
+            boxShadow: '0 10px 24px rgba(15,23,42,0.16)',
+          }}
+        />
+        <div className="grid grid-cols-3 gap-2">
+          {[0, 1, 2].map(i => (
+            <span
+              key={i}
+              className="block h-8 rounded-lg"
+              style={{
+                background: darkPreview ? 'rgba(15,23,42,0.62)' : 'rgba(255,255,255,0.78)',
+                boxShadow: '0 8px 18px rgba(15,23,42,0.12)',
+              }}
+            />
+          ))}
         </div>
-        {active && <span className="text-primary font-bold text-sm">✓</span>}
       </div>
-    </div>
-  </button>
-);
+      <div className="p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-sm font-bold text-gray-900">{template.name}</p>
+            <p className="text-xs text-gray-500 mt-1 leading-snug">{template.description}</p>
+          </div>
+          {active && <span className="text-primary font-bold text-sm">✓</span>}
+        </div>
+      </div>
+    </button>
+  );
+};
 
 const ThemeCard = ({ id, theme, active, onSelect }) => (
   <div onClick={() => onSelect(id)}
@@ -62,7 +112,7 @@ export default function ThemeBuilder() {
   const [activeTab, setActiveTab] = useState('themes');
   const [selectedTheme, setSelectedTheme] = useState(themeKey || 'default');
   const [selectedTemplate, setSelectedTemplate] = useState(settings?.storeTemplate || settings?.template || settings?.layoutTemplate || 'classic');
-  const [selectedFont, setSelectedFont] = useState(settings?.fontStyle || 'default');
+  const [selectedFont, setSelectedFont] = useState(settings?.fontStyle || settings?.fontFamily || 'default');
   const [customColors, setCustomColors] = useState({
     primary: settings?.primaryColor || THEMES[themeKey || 'default']?.primary || '#b5451b',
     primaryDark: settings?.primaryDarkColor || THEMES[themeKey || 'default']?.primaryDark || '#8b3214',
@@ -74,11 +124,29 @@ export default function ThemeBuilder() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [templateFilter, setTemplateFilter] = useState('all');
 
+  useEffect(() => {
+    if (!settings) return;
+    const nextTheme = settings.theme || 'default';
+    const nextTemplate = settings.storeTemplate || settings.template || settings.layoutTemplate || 'classic';
+    const nextFont = settings.fontStyle || settings.fontFamily || 'default';
+    setSelectedTheme(nextTheme);
+    setSelectedTemplate(nextTemplate);
+    setSelectedFont(nextFont);
+    setCustomColors({
+      primary: settings.primaryColor || THEMES[nextTheme]?.primary || '#b5451b',
+      primaryDark: settings.primaryDarkColor || THEMES[nextTheme]?.primaryDark || '#8b3214',
+      primaryLight: settings.primaryLightColor || THEMES[nextTheme]?.primaryLight || '#e8643c',
+      accent: settings.secondaryColor || settings.accentColor || THEMES[nextTheme]?.accent || '#f0a500',
+    });
+    setCustomCSS(settings.customCSS || '');
+  }, [settings]);
+
   const applyPreview = useCallback((themeId, font, colors, dark, template = selectedTemplate) => {
     const merged = {
       ...settings,
       theme: themeId,
       fontStyle: font,
+      fontFamily: font,
       primaryColor: colors.primary,
       primaryDarkColor: colors.primaryDark,
       primaryLightColor: colors.primaryLight,
@@ -132,6 +200,7 @@ export default function ThemeBuilder() {
       const payload = {
         theme: selectedTheme,
         fontStyle: selectedFont,
+        fontFamily: selectedFont,
         primaryColor: customColors.primary,
         primaryDarkColor: customColors.primaryDark,
         primaryLightColor: customColors.primaryLight,

@@ -81,6 +81,29 @@ export default function SuperAdminBilling({ notify }) {
     } finally { setBusyId(null); }
   }
 
+  async function deactivateTenant(id) {
+    const reason = window.prompt('Reason for deactivating this store:', 'Business stopped by tenant') || '';
+    setBusyId(id);
+    try {
+      await API.post(`/superadmin/tenants/${id}/deactivate`, { reason });
+      toast('success', 'Tenant manually deactivated');
+      loadAll();
+    } catch (err) {
+      toast('error', err.response?.data?.message || 'Could not deactivate tenant');
+    } finally { setBusyId(null); }
+  }
+
+  async function reactivateTenant(id) {
+    setBusyId(id);
+    try {
+      await API.post(`/superadmin/tenants/${id}/reactivate`);
+      toast('success', 'Tenant reactivated');
+      loadAll();
+    } catch (err) {
+      toast('error', err.response?.data?.message || 'Could not reactivate tenant');
+    } finally { setBusyId(null); }
+  }
+
   return (
     <div className="space-y-6">
       {/* ── Income / pending stats ── */}
@@ -101,14 +124,76 @@ export default function SuperAdminBilling({ notify }) {
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 p-5">
           <div className="text-xs font-semibold text-slate-500 mb-2">Active Tenants</div>
-          <div className="text-2xl font-extrabold text-indigo-600">{overview?.tenantsByStatus?.active || 0}</div>
+          <div className="text-2xl font-extrabold text-indigo-600">{overview?.tenantStatus?.active || 0}</div>
+          <div className="text-xs text-slate-400 mt-1">MRR {fmtMoney(overview?.recurring?.monthly || 0)}</div>
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 p-5">
           <div className="text-xs font-semibold text-slate-500 mb-2">Trial / Past Due / Suspended</div>
           <div className="text-sm font-semibold text-slate-700">
-            {overview?.tenantsByStatus?.trial || 0} trial · {overview?.tenantsByStatus?.past_due || 0} past due · {overview?.tenantsByStatus?.suspended || 0} suspended
+            {overview?.tenantsByStatus?.trial || 0} trial · {overview?.tenantsByStatus?.past_due || 0} past due · {overview?.tenantStatus?.suspended || 0} suspended
           </div>
+          <div className="text-xs text-slate-400 mt-1">Yearly active {fmtMoney(overview?.recurring?.yearly || 0)}</div>
         </div>
+      </div>
+
+      {/* ── Full tenant billing monitor ── */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-6">
+        <h2 className="text-base font-bold text-slate-900 mb-4">Tenant Billing Monitor</h2>
+        {!overview || !overview.tenants || overview.tenants.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-6">No tenants found.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs font-semibold text-slate-500 border-b border-slate-200">
+                  <th className="py-2 pr-3">Store</th>
+                  <th className="py-2 pr-3">Plan</th>
+                  <th className="py-2 pr-3">Subscription</th>
+                  <th className="py-2 pr-3">Next Payment</th>
+                  <th className="py-2 pr-3">Trial / Grace</th>
+                  <th className="py-2 pr-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {overview.tenants.map(t => (
+                  <tr key={t._id}>
+                    <td className="py-3 pr-3">
+                      <div className="font-semibold text-slate-800">{t.storeName}</div>
+                      <div className="text-xs text-slate-400">{t.owner?.email || t.slug}</div>
+                    </td>
+                    <td className="py-3 pr-3 text-slate-600">
+                      <div>{t.plan?.name || '-'}</div>
+                      <div className="text-xs text-slate-400">{fmtMoney(t.plan?.price, t.plan?.currency)} / {t.billing?.billingCycle || t.plan?.billingCycle}</div>
+                    </td>
+                    <td className="py-3 pr-3">
+                      <StatusBadge status={t.billing?.subscriptionStatus || 'active'} />
+                      <div className="text-xs text-slate-400 mt-1">Store {t.status}</div>
+                    </td>
+                    <td className="py-3 pr-3 text-slate-600">
+                      <div className="font-semibold">{fmtMoney(t.billing?.nextPaymentAmount, t.plan?.currency)}</div>
+                      <div className="text-xs text-slate-400">Due {fmtDate(t.billing?.nextPaymentDate)}</div>
+                    </td>
+                    <td className="py-3 pr-3 text-slate-600">
+                      <div>Trial {fmtDate(t.billing?.trialEndsAt)}</div>
+                      <div className="text-xs text-slate-400">Grace {fmtDate(t.billing?.gracePeriodEndsAt)}</div>
+                    </td>
+                    <td className="py-3 pr-3">
+                      {t.status === 'suspended' || t.billing?.subscriptionStatus === 'cancelled' ? (
+                        <button disabled={busyId === t._id} onClick={() => reactivateTenant(t._id)} className="h-8 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-xs font-semibold">
+                          Reactivate
+                        </button>
+                      ) : (
+                        <button disabled={busyId === t._id} onClick={() => deactivateTenant(t._id)} className="h-8 px-3 rounded-lg bg-red-50 hover:bg-red-100 disabled:opacity-60 text-red-600 text-xs font-semibold">
+                          Deactivate
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* ── Upcoming payments ── */}
@@ -170,6 +255,7 @@ export default function SuperAdminBilling({ notify }) {
                   <th className="py-2 pr-3">Store</th>
                   <th className="py-2 pr-3">Amount</th>
                   <th className="py-2 pr-3">Method / Ref</th>
+                  <th className="py-2 pr-3">Proof</th>
                   <th className="py-2 pr-3">Submitted</th>
                   <th className="py-2 pr-3">Status</th>
                   <th className="py-2 pr-3">Actions</th>
@@ -188,6 +274,15 @@ export default function SuperAdminBilling({ notify }) {
                     <td className="py-3 pr-3 text-slate-600">
                       <div className="capitalize">{(p.method || '').replace('_', ' ')}</div>
                       <div className="text-xs text-slate-400">{p.reference}</div>
+                    </td>
+                    <td className="py-3 pr-3">
+                      {p.proofUrl ? (
+                        <a href={p.proofUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-800 font-semibold text-xs whitespace-nowrap">
+                          Open file
+                        </a>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
                     </td>
                     <td className="py-3 pr-3 text-slate-600">{fmtDate(p.submittedAt || p.createdAt)}</td>
                     <td className="py-3 pr-3">

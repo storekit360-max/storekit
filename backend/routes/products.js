@@ -11,6 +11,7 @@ const express = require('express');
 const router  = express.Router();
 const multer  = require('multer');
 const Product = require('../models/Product');
+const Tenant = require('../models/Tenant');
 const { Category } = require('../models/index');
 const { adminAuth } = require('../middleware/auth');
 const { dispatchForTrigger, manualPublish } = require('../services/publisherService');
@@ -53,6 +54,18 @@ async function makeUniqueProductSlug(nameOrSlug, tenantId, excludeId = null) {
     i += 1;
   }
   return slug;
+}
+
+async function assertProductLimit(tenantId, extraCount = 1) {
+  const tenant = await Tenant.findById(tenantId).populate('plan', 'limits name');
+  const limit = Number(tenant?.plan?.limits?.products || 0);
+  if (!limit) return;
+  const current = await Product.countDocuments({ tenantId });
+  if (current + extraCount > limit) {
+    const err = new Error(`Product limit reached for ${tenant.plan.name}. Limit: ${limit}`);
+    err.statusCode = 403;
+    throw err;
+  }
 }
 
 
@@ -543,8 +556,14 @@ router.post('/admin/import/excel', adminAuth, bulkUpload.single('file'), async (
       return Number.isNaN(n) ? undefined : n;
     };
 
-    const results = { created: 0, skipped: 0, errors: [] };
     const rowCount = ws.rowCount;
+    let incomingProducts = 0;
+    for (let r = 2; r <= rowCount; r++) {
+      if (cell(ws.getRow(r), colMap.name)) incomingProducts++;
+    }
+    await assertProductLimit(tenantId, incomingProducts);
+
+    const results = { created: 0, skipped: 0, errors: [] };
 
     for (let r = 2; r <= rowCount; r++) {
       const row = ws.getRow(r);
@@ -642,7 +661,7 @@ router.post('/admin/import/excel', adminAuth, bulkUpload.single('file'), async (
     res.json(results);
   } catch (err) {
     console.error('[Bulk Import]', err.message);
-    res.status(500).json({ message: 'Import failed: ' + err.message });
+    res.status(err.statusCode || 500).json({ message: 'Import failed: ' + err.message });
   }
 });
 
@@ -756,12 +775,13 @@ router.post('/', adminAuth, async (req, res) => {
   try {
     const tenantId = requireTenantForAdmin(req, res);
     if (!tenantId) return;
+    await assertProductLimit(tenantId);
     const body = { ...req.body, tenantId };
     body.slug = await makeUniqueProductSlug(body.slug || body.name, tenantId);
     product = await Product.create(body);
     res.status(201).json(product);
   } catch (err) {
-    return res.status(500).json({ message: err.message });
+    return res.status(err.statusCode || 500).json({ message: err.message });
   }
 
   // Fire automation AFTER response is sent — non-blocking

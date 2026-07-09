@@ -1118,3 +1118,43 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
 .accordion-body{max-height:0;overflow:hidden;transition:max-height 0.4s var(--ease-expo)}
 .accordion-item.open .accordion-body{max-height:500px}
 .accordion-content{padding:0 0 16px;font-size:14px;color:#64748b;line-height:1.7}.input{height:2.5rem;border:1px solid #cbd5e1;border-radius:.75rem;padding:0 .75rem;font-size:.875rem;background:white;color:#0f172a}.btn{height:2.75rem;padding:0 1.25rem;border-radius:.75rem;background:#4f46e5;color:white;font-weight:800;font-size:.875rem}.btn:hover{background:#4338ca}
+
+/* Storefront template preview cards used by Admin > Theme Builder */
+.store-template-preview{
+  position:relative;overflow:hidden;border-radius:16px;
+  background:linear-gradient(135deg,#f8fafc,#e2e8f0);
+}
+.store-template-preview::before{
+  content:"";position:absolute;inset:0;opacity:.85;
+  background:radial-gradient(circle at 20% 20%,rgba(255,255,255,.9),transparent 34%),linear-gradient(135deg,var(--preview-a,#6366f1),var(--preview-b,#22d3ee));
+}
+.store-template-preview .preview-hero{
+  position:relative;height:32px;border-radius:12px;margin-bottom:10px;
+  background:rgba(255,255,255,.78);box-shadow:0 8px 24px rgba(15,23,42,.12);
+}
+.store-template-preview .preview-grid{
+  position:relative;display:grid;grid-template-columns:repeat(3,1fr);gap:7px;
+}
+.store-template-preview .preview-grid span{
+  display:block;height:32px;border-radius:10px;background:rgba(255,255,255,.78);
+  box-shadow:0 6px 18px rgba(15,23,42,.10);
+}
+.store-template-preview-modern{--preview-a:#2563eb;--preview-b:#06b6d4}
+.store-template-preview-classic{--preview-a:#15803d;--preview-b:#84cc16}
+.store-template-preview-minimal{--preview-a:#f8fafc;--preview-b:#cbd5e1}
+.store-template-preview-luxury,.store-template-preview-jewelry{--preview-a:#111827;--preview-b:#d4af37}
+.store-template-preview-fashion{--preview-a:#be123c;--preview-b:#f9a8d4}
+.store-template-preview-electronics,.store-template-preview-mobile{--preview-a:#0f172a;--preview-b:#38bdf8}
+.store-template-preview-grocery,.store-template-preview-organic{--preview-a:#16a34a;--preview-b:#bef264}
+.store-template-preview-beauty{--preview-a:#db2777;--preview-b:#fbcfe8}
+.store-template-preview-furniture{--preview-a:#78350f;--preview-b:#f59e0b}
+.store-template-preview-sports{--preview-a:#ea580c;--preview-b:#fde047}
+.store-template-preview-automotive,.store-template-preview-neon{--preview-a:#020617;--preview-b:#22d3ee}
+.store-template-preview-kids{--preview-a:#7c3aed;--preview-b:#facc15}
+.store-template-preview-books{--preview-a:#92400e;--preview-b:#fde68a}
+.store-template-preview-pharmacy{--preview-a:#0f766e;--preview-b:#99f6e4}
+.store-template-preview-b2b,.store-template-preview-wholesale{--preview-a:#334155;--preview-b:#94a3b8}
+.store-template-preview-marketplace{--preview-a:#4f46e5;--preview-b:#f97316}
+.store-template-preview-premiumApple{--preview-a:#111827;--preview-b:#e5e7eb}
+.store-template-preview-sriLanka{--preview-a:#b91c1c;--preview-b:#facc15}
+.store-template-preview-startup{--preview-a:#7c3aed;--preview-b:#06b6d4}

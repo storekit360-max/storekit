@@ -67,6 +67,37 @@ const NOTIF_META = {
 };
 const notifMeta = (type) => NOTIF_META[type] || { icon: '🔔', bg: 'bg-gray-50', dot: 'bg-gray-400', label: 'Other' };
 
+function planDaysLeftLabel(billing, plan) {
+  if (!billing || !plan) return '';
+  if (Number(plan.price || 0) <= 0) return 'Free plan';
+
+  const status = billing.subscriptionStatus || 'active';
+  const target =
+    status === 'trial' ? billing.trialEndsAt :
+    status === 'past_due' ? billing.gracePeriodEndsAt :
+    billing.nextPaymentDate;
+
+  if (!target) return 'Plan active';
+  const days = Math.ceil((new Date(target).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  if (days < 0) return status === 'past_due' ? 'Grace ended' : 'Overdue';
+  if (days === 0) return status === 'trial' ? 'Trial ends today' : 'Due today';
+  if (status === 'trial') return `${days}d trial left`;
+  if (status === 'past_due') return `${days}d grace left`;
+  return `${days}d left`;
+}
+
+function planDaysLeftTone(billing, plan) {
+  if (!billing || !plan || Number(plan.price || 0) <= 0) {
+    return { color: '#475569', background: '#f1f5f9', border: '#e2e8f0' };
+  }
+  const status = billing.subscriptionStatus || 'active';
+  if (status === 'past_due' || status === 'suspended' || status === 'cancelled') {
+    return { color: '#b45309', background: '#fffbeb', border: '#fde68a' };
+  }
+  if (status === 'trial') return { color: '#2563eb', background: '#eff6ff', border: '#bfdbfe' };
+  return { color: '#047857', background: '#ecfdf5', border: '#a7f3d0' };
+}
+
 // ─── Sidebar is extracted as a REAL component (not inline) so refs stay stable ─
 // Defining it inside AdminLayout caused it to remount every render, which is
 // what made the nav scroll to top on every route change.
@@ -200,9 +231,10 @@ export default function AdminLayout() {
   const [notifOpen,     setNotifOpen]     = useState(false);
   const [notifFilter,   setNotifFilter]   = useState('all'); // 'all' | type key
   const [badges,        setBadges]        = useState({ orders: 0, returns: 0 });
-  // null = not loaded yet (show everything so the sidebar doesn't flash empty);
-  // once loaded this becomes the plan's features object, e.g. { products: true, ... }
-  const [planFeatures,  setPlanFeatures]  = useState(null);
+  const [billingInfo,   setBillingInfo]   = useState(null);
+  // Empty until loaded so restricted plan items do not flash before /tenant/my returns.
+  const [planFeatures,  setPlanFeatures]  = useState({});
+  const [planLoaded,    setPlanLoaded]     = useState(false);
 
   // navRef is attached to the <nav> element inside Sidebar.
   // Because Sidebar is a stable component (not redefined each render) the ref
@@ -222,6 +254,9 @@ export default function AdminLayout() {
     API.get('/admin/dashboard')
       .then(r => setBadges({ orders: r.data.stats.pendingOrders, returns: 0 }))
       .catch(() => {});
+    API.get('/billing/status')
+      .then(r => setBillingInfo({ billing: r.data?.billing, plan: r.data?.plan }))
+      .catch(() => setBillingInfo(null));
     const id = setInterval(fetchNotifications, 30000);
     return () => clearInterval(id);
   }, [fetchNotifications]);
@@ -230,18 +265,19 @@ export default function AdminLayout() {
   // doesn't include (e.g. Theme Builder on a Starter plan).
   useEffect(() => {
     API.get('/tenant/my')
-      .then(r => setPlanFeatures(r.data?.plan?.features || null))
-      .catch(() => setPlanFeatures(null)); // fail open — don't hide the whole sidebar on a network error
+      .then(r => setPlanFeatures(r.data?.plan?.features || {}))
+      .catch(() => setPlanFeatures({}))
+      .finally(() => setPlanLoaded(true));
   }, []);
 
   const visibleNav = useMemo(() => {
-    if (!planFeatures) return NAV; // still loading, or lookup failed — show everything
+    if (!planLoaded) return NAV.filter(item => item.path === '/admin/settings');
     return NAV.filter(item => {
       const featureKey = NAV_FEATURE_MAP[item.path];
       if (!featureKey) return true; // core item, not plan-gated
       return !!planFeatures[featureKey];
     });
-  }, [planFeatures]);
+  }, [planFeatures, planLoaded]);
 
   // Close mobile drawer on navigation
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
@@ -288,6 +324,8 @@ export default function AdminLayout() {
   };
 
   const currentPage = NAV.find(n => isActive(n.path, n.exact))?.label || 'Admin';
+  const planDaysLabel = planDaysLeftLabel(billingInfo?.billing, billingInfo?.plan);
+  const planDaysTone = planDaysLeftTone(billingInfo?.billing, billingInfo?.plan);
 
   // Shared sidebar props
   const sidebarProps = { user, logout, navigate, isActive, badges, navRef, nav: visibleNav };
@@ -361,6 +399,24 @@ export default function AdminLayout() {
             </button>
 
             {/* Notifications */}
+            {planDaysLabel && (
+              <Link
+                to="/admin/billing"
+                title="Plan days left"
+                className="inline-flex items-center rounded-full text-xs font-bold"
+                style={{
+                  height: 28,
+                  padding: '0 8px',
+                  color: planDaysTone.color,
+                  background: planDaysTone.background,
+                  border: `1px solid ${planDaysTone.border}`,
+                  textDecoration: 'none',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {planDaysLabel}
+              </Link>
+            )}
             <div style={{ position: 'relative', flexShrink: 0 }}>
               <button
                 onClick={() => setNotifOpen(v => !v)}

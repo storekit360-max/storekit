@@ -298,6 +298,9 @@ async function startServer() {
     const { startBackupScheduler } = require('./services/backupScheduler');
     startBackupScheduler();
 
+    const { startSubscriptionScheduler } = require('./services/subscriptionScheduler');
+    startSubscriptionScheduler();
+
     const PORT = process.env.PORT || 5001;
     app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
   } catch (err) {

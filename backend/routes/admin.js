@@ -3,6 +3,7 @@ const router  = express.Router();
 const Order   = require('../models/Order');
 const Product = require('../models/Product');
 const User    = require('../models/User');
+const Tenant  = require('../models/Tenant');
 const { ReturnRequest } = require('../models/index');
 const { adminAuth } = require('../middleware/auth');
 
@@ -142,7 +143,19 @@ router.put('/customers/:id/status', adminAuth, async (req, res) => {
 // ── Create admin user ─────────────────────────────────────────────────────────
 router.post('/create-admin', adminAuth, async (req, res) => {
   try {
-    const user = await User.create({ ...req.body, role: 'admin' });
+    const tenantId = req.user?.tenantId || req.body.tenantId;
+    if (!tenantId) return res.status(400).json({ message: 'Tenant not resolved' });
+
+    const tenant = await Tenant.findById(tenantId).populate('plan', 'limits name');
+    const limit = Number(tenant?.plan?.limits?.admins || 0);
+    if (limit) {
+      const currentAdmins = await User.countDocuments({ tenantId, role: 'admin' });
+      if (currentAdmins >= limit) {
+        return res.status(403).json({ message: `Admin limit reached for ${tenant.plan.name}. Limit: ${limit}` });
+      }
+    }
+
+    const user = await User.create({ ...req.body, tenantId, role: 'admin' });
     res.status(201).json({ message: 'Admin created', userId: user._id });
   } catch (err) {
     res.status(500).json({ message: err.message });
