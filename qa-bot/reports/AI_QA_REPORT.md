@@ -12,7 +12,7 @@
 - **Affected Area**: Admin Orders (`/admin/orders`)
 - **Exact Symptom**: The orders route fails to load, resulting in a 404 error for the URL `http://localhost:3000/admin/orders`.
 - **Probable Root Cause**: Missing or misconfigured API endpoint for fetching orders, leading to a 404 response.
-- **Recommended Fix**: Check the API routing for orders and ensure the endpoint `http://localhost:3000/api/orders/admin/followup/stats` is implemented and accessible.
+- **Recommended Fix**: Check the admin orders API routing and ensure the active order list endpoint is accessible.
 
 #### 3. **Super Admin Login Failure**
 - **Severity**: Critical

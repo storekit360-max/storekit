@@ -96,14 +96,10 @@ export default function Dashboard() {
   const [activeSection, setActiveSection] = useState('overview');
   const [liveVisitors, setLiveVisitors]   = useState(Math.floor(Math.random() * 40) + 8);
   const [analyticsPeriod, setAnalyticsPeriod] = useState('30d');
-  const [opsStats, setOpsStats]   = useState(null);
-  const [opsOrders, setOpsOrders] = useState([]);
   // analyticsData reserved for future drill-down charts
 
   const load = useCallback(() => {
     API.get('/admin/dashboard').then(r => setData(r.data)).finally(() => setLoading(false));
-    API.get('/orders/admin/followup/stats').then(r => setOpsStats(r.data)).catch(() => {});
-    API.get('/orders/admin/all?limit=8&followUpFlag=true').then(r => setOpsOrders(r.data?.orders || [])).catch(() => {});
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -205,7 +201,6 @@ export default function Dashboard() {
     { id: 'products',  label: '🛍️ Products'  },
     { id: 'customers', label: '👥 Customers' },
     { id: 'conversion', label: '🎯 Conversion' },
-    { id: 'operations', label: '🚦 Operations'  },
     { id: 'monitoring', label: '📡 Monitoring', to: '/admin/monitoring' },
   ];
 
@@ -747,149 +742,6 @@ export default function Dashboard() {
         </>
       )}
 
-      {/* ═══════════ OPERATIONS ═══════════ */}
-      {activeSection === 'operations' && (
-        <>
-          {/* Alert KPI cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            {[
-              { label: '🔔 Flagged',          value: opsStats?.flagged        ?? '…', color: 'bg-blue-50',   text: 'text-blue-600',   sub: 'Needs follow-up'    },
-              { label: '🏦 Pending Payment',  value: opsStats?.pendingPayment ?? '…', color: 'bg-yellow-50', text: 'text-yellow-600', sub: 'Awaiting bank slip' },
-              { label: '⚠️ SLA Breached',     value: opsStats?.slaBreached    ?? '…', color: 'bg-red-50',    text: 'text-red-600',    sub: 'Past deadline'      },
-              { label: '🔴 Stuck Orders',     value: opsStats?.stuckOrders    ?? '…', color: 'bg-orange-50', text: 'text-orange-600', sub: 'No action taken'    },
-              { label: '🚨 Urgent Priority',  value: opsStats?.urgent         ?? '…', color: 'bg-red-50',    text: 'text-red-700',    sub: 'High priority'      },
-            ].map(card => (
-              <div key={card.label} onClick={() => navigate('/admin/orders')}
-                className={`${card.color} rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md transition-all`}>
-                <p className="text-xs font-semibold text-gray-500 truncate">{card.label}</p>
-                <p className={`text-3xl font-bold mt-1 ${card.value > 0 ? card.text : 'text-gray-300'}`}>{card.value}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{card.sub}</p>
-                <p className="text-xs font-medium mt-2" style={{ color: 'var(--color-primary)' }}>View orders →</p>
-              </div>
-            ))}
-          </div>
-
-          {/* SLA targets */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-5">
-            <SH title="⏱ SLA Targets by Order Status" />
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-              {[
-                { status: 'Pending',          sla: '2 hours',  icon: '🕑', color: 'bg-yellow-50 border-yellow-100 text-yellow-700' },
-                { status: 'Confirmed',        sla: '4 hours',  icon: '✅', color: 'bg-blue-50 border-blue-100 text-blue-700' },
-                { status: 'Processing',       sla: '24 hours', icon: '⚙️', color: 'bg-purple-50 border-purple-100 text-purple-700' },
-                { status: 'Shipped',          sla: '72 hours', icon: '🚚', color: 'bg-green-50 border-green-100 text-green-700' },
-                { status: 'Out for Delivery', sla: '24 hours', icon: '📦', color: 'bg-orange-50 border-orange-100 text-orange-700' },
-              ].map(s => (
-                <div key={s.status} className={`rounded-xl border p-3 text-center ${s.color}`}>
-                  <p className="text-2xl mb-1">{s.icon}</p>
-                  <p className="text-xs font-bold">{s.status}</p>
-                  <p className="text-xs opacity-70 mt-0.5">Move within</p>
-                  <p className="text-sm font-bold mt-0.5">{s.sla}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Flagged orders list */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-5">
-            <SH title="🔔 Orders Flagged for Follow-up"
-              action={<button onClick={() => navigate('/admin/orders')} className="text-xs font-medium hover:underline" style={{ color: 'var(--color-primary)' }}>View all →</button>} />
-            {opsOrders.length === 0 ? (
-              <div className="py-10 text-center">
-                <p className="text-4xl mb-2">✅</p>
-                <p className="text-gray-500 text-sm">No flagged orders — operations running smoothly!</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {opsOrders.map(order => (
-                  <button key={order._id} onClick={() => navigate(`/admin/orders/${order._id}`)}
-                    className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors text-left border border-transparent hover:border-gray-100">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-sm font-bold text-primary">{order.orderNumber}</span>
-                        {order.priority === 'urgent' && <span className="text-xs font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded animate-pulse">URGENT</span>}
-                        {order.priority === 'high'   && <span className="text-xs font-bold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">HIGH</span>}
-                        {order.slaBreached && <span className="text-xs font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">⚠️ SLA</span>}
-                        {order.stuckSince  && <span className="text-xs font-bold text-orange-500 bg-orange-50 px-1.5 py-0.5 rounded">🔴 Stuck</span>}
-                      </div>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {order.billing?.firstName} {order.billing?.lastName} · {order.orderStatus?.replace(/_/g,' ')}
-                        {order.followUpNote && <span className="ml-2 italic">"{order.followUpNote}"</span>}
-                      </p>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <p className="text-sm font-bold text-gray-900">Rs. {order.total?.toLocaleString()}</p>
-                      <p className="text-xs text-gray-400">{new Date(order.createdAt).toLocaleDateString()}</p>
-                    </div>
-                    <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Checklist + pipeline health */}
-          <div className="grid lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-2xl border border-gray-100 p-5">
-              <SH title="✅ Daily Operations Checklist" />
-              <div className="space-y-2">
-                {[
-                  { task: 'Review & confirm all new pending orders',           urgent: (opsStats?.flagged || 0) > 0 },
-                  { task: 'Verify bank transfer payment slips',                urgent: (opsStats?.pendingPayment || 0) > 0 },
-                  { task: 'Update tracking numbers for shipped orders',        urgent: false },
-                  { task: 'Resolve flagged & follow-up orders',                urgent: (opsStats?.flagged || 0) > 0 },
-                  { task: 'Clear SLA-breached orders immediately',             urgent: (opsStats?.slaBreached || 0) > 0 },
-                  { task: 'Check orders stuck in same status > 12 hours',     urgent: (opsStats?.stuckOrders || 0) > 0 },
-                  { task: 'Review urgent priority orders first',               urgent: (opsStats?.urgent || 0) > 0 },
-                  { task: 'Add internal notes for any customer communication', urgent: false },
-                ].map((item, i) => (
-                  <div key={i} className={`flex items-start gap-3 p-3 rounded-xl ${item.urgent ? 'bg-red-50 border border-red-100' : 'bg-gray-50'}`}>
-                    <div className={`w-5 h-5 rounded-full border-2 flex-shrink-0 mt-0.5 ${item.urgent ? 'border-red-400' : 'border-gray-300'}`} />
-                    <p className={`text-sm ${item.urgent ? 'text-red-700 font-medium' : 'text-gray-600'}`}>{item.task}</p>
-                    {item.urgent && <span className="text-xs text-red-500 font-bold flex-shrink-0 ml-auto">!</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="bg-white rounded-2xl border border-gray-100 p-5">
-              <SH title="📊 Order Pipeline Health" />
-              <div className="space-y-3">
-                {[
-                  { label: 'Flagged for Follow-up', value: opsStats?.flagged        ?? 0, max: 10, color: '#3b82f6', warn: 3 },
-                  { label: 'SLA Breached',          value: opsStats?.slaBreached    ?? 0, max: 10, color: '#ef4444', warn: 1 },
-                  { label: 'Stuck Orders',          value: opsStats?.stuckOrders    ?? 0, max: 10, color: '#f97316', warn: 2 },
-                  { label: 'Pending Payment',       value: opsStats?.pendingPayment ?? 0, max: 20, color: '#eab308', warn: 5 },
-                  { label: 'Urgent Priority',       value: opsStats?.urgent         ?? 0, max: 5,  color: '#dc2626', warn: 1 },
-                ].map(m => (
-                  <div key={m.label}>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className={`font-medium ${m.value >= m.warn ? 'text-gray-800' : 'text-gray-400'}`}>{m.label}</span>
-                      <span className={`font-bold ${m.value >= m.warn ? 'text-gray-800' : 'text-gray-400'}`}>{m.value}</span>
-                    </div>
-                    <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full transition-all"
-                        style={{ width: `${Math.min(100,(m.value/m.max)*100)}%`, background: m.color }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className={`mt-4 p-3 rounded-xl text-xs font-medium ${
-                ((opsStats?.slaBreached ?? 0) > 0 || (opsStats?.urgent ?? 0) > 0)
-                  ? 'bg-red-50 border border-red-200 text-red-700'
-                  : ((opsStats?.flagged ?? 0) > 0 || (opsStats?.stuckOrders ?? 0) > 0)
-                  ? 'bg-yellow-50 border border-yellow-200 text-yellow-700'
-                  : 'bg-green-50 border border-green-200 text-green-700'
-              }`}>
-                {((opsStats?.slaBreached ?? 0) > 0 || (opsStats?.urgent ?? 0) > 0)
-                  ? '🔴 Immediate action required — SLA breaches or urgent orders need attention now'
-                  : ((opsStats?.flagged ?? 0) > 0 || (opsStats?.stuckOrders ?? 0) > 0)
-                  ? '🟡 Some orders need attention — review flagged and stuck orders today'
-                  : '🟢 Operations healthy — no critical issues detected'}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
     </div>
   );
 }

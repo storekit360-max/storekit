@@ -65,19 +65,13 @@ const orderSchema = new mongoose.Schema({
     resolvedBy:  { type: String },
   },
 
-  // ── Follow-up & Tracking ─────────────────────────────────────────────────
-  priority:      { type: String, enum: ['normal', 'high', 'urgent'], default: 'normal' },
-  followUpFlag:  { type: Boolean, default: false },
-  followUpNote:  { type: String },
+  // ── Admin tracking ──────────────────────────────────────────────────────
   adminNotes: [{
     note:      { type: String, required: true },
     addedBy:   { type: String },
     addedAt:   { type: Date, default: Date.now },
   }],
-  slaDeadline:   { type: Date },
-  slaBreached:   { type: Boolean, default: false },
   lastActionAt:  { type: Date, default: Date.now },
-  stuckSince:    { type: Date },
 
   // ── Meta Pixel / CAPI deduplication ─────────────────────────────────────
   // metaEventId: the same event_id used in both the browser fbq Purchase call

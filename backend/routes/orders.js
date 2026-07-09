@@ -193,93 +193,16 @@ const runAutoCancelDecisions = async () => {
 setInterval(runAutoCancelDecisions, 60 * 1000);
 setTimeout(runAutoCancelDecisions, 5000);
 
-// ── Automatic follow-up reminder scheduler (runs every 30 min) ───────────────
-// Sends in-app notifications for:
-//  1. Orders sitting in 'pending' > 30 min with no action
-//  2. Bank transfer orders with no slip uploaded after 2 hours
-//  3. Orders flagged for follow-up — reminds every 2 hours until resolved
-//  4. Cancel requests pending for > 30 min
-const runFollowUpReminders = async () => {
-  try {
-    const now = new Date();
-
-    // 1. Pending orders > 30 min — needs confirmation
-    const pendingCutoff = new Date(now - 30 * 60 * 1000);
-    const stalePending = await Order.find({
-      orderStatus: 'pending',
-      createdAt: { $lte: pendingCutoff },
-    }).select('orderNumber _id billing createdAt');
-
-    for (const o of stalePending) {
-      const mins = Math.round((now - new Date(o.createdAt)) / 60000);
-      // [panel notification suppressed: followup_reminder]
-    }
-
-    // 2. Bank transfer orders with no slip > 2 hours
-    const slipCutoff = new Date(now - 2 * 60 * 60 * 1000);
-    const noSlip = await Order.find({
-      paymentMethod: 'bank_transfer',
-      paymentStatus: 'pending',
-      paymentSlip: { $in: [null, undefined, ''] },
-      orderStatus: { $nin: ['cancelled', 'refunded'] },
-      createdAt: { $lte: slipCutoff },
-    }).select('orderNumber _id billing createdAt');
-
-    for (const o of noSlip) {
-      const hrs = (now - new Date(o.createdAt)) / 3600000;
-      // [panel notification suppressed: followup_reminder]
-    }
-
-    // 3. Flagged follow-up orders — remind every 2 hours
-    const flagRemindCutoff = new Date(now - 2 * 60 * 60 * 1000);
-    const flagged = await Order.find({
-      followUpFlag: true,
-      orderStatus: { $nin: ['delivered', 'cancelled', 'refunded'] },
-      lastActionAt: { $lte: flagRemindCutoff },
-    }).select('orderNumber _id billing followUpNote priority');
-
-    for (const o of flagged) {
-      // [panel notification suppressed: follow_up]
-    }
-
-    // 4. Cancel requests pending > 30 min
-    const cancelCutoff = new Date(now - 30 * 60 * 1000);
-    const pendingCancels = await Order.find({
-      'cancelRequest.requested': true,
-      'cancelRequest.status': 'pending',
-      'cancelRequest.requestedAt': { $lte: cancelCutoff },
-    }).select('orderNumber _id billing cancelRequest');
-
-    for (const o of pendingCancels) {
-      const mins = Math.round((now - new Date(o.cancelRequest.requestedAt)) / 60000);
-      await Notification.create({
-        type: 'cancel_request',
-        title: `🚫 Cancel Request Awaiting Decision`,
-        message: `Order ${o.orderNumber} — cancellation requested ${mins} minutes ago by ${o.billing?.firstName} ${o.billing?.lastName} and still pending${o.cancelRequest.reason ? `: "${o.cancelRequest.reason}"` : ''}`,
-        link: `/admin/orders/${o._id}`,
-        data: { orderId: o._id, reason: 'cancel_pending_long' },
-      }).catch(() => {});
-    }
-
-    const totalReminders = stalePending.length + noSlip.length + flagged.length + pendingCancels.length;
-    if (totalReminders > 0) {
-      console.log(`[FOLLOW-UP] Sent ${totalReminders} reminder notifications`);
-    }
-  } catch (err) {
-    console.error('[FOLLOW-UP SCHEDULER]', err.message);
-  }
-};
-
-setInterval(runFollowUpReminders, 30 * 60 * 1000); // every 30 min
-setTimeout(runFollowUpReminders, 30000);            // 30s after server start
-
-
 // ── Admin — Get all orders ────────────────────────────────────────────────────
 router.get('/admin/all', adminAuth, async (req, res) => {
   try {
-    const { status, page = 1, limit = 20, search } = req.query;
+    const { status, page = 1, limit = 20, search, pendingPayment } = req.query;
     const filter = {};
     if (status && status !== 'all') filter.orderStatus = status;
+    if (pendingPayment === 'true') {
+      filter.paymentStatus = 'pending';
+      filter.paymentMethod = 'bank_transfer';
+    }
     if (search)
       filter.$or = [
         { orderNumber: new RegExp(search, 'i') },

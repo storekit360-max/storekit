@@ -17,11 +17,9 @@ export default function AdminOrderDetail() {
   const [statusUpdate, setStatusUpdate] = useState({ status: '', note: '', trackingNumber: '', deliveryPartner: '' });
   const [saving, setSaving] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState('');
-  // ── Follow-up & Notes state ──
+  // ── Internal notes state ──
   const [newNote, setNewNote]         = useState('');
   const [addingNote, setAddingNote]   = useState(false);
-  const [followUpNote, setFollowUpNote] = useState('');
-  const [showFollowUp, setShowFollowUp] = useState(false);
 
   useEffect(() => {
     API.get(`/orders/${id}`).then(r => {
@@ -49,28 +47,6 @@ export default function AdminOrderDetail() {
       setOrder(data);
       toast.success(decision === 'approved' ? '🚫 Order cancelled & customer notified' : '✅ Cancellation rejected & customer notified');
     } catch { toast.error('Action failed'); }
-  };
-
-  const handleFollowUpSave = async () => {
-    try {
-      const { data } = await API.put(`/orders/admin/${id}/followup`, {
-        followUpFlag: !order.followUpFlag || !!followUpNote,
-        followUpNote,
-        priority: order.priority,
-      });
-      setOrder(data);
-      setShowFollowUp(false);
-      setFollowUpNote('');
-      toast.success(data.followUpFlag ? '🔔 Flagged for follow-up' : 'Follow-up removed');
-    } catch { toast.error('Failed'); }
-  };
-
-  const handlePriority = async (priority) => {
-    try {
-      const { data } = await API.put(`/orders/admin/${id}/followup`, { priority });
-      setOrder(data);
-      toast.success(`Priority set to ${priority}`);
-    } catch { toast.error('Failed'); }
   };
 
   const handleAddNote = async () => {
@@ -212,70 +188,6 @@ export default function AdminOrderDetail() {
               </div>
             </div>
           )}
-
-          {/* ── Follow-up & Priority Panel ─────────────────────────────── */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-5">
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-              <h2 className="font-semibold text-gray-900">🔔 Follow-up & Priority</h2>
-              <div className="flex items-center gap-2 flex-wrap">
-                {/* Priority selector */}
-                <select
-                  value={order.priority || 'normal'}
-                  onChange={e => handlePriority(e.target.value)}
-                  className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 font-medium"
-                >
-                  <option value="normal">Normal</option>
-                  <option value="high">🔶 High Priority</option>
-                  <option value="urgent">🚨 Urgent</option>
-                </select>
-                {/* Follow-up toggle */}
-                <button
-                  onClick={() => order.followUpFlag
-                    ? API.put(`/orders/admin/${id}/followup`, { followUpFlag: false }).then(r => setOrder(r.data))
-                    : setShowFollowUp(v => !v)}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${order.followUpFlag ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-200 text-gray-600 hover:border-blue-400 hover:text-blue-600'}`}
-                >
-                  {order.followUpFlag ? '🔔 Flagged' : '+ Flag for Follow-up'}
-                </button>
-              </div>
-            </div>
-
-            {/* SLA info */}
-            {order.slaDeadline && (
-              <div className={`flex items-center gap-2 rounded-xl px-3 py-2 mb-3 text-sm ${order.slaBreached ? 'bg-red-50 border border-red-200 text-red-700' : 'bg-blue-50 border border-blue-100 text-blue-700'}`}>
-                <span>{order.slaBreached ? '⚠️ SLA BREACHED' : '⏱ SLA Deadline'}:</span>
-                <span className="font-semibold font-mono">{new Date(order.slaDeadline).toLocaleString()}</span>
-              </div>
-            )}
-            {order.stuckSince && (
-              <div className="flex items-center gap-2 rounded-xl px-3 py-2 mb-3 text-sm bg-orange-50 border border-orange-200 text-orange-700">
-                🔴 <span>Order stuck since <strong>{new Date(order.stuckSince).toLocaleString()}</strong> — no admin action recorded</span>
-              </div>
-            )}
-
-            {/* Follow-up note input */}
-            {showFollowUp && (
-              <div className="space-y-2 mb-3">
-                <textarea
-                  value={followUpNote}
-                  onChange={e => setFollowUpNote(e.target.value)}
-                  rows={2}
-                  className="form-input resize-none text-sm"
-                  placeholder="Why is this flagged? (optional)"
-                />
-                <div className="flex gap-2">
-                  <button onClick={handleFollowUpSave} className="btn-primary text-sm py-1.5 px-4">Save Flag</button>
-                  <button onClick={() => setShowFollowUp(false)} className="text-sm text-gray-400 hover:text-gray-600 px-3">Cancel</button>
-                </div>
-              </div>
-            )}
-
-            {order.followUpNote && (
-              <p className="text-sm text-gray-600 italic bg-blue-50 rounded-xl px-3 py-2">
-                📌 {order.followUpNote}
-              </p>
-            )}
-          </div>
 
           {/* ── Internal Admin Notes ───────────────────────────────────────── */}
           <div className="bg-white rounded-2xl border border-gray-100 p-5">

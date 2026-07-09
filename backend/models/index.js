@@ -121,7 +121,6 @@ const notificationSchema = new mongoose.Schema({
       'new_order', 'order_status',
       'payment_slip', 'payment_confirmed',
       'cancel_request', 'cancel_approved', 'cancel_rejected', 'cancel_auto_decision',
-      'follow_up', 'sla_breach', 'order_stuck', 'followup_reminder',
       'low_stock', 'new_review', 'new_user', 'return_request', 'return_status', 'gift_card', 'system',
     ],
     required: true,

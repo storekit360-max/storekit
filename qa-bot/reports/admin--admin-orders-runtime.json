@@ -35,18 +35,5 @@
       "failure": "net::ERR_ABORTED"
     }
   ],
-  "badResponses": [
-    {
-      "url": "http://localhost:3000/api/orders/admin/followup/stats",
-      "status": 404,
-      "method": "GET",
-      "pageUrl": "http://localhost:3000/admin/orders"
-    },
-    {
-      "url": "http://localhost:3000/api/orders/admin/followup/stats",
-      "status": 404,
-      "method": "GET",
-      "pageUrl": "http://localhost:3000/admin/orders"
-    }
-  ]
+  "badResponses": []
 }
