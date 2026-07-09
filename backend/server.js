@@ -229,12 +229,23 @@ safeMount('/api/payments',      require('./routes/payments'));
 safeMount('/api/delivery',      require('./routes/delivery'), tenantScope);
 safeMount('/api/pages',         require('./routes/pages'), tenantScope);
 safeMount('/api/subscribers',   require('./routes/subscribers'), tenantScope);
-safeMount('/api/seo',           require('./routes/seo'), tenantScope);
+const seoRoutes = require('./routes/seo');
+safeMount('/api/seo',           seoRoutes, tenantScope);
 safeMount('/api/meta',          require('./routes/meta'));   // Meta CAPI relay
 
 // ─── SEO aliases ──────────────────────────────────────────────────────────────
-app.get('/sitemap.xml', (req, res) => res.redirect(301, '/api/seo/sitemap.xml'));
-app.get('/robots.txt',  (req, res) => res.redirect(301, '/api/seo/robots.txt'));
+function serveSeoAlias(pathname) {
+  return (req, res, next) => {
+    req.url = pathname;
+    seoRoutes(req, res, next);
+  };
+}
+app.get('/sitemap.xml',             serveSeoAlias('/sitemap.xml'));
+app.get('/products-sitemap.xml',    serveSeoAlias('/products-sitemap.xml'));
+app.get('/categories-sitemap.xml',  serveSeoAlias('/categories-sitemap.xml'));
+app.get('/brands-sitemap.xml',      serveSeoAlias('/brands-sitemap.xml'));
+app.get('/pages-sitemap.xml',       serveSeoAlias('/pages-sitemap.xml'));
+app.get('/robots.txt',              serveSeoAlias('/robots.txt'));
 
 // ─── Admin routes (+ audit logging) ──────────────────────────────────────────
 // SECURITY: auditLog writes one-line JSON to logs/audit.log for every mutating
@@ -256,7 +267,7 @@ safeMount('/api/monitoring',    require('./routes/monitoring'));
 safeMount('/api/backup',        require('./routes/backup'));
 
 // ─── Page SSR for crawlers ────────────────────────────────────────────────────
-const { seoRenderMiddleware } = require('./routes/seo');
+const { seoRenderMiddleware } = seoRoutes;
 const fs = require('fs');
 
 const frontendBuildPath = path.join(__dirname, '..', 'frontend', 'build');

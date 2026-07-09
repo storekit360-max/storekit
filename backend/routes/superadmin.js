@@ -4,6 +4,8 @@ const express = require('express');
 const Plan = require('../models/Plan');
 const Tenant = require('../models/Tenant');
 const User = require('../models/User');
+const Order = require('../models/Order');
+const Product = require('../models/Product');
 const TenantPayment = require('../models/TenantPayment');
 const { auth } = require('../middleware/auth');
 const { normalizeDomain } = require('../middleware/tenant');
@@ -47,6 +49,154 @@ router.get('/stats', async (_req, res, next) => {
       User.countDocuments({ role: 'admin' }),
     ]);
     res.json({ tenants, activeTenants, plans, admins });
+  } catch (err) { next(err); }
+});
+
+router.get('/monitoring', async (_req, res, next) => {
+  try {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const inSevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const [tenants, productAgg, orderAgg, monthlyOrderAgg, adminAgg, paymentAgg, pendingPayments] = await Promise.all([
+      Tenant.find({})
+        .populate('plan', 'name price currency billingCycle trialDays graceDays limits features')
+        .populate('owner', 'firstName lastName email username role isActive lastLogin')
+        .sort({ createdAt: -1 })
+        .lean(),
+      Product.aggregate([
+        {
+          $project: {
+            tenantId: 1,
+            isActive: 1,
+            stock: 1,
+            imageCount: {
+              $add: [
+                { $size: { $ifNull: ['$images', []] } },
+                { $cond: [{ $ifNull: ['$thumbnail', false] }, 1, 0] },
+              ],
+            },
+          },
+        },
+        { $group: { _id: '$tenantId', total: { $sum: 1 }, active: { $sum: { $cond: ['$isActive', 1, 0] } }, stock: { $sum: '$stock' }, imageCount: { $sum: '$imageCount' } } },
+      ]),
+      Order.aggregate([
+        { $group: { _id: '$tenantId', total: { $sum: 1 }, revenue: { $sum: '$total' }, pending: { $sum: { $cond: [{ $eq: ['$orderStatus', 'pending'] }, 1, 0] } } } },
+      ]),
+      Order.aggregate([
+        { $match: { createdAt: { $gte: monthStart } } },
+        { $group: { _id: '$tenantId', total: { $sum: 1 }, revenue: { $sum: '$total' } } },
+      ]),
+      User.aggregate([
+        { $match: { role: 'admin' } },
+        { $group: { _id: '$tenantId', total: { $sum: 1 }, active: { $sum: { $cond: ['$isActive', 1, 0] } } } },
+      ]),
+      TenantPayment.aggregate([
+        { $group: { _id: { tenant: '$tenant', status: '$status' }, count: { $sum: 1 }, total: { $sum: '$amount' } } },
+      ]),
+      TenantPayment.find({ status: 'pending' }).populate('tenant', 'storeName slug').sort({ createdAt: -1 }).limit(20).lean(),
+    ]);
+
+    const byTenant = (rows) => rows.reduce((acc, row) => {
+      if (row._id) acc[String(row._id)] = row;
+      return acc;
+    }, {});
+    const productByTenant = byTenant(productAgg);
+    const orderByTenant = byTenant(orderAgg);
+    const monthlyOrderByTenant = byTenant(monthlyOrderAgg);
+    const adminByTenant = byTenant(adminAgg);
+
+    const paymentsByTenant = {};
+    paymentAgg.forEach(row => {
+      const tenantId = String(row._id?.tenant || '');
+      if (!tenantId) return;
+      if (!paymentsByTenant[tenantId]) paymentsByTenant[tenantId] = {};
+      paymentsByTenant[tenantId][row._id.status] = { count: row.count, total: row.total };
+    });
+
+    const tenantRows = tenants.map(tenant => {
+      const id = String(tenant._id);
+      const limits = tenant.plan?.limits || {};
+      const products = productByTenant[id] || {};
+      const orders = orderByTenant[id] || {};
+      const monthlyOrders = monthlyOrderByTenant[id] || {};
+      const admins = adminByTenant[id] || {};
+      const paymentSummary = paymentsByTenant[id] || {};
+      const nextPayment = tenant.billing?.nextPaymentDate ? new Date(tenant.billing.nextPaymentDate) : null;
+      const trialEnds = tenant.billing?.trialEndsAt ? new Date(tenant.billing.trialEndsAt) : null;
+      const periodEnd = tenant.billing?.currentPeriodEnd ? new Date(tenant.billing.currentPeriodEnd) : null;
+      const dueDate = nextPayment || trialEnds || periodEnd;
+
+      return {
+        _id: tenant._id,
+        storeName: tenant.storeName,
+        slug: tenant.slug,
+        status: tenant.status,
+        createdAt: tenant.createdAt,
+        owner: tenant.owner || null,
+        plan: tenant.plan || null,
+        domains: tenant.domains || [],
+        billing: tenant.billing || {},
+        usage: {
+          products: Number(products.total || 0),
+          activeProducts: Number(products.active || 0),
+          productLimit: Number(limits.products || 0),
+          ordersTotal: Number(orders.total || 0),
+          ordersThisMonth: Number(monthlyOrders.total || 0),
+          ordersPerMonthLimit: Number(limits.ordersPerMonth || 0),
+          revenueTotal: Number(orders.revenue || 0),
+          revenueThisMonth: Number(monthlyOrders.revenue || 0),
+          pendingOrders: Number(orders.pending || 0),
+          admins: Number(admins.total || 0),
+          activeAdmins: Number(admins.active || 0),
+          adminLimit: Number(limits.admins || 0),
+          storageMb: Number(((Number(products.imageCount || 0) * 0.25) + (Number(products.total || 0) * 0.02)).toFixed(1)),
+          storageLimitMb: Number(limits.storageMb || 0),
+          imageAssets: Number(products.imageCount || 0),
+        },
+        payments: {
+          pending: paymentSummary.pending || { count: 0, total: 0 },
+          approved: paymentSummary.approved || { count: 0, total: 0 },
+          rejected: paymentSummary.rejected || { count: 0, total: 0 },
+        },
+        alerts: {
+          hasNoDomain: !(tenant.domains || []).some(d => d.active && d.domain),
+          domainPending: (tenant.domains || []).some(d => d.active && !d.verified),
+          paymentDueSoon: !!(dueDate && dueDate <= inSevenDays && Number(tenant.billing?.nextPaymentAmount || tenant.plan?.price || 0) > 0),
+          pastDue: ['past_due', 'grace'].includes(tenant.billing?.subscriptionStatus),
+          suspended: tenant.status === 'suspended',
+        },
+      };
+    });
+
+    const totals = tenantRows.reduce((acc, tenant) => {
+      acc.tenants += 1;
+      acc.active += tenant.status === 'active' ? 1 : 0;
+      acc.suspended += tenant.status === 'suspended' ? 1 : 0;
+      acc.trial += tenant.billing?.subscriptionStatus === 'trial' ? 1 : 0;
+      acc.pastDue += ['past_due', 'grace'].includes(tenant.billing?.subscriptionStatus) ? 1 : 0;
+      acc.monthlyRevenue += tenant.plan?.billingCycle === 'monthly' && tenant.status === 'active' ? Number(tenant.billing?.nextPaymentAmount || tenant.plan?.price || 0) : 0;
+      acc.yearlyRevenue += tenant.plan?.billingCycle === 'yearly' && tenant.status === 'active' ? Number(tenant.billing?.nextPaymentAmount || tenant.plan?.price || 0) : 0;
+      acc.storeRevenue += tenant.usage.revenueTotal;
+      acc.storeRevenueThisMonth += tenant.usage.revenueThisMonth;
+      acc.pendingPaymentAmount += tenant.payments.pending.total || 0;
+      acc.pendingPaymentCount += tenant.payments.pending.count || 0;
+      acc.products += tenant.usage.products;
+      acc.ordersThisMonth += tenant.usage.ordersThisMonth;
+      acc.admins += tenant.usage.admins;
+      return acc;
+    }, {
+      tenants: 0, active: 0, suspended: 0, trial: 0, pastDue: 0,
+      monthlyRevenue: 0, yearlyRevenue: 0, storeRevenue: 0, storeRevenueThisMonth: 0,
+      pendingPaymentAmount: 0, pendingPaymentCount: 0, products: 0, ordersThisMonth: 0, admins: 0,
+    });
+
+    res.json({
+      generatedAt: now,
+      totals,
+      tenants: tenantRows,
+      pendingPayments,
+    });
   } catch (err) { next(err); }
 });
 
@@ -109,9 +259,16 @@ router.post('/tenants', async (req, res, next) => {
 
     const cleanSlug = String(slug).toLowerCase().trim();
     const domains = [];
-    if (domain) domains.push({ domain: normalizeDomain(domain), type: 'primary', verified: false, active: true });
+    const primaryDomain = domain ? normalizeDomain(domain) : '';
+    if (primaryDomain) domains.push({ domain: primaryDomain, type: 'primary', verified: false, active: true });
+    const tenantSettings = {
+      ...(settings || {}),
+      ...(primaryDomain && !(settings || {}).siteUrl ? { siteUrl: `https://${primaryDomain}` } : {}),
+      metaTitle: (settings || {}).metaTitle || storeName,
+      metaDescription: (settings || {}).metaDescription || `Shop online at ${storeName}.`,
+    };
 
-    const tenant = await Tenant.create({ storeName, slug: cleanSlug, plan, domains, settings: settings || {}, theme: theme || {} });
+    const tenant = await Tenant.create({ storeName, slug: cleanSlug, plan, domains, settings: tenantSettings, theme: theme || {} });
 
     const user = await User.create({
       firstName: adminFirstName || 'Store',
@@ -259,6 +416,7 @@ router.post('/tenants/:id/domains', async (req, res, next) => {
     if (!tenant) return res.status(404).json({ message: 'Tenant not found' });
     if (!tenant.domains.some(d => d.domain === domain)) {
       tenant.domains.push({ domain, type: req.body.type || 'alias', verified: !!req.body.verified, active: true });
+      if (!tenant.settings?.siteUrl) tenant.settings = { ...(tenant.settings?.toObject ? tenant.settings.toObject() : tenant.settings || {}), siteUrl: `https://${domain}` };
       await tenant.save();
     }
     res.json(await Tenant.findById(req.params.id).populate('plan').populate('owner', 'firstName lastName email username role'));

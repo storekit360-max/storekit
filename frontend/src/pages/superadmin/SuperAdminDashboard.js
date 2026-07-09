@@ -92,6 +92,20 @@ const TABS = [
   { key: 'domains', label: 'Domains', icon: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0zM3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18 15 15 0 010-18z' },
 ];
 
+const money = (value, currency = 'LKR') => `${currency} ${Number(value || 0).toLocaleString()}`;
+const compact = value => Number(value || 0).toLocaleString();
+const percent = (value, limit) => {
+  const l = Number(limit || 0);
+  if (!l) return 0;
+  return Math.min(100, Math.round((Number(value || 0) / l) * 100));
+};
+const daysUntil = value => {
+  if (!value) return null;
+  const diff = new Date(value).getTime() - Date.now();
+  return Math.ceil(diff / (24 * 60 * 60 * 1000));
+};
+const shortDate = value => value ? new Date(value).toLocaleDateString() : '-';
+
 function cleanDomain(value) {
   return String(value || '')
     .trim()
@@ -123,6 +137,7 @@ export default function SuperAdminDashboard() {
   const [stats, setStats] = useState({ tenants: 0, activeTenants: 0, plans: 0, admins: 0 });
   const [plans, setPlans] = useState([]);
   const [tenants, setTenants] = useState([]);
+  const [monitoring, setMonitoring] = useState(null);
   const [planForm, setPlanForm] = useState(emptyPlan);
   const [tenantForm, setTenantForm] = useState(emptyTenant);
   const [selectedTenantId, setSelectedTenantId] = useState('');
@@ -143,14 +158,16 @@ export default function SuperAdminDashboard() {
   const loadAll = useCallback(async function loadAll() {
     setLoading(true);
     try {
-      const [statsRes, plansRes, tenantsRes] = await Promise.all([
+      const [statsRes, plansRes, tenantsRes, monitoringRes] = await Promise.all([
         API.get('/superadmin/stats'),
         API.get('/superadmin/plans'),
         API.get('/superadmin/tenants'),
+        API.get('/superadmin/monitoring'),
       ]);
       setStats(statsRes.data);
       setPlans(plansRes.data);
       setTenants(tenantsRes.data);
+      setMonitoring(monitoringRes.data);
       if (!tenantForm.plan && plansRes.data[0]?._id) setTenantForm(prev => ({ ...prev, plan: plansRes.data[0]._id }));
     } catch (err) {
       notify('error', err.response?.data?.message || err.message || 'Failed to load superadmin data');
@@ -322,26 +339,15 @@ export default function SuperAdminDashboard() {
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">
           {activeTab === 'overview' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <Stat label="Total Tenants" value={stats.tenants} icon="M17 20h5v-2a3 3 0 00-5.356-1.857" />
-                <Stat label="Active Tenants" value={stats.activeTenants} accent="text-emerald-600" icon="M5 13l4 4L19 7" />
-                <Stat label="Plans" value={stats.plans} icon="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10" />
-                <Stat label="Store Admins" value={stats.admins} icon="M16 7a4 4 0 11-8 0 4 4 0 018 0z" />
-              </div>
-
-              <div className="bg-white rounded-2xl border border-slate-200 p-6">
-                <h2 className="text-base font-bold text-slate-900 mb-4">Recent Tenants</h2>
-                <TenantTable
-                  tenants={tenants.slice(0, 5)}
-                  plans={plans}
-                  onUpdate={updateTenantRecord}
-                  onResetPassword={resetAdminPassword}
-                  getStorefrontUrl={tenantStorefrontUrl}
-                />
-                {tenants.length === 0 && <p className="text-sm text-slate-400 py-6 text-center">No tenants yet — create one from the Tenants tab.</p>}
-              </div>
-            </div>
+            <AdvancedOverview
+              stats={stats}
+              plans={plans}
+              tenants={tenants}
+              monitoring={monitoring}
+              onTab={setActiveTab}
+              onUpdate={updateTenantRecord}
+              onResetPassword={resetAdminPassword}
+            />
           )}
 
           {activeTab === 'plans' && (
@@ -415,7 +421,11 @@ export default function SuperAdminDashboard() {
 
               <div className="bg-white rounded-2xl border border-slate-200 p-6">
                 <h2 className="text-base font-bold text-slate-900 mb-4">Tenants</h2>
-                <TenantTable tenants={tenants} plans={plans} onUpdate={updateTenantRecord} onResetPassword={resetAdminPassword} getStorefrontUrl={tenantStorefrontUrl} />
+                <TenantMonitorGrid rows={monitoring?.tenants || []} onUpdate={updateTenantRecord} onResetPassword={resetAdminPassword} />
+                <div className="mt-6 pt-6 border-t border-slate-100">
+                  <h3 className="text-sm font-bold text-slate-800 mb-3">Administrative Table</h3>
+                  <TenantTable tenants={tenants} plans={plans} onUpdate={updateTenantRecord} onResetPassword={resetAdminPassword} getStorefrontUrl={tenantStorefrontUrl} />
+                </div>
                 {tenants.length === 0 && <p className="text-sm text-slate-400 py-6 text-center">No tenants yet.</p>}
               </div>
             </div>
@@ -486,6 +496,267 @@ function Stat({ label, value, icon, accent = 'text-indigo-600' }) {
       <div className={`text-2xl font-extrabold ${accent}`}>{value}</div>
     </div>
   );
+}
+
+function AdvancedOverview({ stats, plans, tenants, monitoring, onTab, onUpdate, onResetPassword }) {
+  const totals = monitoring?.totals || {};
+  const rows = monitoring?.tenants || [];
+  const riskRows = rows.filter(t => t.alerts?.suspended || t.alerts?.pastDue || t.alerts?.paymentDueSoon || t.alerts?.hasNoDomain || t.alerts?.domainPending);
+  const dueRows = rows
+    .filter(t => t.billing?.nextPaymentDate || t.billing?.trialEndsAt)
+    .sort((a, b) => new Date(a.billing?.nextPaymentDate || a.billing?.trialEndsAt) - new Date(b.billing?.nextPaymentDate || b.billing?.trialEndsAt))
+    .slice(0, 6);
+
+  return (
+    <div className="space-y-6">
+      <div className="relative overflow-hidden rounded-2xl bg-slate-950 p-6 text-white">
+        <div className="absolute inset-y-0 right-0 w-1/2 bg-gradient-to-l from-indigo-500/30 to-transparent" />
+        <div className="relative flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-indigo-200">Platform Control Center</p>
+            <h2 className="mt-2 text-2xl lg:text-3xl font-extrabold">Tenant monitoring and administration</h2>
+            <p className="mt-2 max-w-2xl text-sm text-slate-300">
+              Monitor store availability, billing health, plan limits, usage, domains, admins, and payment risk from one place.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 min-w-[280px]">
+            <HeroMetric label="MRR" value={money(totals.monthlyRevenue)} />
+            <HeroMetric label="ARR Estimate" value={money((totals.monthlyRevenue || 0) * 12 + (totals.yearlyRevenue || 0))} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 xl:grid-cols-6 gap-4">
+        <Stat label="Total Tenants" value={stats.tenants || totals.tenants || 0} icon="M17 20h5v-2a3 3 0 00-5.356-1.857" />
+        <Stat label="Active Stores" value={stats.activeTenants || totals.active || 0} accent="text-emerald-600" icon="M5 13l4 4L19 7" />
+        <Stat label="Suspended" value={totals.suspended || 0} accent="text-red-600" icon="M18.364 18.364A9 9 0 115.636 5.636" />
+        <Stat label="Trial / Past Due" value={`${totals.trial || 0}/${totals.pastDue || 0}`} accent="text-amber-600" icon="M12 8v4l3 3" />
+        <Stat label="Plans" value={stats.plans || plans.length} icon="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10" />
+        <Stat label="Admins" value={stats.admins || totals.admins || 0} icon="M16 7a4 4 0 11-8 0 4 4 0 018 0z" />
+      </div>
+
+      <div className="grid xl:grid-cols-3 gap-6">
+        <Panel title="Income & Payment Watch" action={<button onClick={() => onTab('billing')} className="text-xs font-bold text-indigo-600">Open billing</button>}>
+          <div className="grid grid-cols-2 gap-3">
+            <MiniMetric label="Pending payments" value={compact(totals.pendingPaymentCount)} sub={money(totals.pendingPaymentAmount)} tone="amber" />
+            <MiniMetric label="Tenant sales this month" value={money(totals.storeRevenueThisMonth)} sub="Across all stores" tone="emerald" />
+          </div>
+          <div className="mt-4 space-y-2">
+            {dueRows.length === 0 ? <EmptyLine text="No upcoming payment dates." /> : dueRows.map(t => <DueLine key={t._id} tenant={t} />)}
+          </div>
+        </Panel>
+
+        <Panel title="Risk Alerts" action={<span className="text-xs text-slate-400">{riskRows.length} alerts</span>}>
+          <div className="space-y-2">
+            {riskRows.length === 0 ? <EmptyLine text="No tenant risk alerts right now." /> : riskRows.slice(0, 8).map(t => (
+              <button key={t._id} onClick={() => onTab('tenants')} className="w-full text-left rounded-xl border border-slate-100 p-3 hover:bg-slate-50">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-slate-800 truncate">{t.storeName}</p>
+                    <p className="text-xs text-slate-400 truncate">{alertText(t)}</p>
+                  </div>
+                  <StatusPill status={t.alerts?.suspended ? 'suspended' : t.billing?.subscriptionStatus || t.status} />
+                </div>
+              </button>
+            ))}
+          </div>
+        </Panel>
+
+        <Panel title="Platform Usage">
+          <UsageSummary label="Products" value={totals.products || 0} />
+          <UsageSummary label="Orders this month" value={totals.ordersThisMonth || 0} />
+          <UsageSummary label="Store revenue total" value={money(totals.storeRevenue || 0)} />
+          <UsageSummary label="Mapped domains" value={rows.reduce((sum, t) => sum + (t.domains?.length || 0), 0)} />
+        </Panel>
+      </div>
+
+      <Panel title="Tenant Health Monitor" action={<button onClick={() => onTab('tenants')} className="text-xs font-bold text-indigo-600">Manage all</button>}>
+        <TenantMonitorGrid rows={rows.slice(0, 6)} onUpdate={onUpdate} onResetPassword={onResetPassword} />
+        {tenants.length === 0 && <p className="text-sm text-slate-400 py-6 text-center">No tenants yet — create one from the Tenants tab.</p>}
+      </Panel>
+    </div>
+  );
+}
+
+function HeroMetric({ label, value }) {
+  return (
+    <div className="rounded-xl bg-white/10 border border-white/10 p-4">
+      <p className="text-xs text-indigo-100">{label}</p>
+      <p className="mt-1 text-xl font-extrabold">{value}</p>
+    </div>
+  );
+}
+
+function Panel({ title, action, children }) {
+  return (
+    <section className="bg-white rounded-2xl border border-slate-200 p-5">
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <h2 className="text-base font-bold text-slate-900">{title}</h2>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function MiniMetric({ label, value, sub, tone = 'indigo' }) {
+  const tones = {
+    indigo: 'bg-indigo-50 text-indigo-700',
+    amber: 'bg-amber-50 text-amber-700',
+    emerald: 'bg-emerald-50 text-emerald-700',
+  };
+  return (
+    <div className={`rounded-xl p-4 ${tones[tone] || tones.indigo}`}>
+      <p className="text-xs font-semibold opacity-75">{label}</p>
+      <p className="mt-1 text-lg font-extrabold">{value}</p>
+      {sub && <p className="text-xs opacity-70">{sub}</p>}
+    </div>
+  );
+}
+
+function EmptyLine({ text }) {
+  return <p className="rounded-xl bg-slate-50 px-3 py-4 text-center text-sm text-slate-400">{text}</p>;
+}
+
+function DueLine({ tenant }) {
+  const date = tenant.billing?.nextPaymentDate || tenant.billing?.trialEndsAt;
+  const days = daysUntil(date);
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 px-3 py-2.5">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-slate-800 truncate">{tenant.storeName}</p>
+        <p className="text-xs text-slate-400">{shortDate(date)} {days != null ? `· ${days <= 0 ? 'due now' : `${days} days`}` : ''}</p>
+      </div>
+      <p className="text-sm font-bold text-slate-900">{money(tenant.billing?.nextPaymentAmount, tenant.plan?.currency || 'LKR')}</p>
+    </div>
+  );
+}
+
+function UsageSummary({ label, value }) {
+  return (
+    <div className="flex items-center justify-between border-b border-slate-100 last:border-0 py-3">
+      <span className="text-sm text-slate-500">{label}</span>
+      <span className="text-sm font-extrabold text-slate-900">{value}</span>
+    </div>
+  );
+}
+
+function StatusPill({ status }) {
+  const s = status || 'unknown';
+  const cls = {
+    active: 'bg-emerald-100 text-emerald-700',
+    trial: 'bg-sky-100 text-sky-700',
+    past_due: 'bg-amber-100 text-amber-700',
+    grace: 'bg-amber-100 text-amber-700',
+    suspended: 'bg-red-100 text-red-700',
+    cancelled: 'bg-slate-200 text-slate-600',
+    pending: 'bg-slate-100 text-slate-600',
+  }[s] || 'bg-slate-100 text-slate-600';
+  return <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold capitalize ${cls}`}>{String(s).replace(/_/g, ' ')}</span>;
+}
+
+function alertText(t) {
+  if (t.alerts?.suspended) return 'Store is unavailable to customers';
+  if (t.alerts?.pastDue) return 'Payment is past due or in grace period';
+  if (t.alerts?.paymentDueSoon) return 'Payment due within 7 days';
+  if (t.alerts?.hasNoDomain) return 'No active customer domain mapped';
+  if (t.alerts?.domainPending) return 'One or more domains are DNS pending';
+  return 'Needs review';
+}
+
+function UsageBar({ label, value, limit }) {
+  const p = percent(value, limit);
+  const tone = p >= 90 ? 'bg-red-500' : p >= 75 ? 'bg-amber-500' : 'bg-indigo-500';
+  return (
+    <div>
+      <div className="flex justify-between text-[11px] mb-1">
+        <span className="font-semibold text-slate-500">{label}</span>
+        <span className="text-slate-400">{compact(value)}{limit ? ` / ${compact(limit)}` : ''}</span>
+      </div>
+      <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+        <div className={`h-full rounded-full ${tone}`} style={{ width: `${limit ? p : 0}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function TenantMonitorGrid({ rows, onUpdate, onResetPassword }) {
+  if (!rows || rows.length === 0) return <p className="text-sm text-slate-400 py-6 text-center">No monitoring data available yet.</p>;
+  return (
+    <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+      {rows.map(t => {
+        const url = tenantStorefrontUrl(t);
+        const nextDate = t.billing?.nextPaymentDate || t.billing?.trialEndsAt || t.billing?.currentPeriodEnd;
+        return (
+          <div key={t._id} className="rounded-2xl border border-slate-200 p-4 hover:shadow-sm transition-shadow">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-extrabold text-slate-900 truncate">{t.storeName}</p>
+                <p className="text-xs text-slate-400 truncate">{t.owner?.email || t.slug}</p>
+              </div>
+              <StatusPill status={t.billing?.subscriptionStatus || t.status} />
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+              <MiniInfo label="Plan" value={t.plan?.name || '-'} />
+              <MiniInfo label="Next pay" value={nextDate ? shortDate(nextDate) : '-'} />
+              <MiniInfo label="Amount" value={money(t.billing?.nextPaymentAmount || t.plan?.price || 0, t.plan?.currency || 'LKR')} />
+              <MiniInfo label="Domains" value={`${(t.domains || []).filter(d => d.active).length} active`} />
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <UsageBar label="Products" value={t.usage?.products || 0} limit={t.usage?.productLimit || 0} />
+              <UsageBar label="Orders / month" value={t.usage?.ordersThisMonth || 0} limit={t.usage?.ordersPerMonthLimit || 0} />
+              <UsageBar label="Admins" value={t.usage?.admins || 0} limit={t.usage?.adminLimit || 0} />
+              <UsageBar label="Storage MB" value={t.usage?.storageMb || 0} limit={t.usage?.storageLimitMb || 0} />
+            </div>
+
+            <div className="mt-4 rounded-xl bg-slate-50 p-3">
+              <p className="text-xs font-bold text-slate-500 mb-2">Alerts</p>
+              <div className="flex flex-wrap gap-1.5">
+                {t.alerts?.suspended && <AlertChip tone="red" text="Unavailable" />}
+                {t.alerts?.pastDue && <AlertChip tone="amber" text="Past due" />}
+                {t.alerts?.paymentDueSoon && <AlertChip tone="amber" text="Due soon" />}
+                {t.alerts?.hasNoDomain && <AlertChip tone="slate" text="No domain" />}
+                {t.alerts?.domainPending && <AlertChip tone="sky" text="DNS pending" />}
+                {!alertText(t).includes('Needs') ? null : <span className="text-xs text-slate-400">No alerts</span>}
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {url && <a href={url} target="_blank" rel="noreferrer" className="h-8 px-3 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-bold inline-flex items-center">Open</a>}
+              <button onClick={() => onResetPassword(t._id)} className="h-8 px-3 rounded-lg bg-slate-900 text-white text-xs font-bold">Reset Admin</button>
+              <button
+                onClick={() => onUpdate(t._id, { status: t.status === 'active' ? 'suspended' : 'active' })}
+                className={`h-8 px-3 rounded-lg text-xs font-bold ${t.status === 'active' ? 'bg-red-50 text-red-700 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
+              >
+                {t.status === 'active' ? 'Deactivate' : 'Activate'}
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MiniInfo({ label, value }) {
+  return (
+    <div className="rounded-xl bg-slate-50 px-3 py-2">
+      <p className="text-[10px] uppercase tracking-wide text-slate-400 font-bold">{label}</p>
+      <p className="mt-0.5 font-bold text-slate-800 truncate">{value}</p>
+    </div>
+  );
+}
+
+function AlertChip({ tone, text }) {
+  const cls = {
+    red: 'bg-red-100 text-red-700',
+    amber: 'bg-amber-100 text-amber-700',
+    sky: 'bg-sky-100 text-sky-700',
+    slate: 'bg-slate-200 text-slate-600',
+  }[tone] || 'bg-slate-100 text-slate-600';
+  return <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${cls}`}>{text}</span>;
 }
 
 function Input({ label, value, onChange, type = 'text', placeholder = '', required = false }) {

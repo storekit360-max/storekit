@@ -63,11 +63,13 @@ export default function AdminSEO() {
     }).catch(() => {});
     API.get('/products?limit=100').then(r => setProducts(r.data.products || [])).catch(() => {});
     API.get('/categories').then(r => setCategories(r.data || [])).catch(() => {});
-    // Load saved robots.txt
-    const saved = localStorage.getItem('storekit_robots');
-    if (saved) setRobotsTxt(saved);
-    else setRobotsTxt(`User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /checkout\nDisallow: /account\nDisallow: /cart\n\nSitemap: ${window.location.origin}/sitemap.xml`);
   }, []);
+
+  useEffect(() => {
+    const base = settings.siteUrl || window.location.origin;
+    const fallback = `User-agent: *\nAllow: /\nDisallow: /admin/\nDisallow: /superadmin/\nDisallow: /api/\nDisallow: /checkout\nDisallow: /cart\nDisallow: /account\nDisallow: /my-orders\nDisallow: /returns\n\nSitemap: ${base}/sitemap.xml`;
+    setRobotsTxt(settings.robotsTxt || fallback);
+  }, [settings.siteUrl, settings.robotsTxt]);
 
   const saveSettings = async (patch = {}) => {
     const merged = { ...settings, ...patch };
@@ -103,7 +105,7 @@ export default function AdminSEO() {
       if (merged.capiTestEventCode !== undefined) {
         await API.put('/settings', { meta_test_event_code: merged.capiTestEventCode }).catch(() => {});
       }
-      const payload = { ...merged, seo_config };
+      const payload = { ...merged, robotsTxt, seo_config };
       await API.put('/settings', payload);
       // Immediately inject into window so analytics fires without page reload
       window.__STOREKIT_SEO__ = seo_config;
@@ -149,7 +151,7 @@ export default function AdminSEO() {
       { loc: base, priority: '1.0', freq: 'daily' },
       { loc: `${base}/shop`, priority: '0.9', freq: 'daily' },
       { loc: `${base}/gift-cards`, priority: '0.7', freq: 'weekly' },
-      ...categories.map(c => ({ loc: `${base}/shop/${c.slug}`, priority: '0.8', freq: 'weekly' })),
+      ...categories.map(c => ({ loc: `${base}/category/${c.slug}`, priority: '0.8', freq: 'weekly' })),
       ...products.filter(p => p.isActive).map(p => ({ loc: `${base}/product/${p.slug}`, priority: '0.7', freq: 'weekly' })),
     ];
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -175,7 +177,7 @@ ${urls.map(u => `  <url>
     toast.success(`${filename} downloaded!`);
   };
 
-  const saveRobots = () => { localStorage.setItem('storekit_robots', robotsTxt); toast.success('Robots.txt saved!'); };
+  const saveRobots = () => saveSettings({ robotsTxt });
 
   const overallScore = vitals
     ? Math.round(Object.values(vitals).filter(v => typeof v.score === 'number').reduce((s, v) => s + v.score, 0) / Object.values(vitals).filter(v => typeof v.score === 'number').length)
