@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const categorySchema = new mongoose.Schema({
   tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   name: { type: String, required: true },
-  slug: { type: String, required: true },
+  slug: { type: String },
   description: String,
   image: String,
   parent: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', default: null },
@@ -12,11 +12,11 @@ const categorySchema = new mongoose.Schema({
   sortOrder: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now }
 });
-categorySchema.index({ tenantId: 1, slug: 1 }, { unique: true });
 categorySchema.pre('save', function(next) {
   if (!this.slug) this.slug = this.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g,'');
   next();
 });
+categorySchema.index({ tenantId: 1, slug: 1 }, { unique: true, sparse: true });
 const Category = mongoose.model('Category', categorySchema);
 
 // Coupon
@@ -56,7 +56,7 @@ const couponSchema = new mongoose.Schema({
   usedByEmails: [{ type: String, lowercase: true, trim: true }],
   createdAt: { type: Date, default: Date.now }
 });
-couponSchema.index({ tenantId: 1, code: 1 }, { unique: true });
+couponSchema.index({ tenantId: 1, code: 1 }, { unique: true, sparse: true });
 const Coupon = mongoose.model('Coupon', couponSchema);
 
 // Banner - Enhanced with full banner system support
@@ -141,13 +141,13 @@ const settingsSchema = new mongoose.Schema({
   group: { type: String, default: 'general' },
   updatedAt: { type: Date, default: Date.now }
 });
-settingsSchema.index({ tenantId: 1, key: 1 }, { unique: true });
+settingsSchema.index({ tenantId: 1, key: 1 }, { unique: true, sparse: true });
 const Settings = mongoose.model('Settings', settingsSchema);
 
 // GiftCard
 const giftCardSchema = new mongoose.Schema({
   tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
-  code: { type: String, uppercase: true, required: true },
+  code: { type: String, unique: true, uppercase: true, required: true },
   initialValue: { type: Number, required: true },
   balance: { type: Number, required: true },
   purchasedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -180,7 +180,7 @@ const giftCardSchema = new mongoose.Schema({
   rejectedAt: Date,
   createdAt: { type: Date, default: Date.now }
 });
-giftCardSchema.index({ tenantId: 1, code: 1 }, { unique: true });
+giftCardSchema.index({ tenantId: 1, code: 1 }, { unique: true, sparse: true });
 const GiftCard = mongoose.model('GiftCard', giftCardSchema);
 
 // ── ReturnRequest ─────────────────────────────────────────────────────────────
@@ -307,14 +307,14 @@ const paymentGatewaySchema = new mongoose.Schema({
   supportedCurrencies: [String],
   updatedAt: { type: Date, default: Date.now }
 });
-paymentGatewaySchema.index({ tenantId: 1, gateway: 1 }, { unique: true });
+paymentGatewaySchema.index({ tenantId: 1, gateway: 1 }, { unique: true, sparse: true });
 const PaymentGateway = mongoose.model('PaymentGateway', paymentGatewaySchema);
 
 // DeliveryService
 const deliveryServiceSchema = new mongoose.Schema({
   tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   name: { type: String, required: true },
-  code: { type: String, required: true },
+  code: { type: String, required: true, unique: true },
   isEnabled: { type: Boolean, default: false },
   codAllowed: { type: Boolean, default: true },
   sortOrder: { type: Number, default: 0 },
@@ -340,7 +340,6 @@ const deliveryServiceSchema = new mongoose.Schema({
   updatedAt: Date,
   createdAt: { type: Date, default: Date.now }
 });
-deliveryServiceSchema.index({ tenantId: 1, code: 1 }, { unique: true });
 const DeliveryService = mongoose.model('DeliveryService', deliveryServiceSchema);
 
 // BusinessPage
@@ -357,7 +356,7 @@ const businessPageSchema = new mongoose.Schema({
   sortOrder: { type: Number, default: 0 },
   updatedAt: { type: Date, default: Date.now }
 });
-businessPageSchema.index({ tenantId: 1, slug: 1 }, { unique: true });
+businessPageSchema.index({ tenantId: 1, slug: 1 }, { unique: true, sparse: true });
 const BusinessPage = mongoose.model('BusinessPage', businessPageSchema);
 
 // Newsletter subscriber
@@ -369,7 +368,7 @@ const subscriberSchema = new mongoose.Schema({
   source: { type: String, default: 'website' },
   createdAt: { type: Date, default: Date.now }
 });
-subscriberSchema.index({ tenantId: 1, email: 1 }, { unique: true });
+subscriberSchema.index({ tenantId: 1, email: 1 }, { unique: true, sparse: true });
 const Subscriber = mongoose.model('Subscriber', subscriberSchema);
 
 module.exports = {

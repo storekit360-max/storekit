@@ -22,6 +22,9 @@
 
 const express    = require('express');
 const mongoose   = require('mongoose');
+const { installTenantScope, tenantContextMiddleware } = require('./middleware/tenantContext');
+const { optionalTenant } = require('./middleware/tenant');
+installTenantScope(mongoose);
 const cors       = require('cors');
 const path       = require('path');
 require('dotenv').config();
@@ -118,6 +121,16 @@ app.use((req, _res, next) => {
   next();
 });
 
+// ─── Tenant resolution + automatic tenant query scope ────────────────────────
+// Every storefront/admin API request carries the real tenant domain in Origin or
+// X-Tenant-Domain. This middleware attaches req.tenantId and AsyncLocalStorage
+// then automatically scopes all tenant-aware Mongoose models. Superadmin routes
+// intentionally bypass this to manage all tenants globally.
+app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/superadmin') || req.path === '/health') return next();
+  optionalTenant(req, res, () => tenantContextMiddleware(req, res, next));
+});
+
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', time: new Date() }));
 
@@ -128,7 +141,6 @@ app.use('/api/auth/login', loginLimiter);
 app.use('/api/auth',          require('./routes/auth'));
 app.use('/api/tenant',        require('./routes/tenant'));
 app.use('/api/superadmin',    require('./routes/superadmin'));
-app.use('/api/superadmin/billing', require('./routes/superadminBilling'));
 
 // ─── Public routes ────────────────────────────────────────────────────────────
 app.use('/api/products',      require('./routes/products'));
@@ -161,7 +173,6 @@ app.get('/robots.txt',  (req, res) => res.redirect(301, '/api/seo/robots.txt'));
 //           responses are identical to before.
 app.use('/api/admin', auditLog, require('./routes/admin'));
 app.use('/api/admin/reset', require('./routes/reset'));
-app.use('/api/admin/billing', require('./routes/adminBilling'));
 
 // ─── Other routes ─────────────────────────────────────────────────────────────
 app.use('/api/whatsapp',      require('./routes/whatsapp'));

@@ -1,21 +1,5 @@
 const mongoose = require('mongoose');
 
-function slugify(value = '') {
-  let slug = String(value)
-    .trim()
-    .toLowerCase()
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-  const MAX_SLUG_LEN = 75;
-  if (slug.length > MAX_SLUG_LEN) {
-    slug = slug.slice(0, MAX_SLUG_LEN);
-    slug = slug.slice(0, slug.lastIndexOf('-')) || slug.slice(0, MAX_SLUG_LEN);
-    slug = slug.replace(/-$/, '');
-  }
-  return slug || 'product';
-}
-
 const variantOptionSchema = new mongoose.Schema({
   name: { type: String, required: true },       // e.g. "Size", "Color", "Material"
   type: { type: String, enum: ['size','color','text','button','material','style','storage','weight','flavor'], default: 'button' },
@@ -32,7 +16,7 @@ const variantOptionSchema = new mongoose.Schema({
 const productSchema = new mongoose.Schema({
   tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   name: { type: String, required: true },
-  slug: { type: String, required: true },
+  slug: { type: String },
   description: { type: String, required: true },
   shortDescription: String,
   price: { type: Number, required: true },
@@ -72,20 +56,20 @@ const productSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-productSchema.pre('validate', function(next) {
-  if (!this.slug && this.name) this.slug = slugify(this.name);
-  if (this.slug) this.slug = slugify(this.slug);
-  next();
-});
-
 productSchema.pre('save', function(next) {
-  if (!this.slug && this.name) this.slug = slugify(this.name);
+  if (!this.slug) {
+    let slug = this.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const MAX_SLUG_LEN = 75;
+    if (slug.length > MAX_SLUG_LEN) {
+      slug = slug.slice(0, MAX_SLUG_LEN);
+      slug = slug.slice(0, slug.lastIndexOf('-')) || slug.slice(0, MAX_SLUG_LEN);
+      slug = slug.replace(/-$/, '');
+    }
+    this.slug = slug;
+  }
   this.updatedAt = Date.now();
   next();
 });
 
-
-productSchema.index({ tenantId: 1, slug: 1 }, { unique: true });
-productSchema.index({ tenantId: 1, category: 1 });
-
-module.exports = mongoose.model('Product', productSchema);
+productSchema.index({ tenantId: 1, slug: 1 }, { unique: true, sparse: true });
+module.exports = mongoose.models.Product || mongoose.model('Product', productSchema);
