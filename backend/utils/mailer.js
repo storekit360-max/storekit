@@ -1,13 +1,43 @@
 const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 
 // ── Resend client ─────────────────────────────────────────────────────────────
 const getResendClient = () => {
-  return new Resend(process.env.RESEND_API_KEY || 're_6rTy1uYg_Pyw8zzzKx7EKKsxk8pRTmHVe');
+  const apiKey = (process.env.RESEND_API_KEY || '').trim();
+  if (!apiKey) throw new Error('RESEND_API_KEY is not configured');
+  return new Resend(apiKey);
 };
+
+const looksUnset = (value) => {
+  const v = String(value || '').trim().toLowerCase();
+  return !v || v.includes('your_') || v.includes('change_this') || v.includes('example');
+};
+
+const hasSmtpConfig = () => (
+  !looksUnset(process.env.EMAIL_HOST)
+  && !looksUnset(process.env.EMAIL_USER)
+  && !looksUnset(process.env.EMAIL_PASS)
+);
+
+const createSmtpTransport = () => nodemailer.createTransport({
+  host: process.env.EMAIL_HOST,
+  port: Number(process.env.EMAIL_PORT || 587),
+  secure: String(process.env.EMAIL_PORT || '') === '465',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
 
 // ── SMTP connection verification (called once at startup) ─────────────────────
 const verifySmtp = async () => {
   try {
+    if (hasSmtpConfig()) {
+      await createSmtpTransport().verify();
+      console.log('[MAIL] ✅ SMTP verified — emails will work');
+      return;
+    }
+
     const resend = getResendClient();
     await resend.emails.send({
       from: 'onboarding@resend.dev',
@@ -17,8 +47,8 @@ const verifySmtp = async () => {
     });
     console.log('[MAIL] ✅ Resend API verified — emails will work');
   } catch (err) {
-    console.error('[MAIL] ❌ Resend API FAILED:', err.message);
-    console.error('[MAIL] ⚠️  Check RESEND_API_KEY in your Railway env vars.');
+    console.error('[MAIL] ❌ Email provider verification failed:', err.message);
+    console.error('[MAIL] ⚠️  Configure either RESEND_API_KEY or EMAIL_HOST/EMAIL_USER/EMAIL_PASS in Railway env vars.');
   }
 };
 
@@ -45,11 +75,28 @@ const getFromAddress = async (theme) => {
   return `${storeName} <onboarding@resend.dev>`;
 };
 
+const getSmtpFromAddress = (theme) => (
+  process.env.EMAIL_FROM && !looksUnset(process.env.EMAIL_FROM)
+    ? process.env.EMAIL_FROM
+    : `${theme?.storeName || 'StoreKit'} <${process.env.EMAIL_USER}>`
+);
+
 // ── sendMail ──────────────────────────────────────────────────────────────────
 const sendMail = async ({ to, subject, html }) => {
   try {
-    const resend = getResendClient();
     const theme = await getTheme().catch(() => ({ storeName: 'StoreKit', primary: '#15803d' }));
+
+    if (hasSmtpConfig()) {
+      const from = getSmtpFromAddress(theme);
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[MAIL] Sending via SMTP | from:${from} → to:${to}`);
+      }
+      const info = await createSmtpTransport().sendMail({ from, to, subject, html });
+      console.log(`[MAIL SENT] To:${to} | ${subject} | id:${info?.messageId}`);
+      return info;
+    }
+
+    const resend = getResendClient();
     const from = await getFromAddress(theme);
 
     // Dev-mode hint: remind developers which sender is being used
