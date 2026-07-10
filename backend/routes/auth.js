@@ -89,6 +89,42 @@ async function resolveTenantFromRequest(req) {
   }).lean();
 }
 
+function cleanUsernameBase(value, fallback = 'user') {
+  return String(value || fallback).replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20) || fallback;
+}
+
+async function makeUniqueUsername(baseValue, tenantId, excludeId = null) {
+  const base = cleanUsernameBase(baseValue);
+  let username = base;
+  let attempt = 0;
+  const filter = { tenantId: tenantId || null, username };
+  if (excludeId) filter._id = { $ne: excludeId };
+
+  while (await User.findOne(filter)) {
+    attempt += 1;
+    username = `${base}_${attempt}`;
+    filter.username = username;
+  }
+  return username;
+}
+
+async function attachLegacyCustomerToTenant(user, tenantId) {
+  if (!user || !tenantId || user.tenantId || user.role !== 'customer') return user;
+
+  const usernameTaken = await User.findOne({
+    tenantId,
+    username: user.username,
+    _id: { $ne: user._id },
+  });
+  if (usernameTaken) {
+    user.username = await makeUniqueUsername(user.username || user.email?.split('@')[0], tenantId, user._id);
+  }
+
+  user.tenantId = tenantId;
+  await user.save();
+  return user;
+}
+
 // ─── Password strength validator ─────────────────────────────────────────────
 // Returns { valid: Boolean, errors: String[] } — unchanged from original.
 function validatePasswordStrength(password) {
@@ -108,28 +144,33 @@ function validatePasswordStrength(password) {
 router.post('/register', async (req, res, next) => {
   try {
     const { firstName, lastName, username, email, password, phone } = req.body;
+    const tenant = await resolveTenantFromRequest(req);
+    const tenantId = tenant?._id || null;
+    const normalizedEmail = String(email || '').toLowerCase().trim();
 
     const pwCheck = validatePasswordStrength(password);
     if (!pwCheck.valid) {
       return res.status(400).json({ message: 'Password is too weak', errors: pwCheck.errors });
     }
 
-    const exists = await User.findOne({ $or: [{ email }, { username }] });
+    const exists = await User.findOne({ tenantId, $or: [{ email: normalizedEmail }, { username }] });
     if (exists) {
       return res.status(400).json({
-        message: exists.email === email ? 'Email already registered' : 'Username already taken',
+        message: exists.email === normalizedEmail ? 'Email already registered' : 'Username already taken',
       });
     }
 
-    const user = await User.create({ firstName, lastName, username, email, password, phone });
+    const user = await User.create({ tenantId, firstName, lastName, username, email: normalizedEmail, password, phone });
 
     const newUserCoupon = await Coupon.findOne({
+      tenantId,
       isNewUserOnly: true,
       isActive:      true,
       validUntil:    { $gte: new Date() },
     });
 
     await Notification.create({
+      tenantId,
       type:    'new_user',
       title:   'New Customer Registered',
       message: `${firstName} ${lastName} just created an account`,
@@ -222,6 +263,8 @@ router.post('/google', async (req, res, next) => {
   try {
     const { credential } = req.body;
     if (!credential) return res.status(400).json({ message: 'Google credential is required' });
+    const tenant = await resolveTenantFromRequest(req);
+    const tenantId = tenant?._id || null;
 
     const ticket = await googleClient.verifyIdToken({
       idToken:  credential,
@@ -229,24 +272,24 @@ router.post('/google', async (req, res, next) => {
     });
     const payload = ticket.getPayload();
     const { email, given_name, family_name, picture, sub: googleId } = payload;
+    const normalizedEmail = String(email || '').toLowerCase().trim();
 
-    let user = await User.findOne({ googleId });
-    if (!user) user = await User.findOne({ email });
+    let user = await User.findOne(tenantId ? { tenantId, googleId } : { googleId });
+    if (!user) user = await User.findOne(tenantId ? { tenantId, email: normalizedEmail } : { email: normalizedEmail });
+    if (!user && tenantId) {
+      const legacyUser = await User.findOne({ tenantId: null, email: normalizedEmail, role: 'customer' });
+      if (legacyUser) user = await attachLegacyCustomerToTenant(legacyUser, tenantId);
+    }
 
     if (!user) {
-      const base = (email.split('@')[0]).replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20) || 'user';
-      let username = base;
-      let attempt  = 0;
-      while (await User.findOne({ username })) {
-        attempt++;
-        username = `${base}_${attempt}`;
-      }
+      const username = await makeUniqueUsername(normalizedEmail.split('@')[0], tenantId);
 
       user = await User.create({
+        tenantId,
         firstName:  given_name  || 'User',
         lastName:   family_name || '',
         username,
-        email,
+        email:      normalizedEmail,
         password:   crypto.randomBytes(32).toString('hex'),
         googleId,
         avatar:     picture || '',
@@ -254,9 +297,10 @@ router.post('/google', async (req, res, next) => {
       });
 
       await Notification.create({
+        tenantId,
         type:    'new_user',
         title:   'New Customer (Google)',
-        message: `${given_name || email} signed up via Google`,
+        message: `${given_name || normalizedEmail} signed up via Google`,
         link:    '/admin/customers',
       });
     }
@@ -266,6 +310,7 @@ router.post('/google', async (req, res, next) => {
     let dirty = false;
     if (!user.googleId)          { user.googleId = googleId; dirty = true; }
     if (!user.avatar && picture) { user.avatar   = picture;  dirty = true; }
+    if (tenantId && !user.tenantId && user.role === 'customer') { user.tenantId = tenantId; dirty = true; }
     user.lastLogin = Date.now();
     if (dirty) await user.save();
     else await User.findByIdAndUpdate(user._id, { lastLogin: Date.now() });
@@ -305,9 +350,13 @@ router.post('/forgot-password', async (req, res, next) => {
 
     const normalizedEmail = email.toLowerCase().trim();
     const tenant = await resolveTenantFromRequest(req);
-    const user = await User.findOne(tenant
+    let user = await User.findOne(tenant
       ? { tenantId: tenant._id, email: normalizedEmail }
       : { email: normalizedEmail });
+    if (!user && tenant) {
+      const legacyUser = await User.findOne({ tenantId: null, email: normalizedEmail, role: 'customer' });
+      if (legacyUser) user = await attachLegacyCustomerToTenant(legacyUser, tenant._id);
+    }
     if (!user) {
       return res.status(404).json({ message: 'No account found with this email address' });
     }
