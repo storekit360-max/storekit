@@ -4,8 +4,8 @@ const Tenant = require('../models/Tenant');
 const { currentTenantId, withoutTenantScope } = require('../middleware/tenantContext');
 
 // ── Resend client ─────────────────────────────────────────────────────────────
-const getResendClient = () => {
-  const apiKey = (process.env.RESEND_API_KEY || '').trim();
+const getResendClient = (overrideApiKey = '') => {
+  const apiKey = (overrideApiKey || process.env.RESEND_API_KEY || '').trim();
   if (!apiKey) throw new Error('RESEND_API_KEY is not configured');
   return new Resend(apiKey);
 };
@@ -125,7 +125,7 @@ const sendMail = async ({ to, subject, html, tenantId, tenant }) => {
       return info;
     }
 
-    const resend = getResendClient();
+    const resend = getResendClient(theme.resendApiKey);
     const from = await getFromAddress(theme);
     const replyTo = theme.emailReplyTo || theme.storeEmail || undefined;
 
@@ -158,15 +158,25 @@ const sendMail = async ({ to, subject, html, tenantId, tenant }) => {
 
 // ── Admin email helper ────────────────────────────────────────────────────────
 const getAdminEmail = async () => {
-  if (process.env.ADMIN_EMAIL) return process.env.ADMIN_EMAIL;
-  if (process.env.EMAIL_USER)  return process.env.EMAIL_USER;
   try {
+    const tenantId = currentTenantId();
+    if (tenantId) {
+      const tenant = await withoutTenantScope(() => Tenant.findById(tenantId).populate('owner', 'email').lean());
+      const settings = tenant?.settings || {};
+      if (settings.orderNotificationEmail) return settings.orderNotificationEmail;
+      if (settings.adminEmail) return settings.adminEmail;
+      if (tenant?.owner?.email) return tenant.owner.email;
+      if (settings.storeEmail) return settings.storeEmail;
+    }
+
     const { Settings } = require('../models/index');
     const row = await Settings.findOne({ key: 'adminEmail' }).lean();
     if (row?.value) return row.value;
     const smtpRow = await Settings.findOne({ key: 'smtpUser' }).lean();
     if (smtpRow?.value) return smtpRow.value;
   } catch {}
+  if (process.env.ADMIN_EMAIL) return process.env.ADMIN_EMAIL;
+  if (process.env.EMAIL_USER)  return process.env.EMAIL_USER;
   return null;
 };
 
@@ -194,6 +204,7 @@ const getTheme = async ({ tenantId, tenant } = {}) => {
           emailFromName:    settings.emailFromName || row.storeName || 'StoreKit',
           emailFromAddress: settings.emailFromAddress || '',
           emailReplyTo:     settings.emailReplyTo || settings.storeEmail || '',
+          resendApiKey:     settings.resendApiKey || '',
         };
         _themeCache.set(cacheKey, { at: now, value });
         return value;
@@ -979,6 +990,17 @@ setTimeout(() => verifySmtp(), 3000);
 // Returns true by default if the key is missing (safe for existing installs).
 const isEmailEnabled = async (key) => {
   try {
+    const tenantId = currentTenantId();
+    if (tenantId) {
+      const tenant = await withoutTenantScope(() => Tenant.findById(tenantId).select('settings').lean());
+      const value = tenant?.settings?.[`emailNotif_${key}`];
+      if (value !== undefined && value !== null) {
+        if (typeof value === "boolean") return value;
+        if (typeof value === "string") return value !== "false" && value !== "0";
+        return Boolean(value);
+      }
+    }
+
     const { Settings } = require("./../models/index");
     const row = await Settings.findOne({ key: `emailNotif_${key}` }).lean();
     if (!row) return true; // default enabled

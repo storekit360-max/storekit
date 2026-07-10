@@ -79,6 +79,11 @@ const Toggle = ({ label, desc, value, onChange }) => (
   </div>
 );
 
+const withoutClientSecrets = (settings = {}) => {
+  const { resendApiKey, ...safeSettings } = settings;
+  return safeSettings;
+};
+
 // SaveBar receives onSave + saving as props so it does not need to close over
 // the parent's state (which would force it back inside the component).
 const SaveBar = ({ onSave, saving }) => (
@@ -105,7 +110,7 @@ export default function AdminSettings() {
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState({
     storeName:'', storeTagline:'', storeEmail:'', storePhone:'', storeAddress:'',
-    emailFromName:'', emailFromAddress:'', emailReplyTo:'',
+    emailFromName:'', emailFromAddress:'', emailReplyTo:'', resendApiKey:'', resendApiKeyConfigured:false,
     currency:'LKR', currencySymbol:'Rs.',
     standardDelivery:600, freeDeliveryThreshold:5000,
     codEnabled:true, bankTransferEnabled:true,
@@ -196,21 +201,23 @@ export default function AdminSettings() {
     setSaving(true);
     try {
       const res = await API.put('/settings', settings);
+      const safeSettings = withoutClientSecrets(settings);
       // Treat any non-success response as an error so the toast is accurate
       if (res.data && res.data.success === false) {
         throw new Error(res.data.message || 'Server returned success:false');
       }
       // Apply theme and cache — wrapped separately so a non-critical failure
       // here does NOT trigger the "Failed to save" toast.
-      try { applyTheme(settings); } catch (themeErr) {
+      try { applyTheme(safeSettings); } catch (themeErr) {
         console.warn('applyTheme error (non-critical):', themeErr);
       }
       try {
-        localStorage.setItem('storekit_theme_v2', JSON.stringify(settings));
+        localStorage.setItem('storekit_theme_v2', JSON.stringify(safeSettings));
       } catch (lsErr) {
         console.warn('localStorage error (non-critical):', lsErr);
       }
       toast.success('✅ Settings saved & applied!');
+      setSettings(p => p.resendApiKey ? ({ ...p, resendApiKey:'', resendApiKeyConfigured:true }) : p);
     } catch (err) {
       console.error('Save settings error:', err);
       // Show the specific server message when available, otherwise a clear
@@ -1446,6 +1453,15 @@ export default function AdminSettings() {
                       onChange={e=>setSettings(p=>({...p,emailReplyTo:e.target.value}))}
                       placeholder={settings.storeEmail || 'support@yourstore.com'}
                       hint="Customer replies go here. Leave empty to use Store Email."
+                      col2
+                    />
+                    <F
+                      label="Resend API Key"
+                      type="password"
+                      value={settings.resendApiKey}
+                      onChange={e=>setSettings(p=>({...p,resendApiKey:e.target.value}))}
+                      placeholder={settings.resendApiKeyConfigured ? 'Configured - leave blank to keep current key' : 're_...'}
+                      hint={settings.resendApiKeyConfigured ? 'A tenant Resend key is saved. Enter a new key only when replacing it.' : 'Paste this store Resend secret key here. It is saved securely and not shown again.'}
                       col2
                     />
                   </div>

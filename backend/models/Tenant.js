@@ -21,6 +21,7 @@ const tenantSchema = new mongoose.Schema({
     emailFromName: { type: String, default: '' },
     emailFromAddress: { type: String, default: '' },
     emailReplyTo: { type: String, default: '' },
+    resendApiKey: { type: String, default: '' },
     phone: { type: String, default: '' },
     whatsapp: { type: String, default: '' },
     currency: { type: String, default: 'LKR' },

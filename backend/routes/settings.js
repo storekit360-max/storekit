@@ -17,6 +17,7 @@ const THEME_KEYS = new Set([
 
 const SETTINGS_CACHE_TTL = 30 * 1000;
 const _settingsCache = new Map();
+const SECRET_SETTING_KEYS = new Set(['resendApiKey']);
 
 function invalidateSettingsCache(scope = null) {
   if (!scope) return _settingsCache.clear();
@@ -44,11 +45,14 @@ function isLocalDomain(domain) {
 }
 
 function tenantSettingsResponse(tenant) {
-  const settings = toPlain(tenant.settings);
+  const rawSettings = toPlain(tenant.settings);
+  const settings = { ...rawSettings };
+  SECRET_SETTING_KEYS.forEach(key => { delete settings[key]; });
   const theme = normalizeTheme(toPlain(tenant.theme));
   return {
     ...settings,
     ...theme,
+    resendApiKeyConfigured: !!rawSettings.resendApiKey,
     storeName: tenant.storeName,
     tenantId: tenant._id,
     plan: tenant.plan?.name,
@@ -186,6 +190,12 @@ router.put('/', adminAuth, async (req, res) => {
 
       for (const [key, value] of entries) {
         if (key === 'tenantId' || key === 'plan' || key === 'features' || key === 'limits') continue;
+        if (SECRET_SETTING_KEYS.has(key)) {
+          const secret = String(value || '').trim();
+          if (!secret || secret.includes('••••')) continue;
+          nextSettings[key] = secret;
+          continue;
+        }
         if (key === 'storeName') {
           tenant.storeName = value;
         } else if (THEME_KEYS.has(key)) {
