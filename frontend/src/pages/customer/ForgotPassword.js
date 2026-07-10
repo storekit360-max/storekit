@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import API from '../../utils/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
+import { useTheme } from '../../context/ThemeContext';
 
 // ─── Password strength helpers ────────────────────────────────────────────────
 const RULES = [
@@ -72,6 +73,7 @@ function PasswordStrengthMeter({ password }) {
 export default function ForgotPassword() {
   const navigate = useNavigate();
   const { loginWithGoogle: loginDirect } = useAuth(); // reuse the same setter
+  const { settings } = useTheme();
 
   const [step, setStep] = useState(1); // 1=email, 2=otp, 3=new password
   const [email, setEmail] = useState('');
@@ -162,45 +164,64 @@ export default function ForgotPassword() {
     if (e.key === 'Backspace' && !otp[idx] && idx > 0) document.getElementById(`otp-${idx - 1}`)?.focus();
   }, [otp]);
 
+  const storeName = settings?.storeName || 'StoreKit';
+  const primary = settings?.primaryColor || 'var(--color-primary, #15803d)';
+
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen flex items-center justify-center px-4 py-12" style={{ background: 'var(--body-bg, #fafaf8)' }}>
       <div className="w-full max-w-md fade-in">
 
         {/* Header */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2 mb-6">
-            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-lg">
-              <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-              </svg>
-            </div>
-            <span className="font-display font-bold text-2xl text-gray-900">StoreKit</span>
+            {settings?.logoUrl ? (
+              <img src={settings.logoUrl} alt={storeName} className="h-10 max-w-[180px] object-contain" />
+            ) : (
+              <>
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg" style={{ background: 'var(--theme-gradient)' }}>
+                  <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+                <span className="font-display font-bold text-2xl text-gray-900" style={{ color: 'var(--text-primary, #111827)' }}>{storeName}</span>
+              </>
+            )}
           </Link>
 
           {/* Step indicator */}
           <div className="flex items-center justify-center gap-2 mb-6">
             {[1, 2, 3].map(s => (
               <div key={s} className="flex items-center gap-2">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${step >= s ? 'bg-primary text-white shadow-lg' : 'bg-gray-200 text-gray-400'}`}>
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all"
+                  style={step >= s
+                    ? { background: primary, color: '#fff', boxShadow: '0 10px 28px var(--glow-primary, rgba(21,128,61,0.25))' }
+                    : { background: '#e5e7eb', color: '#9ca3af' }}
+                >
                   {step > s ? '✓' : s}
                 </div>
-                {s < 3 && <div className={`w-8 h-0.5 transition-all ${step > s ? 'bg-primary' : 'bg-gray-200'}`} />}
+                {s < 3 && (
+                  <div
+                    className="w-8 h-0.5 transition-all"
+                    style={{ background: step > s ? primary : '#e5e7eb' }}
+                  />
+                )}
               </div>
             ))}
           </div>
 
-          <h1 className="font-display text-2xl font-bold text-gray-900">
+          <h1 className="font-display text-2xl font-bold" style={{ color: 'var(--text-primary, #111827)' }}>
             {step === 1 ? 'Forgot Password?' : step === 2 ? 'Enter OTP' : 'New Password'}
           </h1>
-          <p className="text-gray-500 mt-1 text-sm">
+          <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary, #6b7280)' }}>
             {step === 1 ? 'Enter your email to receive an OTP'
               : step === 2 ? `We sent a 6-digit OTP to ${email}`
               : 'Choose a strong new password'}
           </p>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-xl p-8">
+        <div className="rounded-2xl border shadow-xl p-8" style={{ background: 'var(--card-bg, #fff)', borderColor: 'var(--border-color, #f3f4f6)' }}>
 
           {/* ── Step 1: Email ─────────────────────────────────────────────────── */}
           {step === 1 && (
