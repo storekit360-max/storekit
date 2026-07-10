@@ -1,5 +1,7 @@
 const { Resend } = require('resend');
 const nodemailer = require('nodemailer');
+const Tenant = require('../models/Tenant');
+const { currentTenantId, withoutTenantScope } = require('../middleware/tenantContext');
 
 // ── Resend client ─────────────────────────────────────────────────────────────
 const getResendClient = () => {
@@ -18,6 +20,28 @@ const hasSmtpConfig = () => (
   && !looksUnset(process.env.EMAIL_USER)
   && !looksUnset(process.env.EMAIL_PASS)
 );
+
+const freeEmailProviders = ['@gmail.', '@yahoo.', '@hotmail.', '@outlook.', '@live.', '@icloud.'];
+
+const isFreeMailAddress = (value) => {
+  const v = String(value || '').toLowerCase();
+  return freeEmailProviders.some(p => v.includes(p));
+};
+
+const extractEmailAddress = (value) => {
+  const raw = String(value || '').trim();
+  const match = raw.match(/<([^>]+)>/);
+  return (match ? match[1] : raw).trim();
+};
+
+const sanitizeFromName = (value) => (
+  String(value || 'StoreKit')
+    .replace(/[\r\n<>"]/g, '')
+    .trim()
+    .slice(0, 80) || 'StoreKit'
+);
+
+const formatAddress = (name, email) => `${sanitizeFromName(name)} <${extractEmailAddress(email)}>`;
 
 const createSmtpTransport = () => nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
@@ -61,14 +85,16 @@ const getFromAddress = async (theme) => {
   //
   // Until then, always use onboarding@resend.dev — Resend's pre-verified
   // test sender that works with any Resend API key.
-  const storeName = theme?.storeName || 'StoreKit';
+  const storeName = theme?.emailFromName || theme?.storeName || 'StoreKit';
+
+  if (theme?.emailFromAddress && !looksUnset(theme.emailFromAddress) && !isFreeMailAddress(theme.emailFromAddress)) {
+    return formatAddress(storeName, theme.emailFromAddress);
+  }
 
   // Only use a custom from address if it is NOT a free email provider
   if (process.env.EMAIL_FROM) {
     const addr = process.env.EMAIL_FROM;
-    const freeProviders = ['@gmail.', '@yahoo.', '@hotmail.', '@outlook.', '@live.', '@icloud.'];
-    const isFreeMail = freeProviders.some(p => addr.toLowerCase().includes(p));
-    if (!isFreeMail) return addr; // custom/business domain — use it
+    if (!isFreeMailAddress(addr)) return formatAddress(storeName, addr); // custom/business domain — use it
   }
 
   // Fallback: Resend's safe test sender (always works, no domain verification needed)
@@ -76,35 +102,39 @@ const getFromAddress = async (theme) => {
 };
 
 const getSmtpFromAddress = (theme) => (
-  process.env.EMAIL_FROM && !looksUnset(process.env.EMAIL_FROM)
-    ? process.env.EMAIL_FROM
-    : `${theme?.storeName || 'StoreKit'} <${process.env.EMAIL_USER}>`
+  theme?.emailFromAddress && !looksUnset(theme.emailFromAddress)
+    ? formatAddress(theme.emailFromName || theme.storeName, theme.emailFromAddress)
+    : process.env.EMAIL_FROM && !looksUnset(process.env.EMAIL_FROM)
+      ? formatAddress(theme?.emailFromName || theme?.storeName || 'StoreKit', process.env.EMAIL_FROM)
+      : formatAddress(theme?.emailFromName || theme?.storeName || 'StoreKit', process.env.EMAIL_USER)
 );
 
 // ── sendMail ──────────────────────────────────────────────────────────────────
-const sendMail = async ({ to, subject, html }) => {
+const sendMail = async ({ to, subject, html, tenantId, tenant }) => {
   try {
-    const theme = await getTheme().catch(() => ({ storeName: 'StoreKit', primary: '#15803d' }));
+    const theme = await getTheme({ tenantId, tenant }).catch(() => ({ storeName: 'StoreKit', primary: '#15803d' }));
 
     if (hasSmtpConfig()) {
       const from = getSmtpFromAddress(theme);
+      const replyTo = theme.emailReplyTo || theme.storeEmail || undefined;
       if (process.env.NODE_ENV !== 'production') {
         console.log(`[MAIL] Sending via SMTP | from:${from} → to:${to}`);
       }
-      const info = await createSmtpTransport().sendMail({ from, to, subject, html });
+      const info = await createSmtpTransport().sendMail({ from, to, subject, html, replyTo });
       console.log(`[MAIL SENT] To:${to} | ${subject} | id:${info?.messageId}`);
       return info;
     }
 
     const resend = getResendClient();
     const from = await getFromAddress(theme);
+    const replyTo = theme.emailReplyTo || theme.storeEmail || undefined;
 
     // Dev-mode hint: remind developers which sender is being used
     if (process.env.NODE_ENV !== 'production') {
       console.log(`[MAIL] Sending via Resend | from:${from} → to:${to}`);
     }
 
-    const { data, error } = await resend.emails.send({ from, to, subject, html });
+    const { data, error } = await resend.emails.send({ from, to, subject, html, replyTo });
 
     if (error) {
       // Resend returns structured errors — surface them clearly
@@ -141,35 +171,61 @@ const getAdminEmail = async () => {
 };
 
 // ── Theme helper ──────────────────────────────────────────────────────────────
-let _themeCache = null;
-let _themeCacheAt = 0;
+let _themeCache = new Map();
 const THEME_TTL_MS = 60_000;
 
-const getTheme = async () => {
+const getTheme = async ({ tenantId, tenant } = {}) => {
+  const resolvedTenantId = tenant?._id || tenantId || currentTenantId();
+  const cacheKey = resolvedTenantId ? `tenant:${resolvedTenantId}` : 'global';
   const now = Date.now();
-  if (_themeCache && now - _themeCacheAt < THEME_TTL_MS) return _themeCache;
+  const cached = _themeCache.get(cacheKey);
+  if (cached && now - cached.at < THEME_TTL_MS) return cached.value;
+
   try {
+    if (tenant || resolvedTenantId) {
+      const row = tenant || await withoutTenantScope(() => Tenant.findById(resolvedTenantId).lean());
+      if (row) {
+        const settings = row.settings || {};
+        const theme = row.theme || {};
+        const value = {
+          primary:          theme.primaryColor || settings.primaryColor || '#15803d',
+          storeName:        row.storeName || settings.storeName || 'StoreKit',
+          storeEmail:       settings.storeEmail || '',
+          emailFromName:    settings.emailFromName || row.storeName || 'StoreKit',
+          emailFromAddress: settings.emailFromAddress || '',
+          emailReplyTo:     settings.emailReplyTo || settings.storeEmail || '',
+        };
+        _themeCache.set(cacheKey, { at: now, value });
+        return value;
+      }
+    }
+
     const { Settings } = require('../models/index');
     const rows = await Settings.find(
-      { key: { $in: ['primaryColor', 'storeName'] } },
+      { key: { $in: ['primaryColor', 'storeName', 'storeEmail', 'emailFromName', 'emailFromAddress', 'emailReplyTo'] } },
       'key value'
     ).lean();
     const map = {};
     rows.forEach(r => { map[r.key] = r.value; });
-    _themeCache = {
-      primary:   map.primaryColor || '#15803d',
-      storeName: map.storeName    || 'StoreKit',
+    const value = {
+      primary:          map.primaryColor || '#15803d',
+      storeName:        map.storeName || 'StoreKit',
+      storeEmail:       map.storeEmail || '',
+      emailFromName:    map.emailFromName || map.storeName || 'StoreKit',
+      emailFromAddress: map.emailFromAddress || '',
+      emailReplyTo:     map.emailReplyTo || map.storeEmail || '',
     };
-    _themeCacheAt = now;
+    _themeCache.set(cacheKey, { at: now, value });
+    return value;
   } catch (err) {
     console.warn('[MAIL] Could not load theme from DB, using defaults:', err.message);
-    _themeCache = { primary: '#15803d', storeName: 'StoreKit' };
-    _themeCacheAt = now;
+    const value = { primary: '#15803d', storeName: 'StoreKit', emailFromName: 'StoreKit' };
+    _themeCache.set(cacheKey, { at: now, value });
+    return value;
   }
-  return _themeCache;
 };
 
-const clearThemeCache = () => { _themeCache = null; _themeCacheAt = 0; };
+const clearThemeCache = () => { _themeCache.clear(); };
 
 // ── Shared layout helpers ─────────────────────────────────────────────────────
 const lighten = (hex) => {
@@ -201,8 +257,8 @@ const wrapper = (content, theme) => `<!DOCTYPE html><html><body style="font-fami
   </div></body></html>`;
 
 // ── OTP email ─────────────────────────────────────────────────────────────────
-const otpEmailHtml = async (otp, name) => {
-  const t = await getTheme();
+const otpEmailHtml = async (otp, name, options = {}) => {
+  const t = await getTheme(options);
   return wrapper(`
     ${header('Password Reset OTP', t)}
     <div style="padding:32px">

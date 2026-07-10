@@ -18,6 +18,9 @@ const tenantSchema = new mongoose.Schema({
   domains: { type: [domainSchema], default: [] },
   settings: {
     storeEmail: { type: String, default: '' },
+    emailFromName: { type: String, default: '' },
+    emailFromAddress: { type: String, default: '' },
+    emailReplyTo: { type: String, default: '' },
     phone: { type: String, default: '' },
     whatsapp: { type: String, default: '' },
     currency: { type: String, default: 'LKR' },

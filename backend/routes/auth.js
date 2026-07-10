@@ -38,9 +38,11 @@ const crypto   = require('crypto');
 const bcrypt   = require('bcryptjs');
 const { OAuth2Client } = require('google-auth-library');
 const User     = require('../models/User');
+const Tenant   = require('../models/Tenant');
 const { auth, generateToken, recordFailedLogin, clearFailedLogin, isAccountLocked } = require('../middleware/auth');
 const { Notification, OTP, Coupon } = require('../models/index');
 const { sendMail, otpEmailHtml }    = require('../utils/mailer');
+const { getHeaderDomainCandidates } = require('../middleware/tenant');
 
 // ─── DIAGNOSTIC GUARD ─────────────────────────────────────────────────────────
 // A "Router.use() requires a middleware function" crash means one of the
@@ -77,6 +79,15 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 //           doesn't exist, an attacker can detect non-existent emails by
 //           measuring response time.
 const DUMMY_HASH = '$2a$12$dummyhashtopreventtimingattacks.onloginendpoint.padded';
+
+async function resolveTenantFromRequest(req) {
+  const candidates = getHeaderDomainCandidates(req);
+  if (!candidates.length) return null;
+  return Tenant.findOne({
+    status: 'active',
+    domains: { $elemMatch: { domain: { $in: candidates }, active: true } },
+  }).lean();
+}
 
 // ─── Password strength validator ─────────────────────────────────────────────
 // Returns { valid: Boolean, errors: String[] } — unchanged from original.
@@ -292,7 +303,11 @@ router.post('/forgot-password', async (req, res, next) => {
       return res.status(400).json({ message: 'Email address is required' });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    const normalizedEmail = email.toLowerCase().trim();
+    const tenant = await resolveTenantFromRequest(req);
+    const user = await User.findOne(tenant
+      ? { tenantId: tenant._id, email: normalizedEmail }
+      : { email: normalizedEmail });
     if (!user) {
       return res.status(404).json({ message: 'No account found with this email address' });
     }
@@ -300,18 +315,21 @@ router.post('/forgot-password', async (req, res, next) => {
     const otp       = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min
 
-    await OTP.deleteMany({ email: user.email });
-    await OTP.create({ email: user.email, otp, expiresAt });
+    const otpFilter = { email: user.email, tenantId: user.tenantId || null };
+    await OTP.deleteMany(otpFilter);
+    await OTP.create({ ...otpFilter, otp, expiresAt });
 
     try {
       await sendMail({
         to:      user.email,
         subject: `${otp} — Your StoreKit Password Reset OTP`,
-        html:    await otpEmailHtml(otp, user.firstName),
+        html:    await otpEmailHtml(otp, user.firstName, { tenantId: user.tenantId, tenant }),
+        tenantId: user.tenantId,
+        tenant,
       });
     } catch (mailErr) {
       console.error('[FORGOT-PASSWORD] SMTP error:', mailErr.message);
-      await OTP.deleteMany({ email: user.email }).catch(() => {});
+      await OTP.deleteMany(otpFilter).catch(() => {});
       return res.status(500).json({
         message:
           'Unable to send the OTP email right now. ' +
@@ -331,14 +349,17 @@ router.post('/forgot-password', async (req, res, next) => {
 router.post('/verify-otp', async (req, res, next) => {
   try {
     const { email, otp } = req.body;
-    const record = await OTP.findOne({ email, otp, used: false, expiresAt: { $gte: new Date() } });
+    const normalizedEmail = String(email || '').toLowerCase().trim();
+    const tenant = await resolveTenantFromRequest(req);
+    const tenantId = tenant?._id || null;
+    const record = await OTP.findOne({ email: normalizedEmail, tenantId, otp, used: false, expiresAt: { $gte: new Date() } });
     if (!record) {
       return res.status(400).json({ message: 'Invalid or expired OTP. Please request a new one.' });
     }
     const resetToken = crypto.randomBytes(32).toString('hex');
     record.used = true;
     await record.save();
-    await OTP.create({ email, otp: resetToken, expiresAt: new Date(Date.now() + 15 * 60 * 1000) });
+    await OTP.create({ email: normalizedEmail, tenantId, otp: resetToken, expiresAt: new Date(Date.now() + 15 * 60 * 1000) });
     res.json({ message: 'OTP verified', resetToken });
   } catch (err) {
     next(err);
@@ -350,18 +371,21 @@ router.post('/verify-otp', async (req, res, next) => {
 router.post('/reset-password', async (req, res, next) => {
   try {
     const { email, resetToken, newPassword } = req.body;
+    const normalizedEmail = String(email || '').toLowerCase().trim();
+    const tenant = await resolveTenantFromRequest(req);
+    const tenantId = tenant?._id || null;
 
     const pwCheck = validatePasswordStrength(newPassword);
     if (!pwCheck.valid) {
       return res.status(400).json({ message: 'Password is too weak', errors: pwCheck.errors });
     }
 
-    const record = await OTP.findOne({ email, otp: resetToken, used: false, expiresAt: { $gte: new Date() } });
+    const record = await OTP.findOne({ email: normalizedEmail, tenantId, otp: resetToken, used: false, expiresAt: { $gte: new Date() } });
     if (!record) {
       return res.status(400).json({ message: 'Invalid or expired reset token. Please restart the password reset process.' });
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne(tenantId ? { tenantId, email: normalizedEmail } : { email: normalizedEmail });
     if (!user) return res.status(404).json({ message: 'User not found' });
 
     user.password  = newPassword;

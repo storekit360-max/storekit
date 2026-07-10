@@ -105,6 +105,7 @@ export default function AdminSettings() {
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState({
     storeName:'', storeTagline:'', storeEmail:'', storePhone:'', storeAddress:'',
+    emailFromName:'', emailFromAddress:'', emailReplyTo:'',
     currency:'LKR', currencySymbol:'Rs.',
     standardDelivery:600, freeDeliveryThreshold:5000,
     codEnabled:true, bankTransferEnabled:true,
@@ -1416,6 +1417,38 @@ export default function AdminSettings() {
                 <div>
                   <h3 className="font-semibold text-gray-900 text-lg">📧 Email Notifications</h3>
                   <p className="text-sm text-gray-500 mt-1">Control which emails are sent automatically. Toggles take effect immediately — no server restart needed.</p>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 overflow-hidden">
+                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                    <p className="font-semibold text-gray-800 text-sm">Sender Identity</p>
+                  </div>
+                  <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <F
+                      label="Sender Name"
+                      value={settings.emailFromName}
+                      onChange={e=>setSettings(p=>({...p,emailFromName:e.target.value}))}
+                      placeholder={settings.storeName || 'Store Name'}
+                      hint="Example: Lily Store"
+                    />
+                    <F
+                      label="Sender Email"
+                      type="email"
+                      value={settings.emailFromAddress}
+                      onChange={e=>setSettings(p=>({...p,emailFromAddress:e.target.value}))}
+                      placeholder="noreply@your-verified-domain.com"
+                      hint="Must be verified in Resend or allowed by your SMTP provider."
+                    />
+                    <F
+                      label="Reply-To Email"
+                      type="email"
+                      value={settings.emailReplyTo}
+                      onChange={e=>setSettings(p=>({...p,emailReplyTo:e.target.value}))}
+                      placeholder={settings.storeEmail || 'support@yourstore.com'}
+                      hint="Customer replies go here. Leave empty to use Store Email."
+                      col2
+                    />
+                  </div>
                 </div>
 
                 {/* Orders */}
