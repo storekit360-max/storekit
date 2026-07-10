@@ -227,6 +227,7 @@ router.put('/plans/:id', async (req, res, next) => {
     if (body.name && !body.slug) body.slug = await generateUniqueSlug(body.name, req.params.id);
     const plan = await Plan.findByIdAndUpdate(req.params.id, { $set: body }, { new: true, runValidators: true });
     if (!plan) return res.status(404).json({ message: 'Plan not found' });
+    await subscriptionService.syncTenantsForPlanUpdate(plan);
     res.json(plan);
   } catch (err) {
     if (err.code === 11000) return res.status(400).json({ message: 'A plan with that name/slug already exists' });

@@ -15,7 +15,7 @@ const Product = require('../models/Product');
 const Order   = require('../models/Order');
 const Tenant  = require('../models/Tenant');
 const User    = require('../models/User');
-const { PaymentGateway, ReturnRequest, DeliveryService, BusinessPage } = require('../models/index');
+const { PaymentGateway, ReturnRequest, DeliveryService, BusinessPage, Banner } = require('../models/index');
 
 router.use(adminAuth);
 
@@ -598,6 +598,18 @@ const STOREKIT_ASSISTANT_SETTINGS_POLICY = [
   'Never invent settings, tabs, fields, routes, default values, or successful configuration changes.',
 ].join('\n');
 
+const STOREKIT_ASSISTANT_THEME_POLICY = [
+  'Theme and website builder expert rules:',
+  'Always retrieve the active tenant theme, theme settings, layout_builder configuration, business pages, banners, and feature flags before answering website/theme questions.',
+  'In the current StoreKit schema, there is no separate draft/published theme model. The saved Tenant.theme and layout_builder settings are treated as the active storefront configuration. Do not invent draft themes or publish states.',
+  'Use verified menu paths only: Admin Panel -> Theme Builder, Admin Panel -> Layout Builder, Admin Panel -> Settings -> Theme, Admin Panel -> Settings -> Pages, Admin Panel -> Banners & Popups.',
+  'Distinguish theme styling, layout sections, banners, business pages, and SEO/settings. Do not merge them into one imaginary Website page.',
+  'Explain desktop, tablet, and mobile/customer-facing impact for theme/layout/banner changes.',
+  'Before recommending publishing/saving customer-facing changes, verify required assets such as logo/favicon/banner images, feature flags, layout sections, and preview/review steps.',
+  'For troubleshooting, check saved theme, layout_builder, banners/pages, feature flags, cache/theme application, browser cache, and recent logs before naming a root cause.',
+  'Never invent theme options, templates, pages, sections, widgets, draft states, publishing workflows, or deployment/CDN checks that are not exposed by StoreKit.',
+].join('\n');
+
 const APPROVED_ASSISTANT_TOOLS = [
   'getStoreSummary',
   'getProducts',
@@ -615,6 +627,7 @@ const APPROVED_ASSISTANT_TOOLS = [
   'getPaymentGateways',
   'getDeliveryServices',
   'getBusinessPages',
+  'getWebsiteTheme',
   'getTenantDomains',
   'getReturnRequestsForOrder',
   'getAnalytics',
@@ -776,6 +789,8 @@ const HIGH_RISK_ACTIONS = [
   { action: 'change tax settings', feature: null, recordType: 'tax settings', words: ['change tax', 'tax rate change', 'enable tax', 'disable tax', 'vat change', 'tax settings update'] },
   { action: 'change maintenance mode', feature: null, recordType: 'store availability setting', words: ['maintenance mode on', 'maintenance mode off', 'enable maintenance', 'disable maintenance', 'turn on maintenance', 'turn off maintenance'] },
   { action: 'change email provider/settings', feature: null, recordType: 'email settings', words: ['change email provider', 'smtp change', 'email provider change', 'disable order emails', 'turn off emails'] },
+  { action: 'publish website/theme changes', feature: 'themeBuilder', recordType: 'theme/layout', words: ['publish theme', 'publish website', 'save theme live', 'apply theme live', 'website publish', 'theme publish karanna'] },
+  { action: 'reset website layout/theme', feature: 'layoutEditor', recordType: 'theme/layout', words: ['reset layout', 'reset theme', 'restore default theme', 'layout reset', 'theme reset'] },
   { action: 'remove staff member', feature: null, recordType: 'staff/admin user', words: ['remove staff', 'delete staff', 'remove admin', 'delete admin'] },
   { action: 'change plan', feature: null, recordType: 'subscription plan', words: ['change plan', 'plan eka change', 'upgrade plan', 'downgrade plan'] },
   { action: 'restore backup', feature: 'backup', recordType: 'backup', words: ['restore backup', 'backup restore'] },
@@ -853,6 +868,16 @@ const INTENT_PHRASES = {
     'settings wada na', 'save settings', 'setting save wenne na', 'currency eka',
     'tax eka', 'delivery settings eka', 'email yawenne na', 'logo eka', 'maintenance mode eka',
     'settings එක', 'currency එක', 'tax එක', 'email යවන්නේ නැහැ',
+  ],
+  themeWebsite: [
+    'theme', 'theme builder', 'website builder', 'layout builder', 'homepage',
+    'header', 'footer', 'menu', 'menus', 'banners', 'banner', 'sections',
+    'widgets', 'pages', 'branding', 'colors', 'fonts', 'logo', 'favicon',
+    'templates', 'responsive layout', 'mobile layout', 'desktop layout',
+    'publish theme', 'preview theme', 'store design', 'website design',
+    'hero slider', 'category grid', 'featured products', 'new arrivals',
+    'theme eka', 'website eka', 'layout eka', 'homepage eka', 'logo eka',
+    'banner eka', 'font eka', 'color eka', 'theme එක', 'website එක',
   ],
   orderStatus: [
     'order status', 'order pending', 'order tracking', 'tracking number', 'delivery status',
@@ -933,6 +958,9 @@ function classifyAssistantMessage(message, history = []) {
   else if (textIncludesAny(normalized, INTENT_PHRASES.paymentCheckout)) intent = textIncludesAny(normalized, ['order', 'oder', 'ord-', 'paid', 'unpaid', 'pending', 'refund', 'transaction id', 'payment reference'])
     ? 'troubleshoot_payment_status'
     : 'troubleshoot_checkout_payment';
+  else if (textIncludesAny(normalized, INTENT_PHRASES.themeWebsite)) intent = textIncludesAny(normalized, ['not working', 'wada na', 'weda na', 'not showing', 'save wenne na', 'published not', 'mobile issue', 'responsive', 'cache', 'නැහැ'])
+    ? 'troubleshoot_theme'
+    : 'theme_help';
   else if (textIncludesAny(normalized, INTENT_PHRASES.settingsHelp)) intent = textIncludesAny(normalized, ['not working', 'wada na', 'weda na', 'save wenne na', 'email yawenne na', 'ineffective', 'not showing', 'නැහැ'])
     ? 'troubleshoot_settings'
     : 'settings_help';
@@ -961,6 +989,8 @@ function classifyAssistantMessage(message, history = []) {
     'navigation_help',
     'settings_help',
     'troubleshoot_settings',
+    'theme_help',
+    'troubleshoot_theme',
     'read_order_status',
     'troubleshoot_customer_login',
     'read_customer_status',
@@ -1141,14 +1171,50 @@ function compactThemeSettings(theme = {}) {
   return {
     theme: theme.theme || 'default',
     storeTemplate: theme.storeTemplate || theme.template || '',
+    layoutTemplate: theme.layoutTemplate || '',
     primaryColorPresent: !!theme.primaryColor,
+    primaryColor: theme.primaryColor || '',
+    primaryDarkColor: theme.primaryDarkColor || '',
+    primaryLightColor: theme.primaryLightColor || '',
     secondaryColorPresent: !!(theme.secondaryColor || theme.accentColor),
+    secondaryColor: theme.secondaryColor || theme.accentColor || '',
     darkMode: !!theme.darkMode,
     fontStyle: theme.fontStyle || theme.fontFamily || '',
     logoUrlPresent: !!theme.logoUrl,
     faviconUrlPresent: !!theme.faviconUrl,
     logoSize: Number(theme.logoSize || 0),
     customCSSPresent: !!theme.customCSS,
+  };
+}
+
+function compactLayoutBuilder(layoutBuilder = {}) {
+  const pages = ['homepage', 'product_page', 'category_page', 'checkout', 'header', 'footer'];
+  return Object.fromEntries(pages.map(page => {
+    const sections = Array.isArray(layoutBuilder?.[page]) ? layoutBuilder[page] : [];
+    return [page, {
+      configured: sections.length > 0,
+      totalSections: sections.length,
+      enabledSections: sections.filter(section => section.enabled !== false).length,
+      disabledSections: sections.filter(section => section.enabled === false).length,
+      sectionIds: sections
+        .slice()
+        .sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
+        .map(section => section.id)
+        .slice(0, 12),
+    }];
+  }));
+}
+
+function compactBannerForWebsite(banner) {
+  return {
+    title: banner.title || '',
+    position: banner.position || 'hero',
+    isActive: banner.isActive !== false,
+    imagePresent: !!banner.image,
+    showOnMobile: banner.showOnMobile !== false,
+    showOnDesktop: banner.showOnDesktop !== false,
+    startDate: banner.startDate || null,
+    endDate: banner.endDate || null,
   };
 }
 
@@ -1444,6 +1510,44 @@ function createAssistantTools({ tenantId, tenant, user, pageContext }) {
           showInNav: !!page.showInNav,
           updatedAt: page.updatedAt || null,
         })),
+      };
+    }),
+    getWebsiteTheme: () => runAssistantTool('getWebsiteTheme', async () => {
+      const [banners, pages] = await Promise.all([
+        Banner.find({ tenantId }).sort({ sortOrder: 1, createdAt: -1 }).limit(30).lean(),
+        BusinessPage.find({ tenantId }).sort({ sortOrder: 1, updatedAt: -1 }).limit(30).select('slug title isActive showInFooter showInNav updatedAt').lean(),
+      ]);
+      const activeBanners = banners.filter(banner => banner.isActive !== false);
+      return {
+        activeTheme: compactThemeSettings(tenant.theme || {}),
+        layoutBuilder: compactLayoutBuilder(tenant.settings?.layout_builder || {}),
+        bannerSummary: {
+          count: banners.length,
+          activeCount: activeBanners.length,
+          byPosition: activeBanners.reduce((acc, banner) => {
+            const key = banner.position || 'hero';
+            acc[key] = (acc[key] || 0) + 1;
+            return acc;
+          }, {}),
+          banners: banners.slice(0, 10).map(compactBannerForWebsite),
+        },
+        pageSummary: {
+          count: pages.length,
+          activeCount: pages.filter(page => page.isActive !== false).length,
+          pages: pages.slice(0, 10).map(page => ({
+            slug: page.slug,
+            title: page.title,
+            isActive: page.isActive !== false,
+            showInFooter: !!page.showInFooter,
+            showInNav: !!page.showInNav,
+          })),
+        },
+        featureFlags: {
+          themeBuilder: !!tenant.plan?.features?.themeBuilder,
+          layoutEditor: !!tenant.plan?.features?.layoutEditor,
+          banners: !!tenant.plan?.features?.banners,
+          seo: !!tenant.plan?.features?.seo,
+        },
       };
     }),
     getAnalytics: () => runAssistantTool('getAnalytics', async () => ({ message: 'Analytics are summarized through getStoreSummary for the assistant.' })),
@@ -2305,6 +2409,148 @@ function buildSettingsAnswer(ctx, tab, settingsResult, gatewayResult, deliveryRe
       '- Admin Panel -> Settings -> Email Notifications',
     ].filter(Boolean).join('\n'),
     actions: [{ label: `Open Settings`, path: '/admin/settings' }],
+  };
+}
+
+function websiteFocus(message) {
+  const normalized = normalizeAdminMessage(message);
+  if (textIncludesAny(normalized, ['layout', 'homepage', 'header', 'footer', 'section', 'widget', 'responsive', 'mobile layout', 'desktop layout'])) return 'layout';
+  if (textIncludesAny(normalized, ['banner', 'hero slider', 'popup', 'running banner'])) return 'banners';
+  if (textIncludesAny(normalized, ['page', 'pages', 'legal page', 'footer page', 'nav page'])) return 'pages';
+  if (textIncludesAny(normalized, ['logo', 'favicon', 'branding', 'color', 'font', 'theme', 'template'])) return 'theme';
+  return 'website';
+}
+
+function layoutRows(layoutBuilder = {}) {
+  const labels = {
+    homepage: 'Homepage',
+    product_page: 'Product Page',
+    category_page: 'Category Page',
+    checkout: 'Checkout',
+    header: 'Header',
+    footer: 'Footer',
+  };
+  return Object.entries(labels).map(([key, label]) => {
+    const page = layoutBuilder[key] || {};
+    return `${label}: ${page.configured ? `${page.enabledSections}/${page.totalSections} sections enabled` : 'default layout, no saved custom layout'}`;
+  });
+}
+
+function buildThemeWebsiteAnswer(ctx, websiteResult, mode = 'help', focus = 'website') {
+  const data = websiteResult.status === 'ok' ? websiteResult.data : null;
+  if (!data) {
+    return {
+      answer: [
+        'Current Theme:',
+        '- I could not retrieve the active theme configuration for the authenticated current store.',
+        '',
+        'Findings:',
+        `- Tool status: ${websiteResult.status}`,
+        `- Error type: ${websiteResult.error?.type || 'unknown'}`,
+        '',
+        'Action:',
+        '- Reload the admin session and try again before changing theme, layout, banners, or pages.',
+        '',
+        'Expected Result:',
+        '- Once configuration is available, I can verify the saved theme and website builder settings safely.',
+      ].join('\n'),
+      actions: [{ label: 'Open Theme Builder', path: '/admin/theme-builder' }],
+    };
+  }
+
+  const theme = data.activeTheme || {};
+  const featureFlags = data.featureFlags || {};
+  const bannerSummary = data.bannerSummary || {};
+  const pageSummary = data.pageSummary || {};
+  const missingAssets = [];
+  if (!theme.logoUrlPresent) missingAssets.push('Logo is not configured');
+  if (!theme.faviconUrlPresent) missingAssets.push('Favicon is not configured');
+  if ((bannerSummary.activeCount || 0) > 0 && Array.isArray(bannerSummary.banners)) {
+    const imageMissing = bannerSummary.banners.filter(banner => banner.isActive && !banner.imagePresent).length;
+    if (imageMissing) missingAssets.push(`${imageMissing} active banner(s) have no image`);
+  }
+
+  const actionMap = {
+    theme: 'Admin Panel -> Theme Builder',
+    layout: 'Admin Panel -> Layout Builder',
+    banners: 'Admin Panel -> Banners & Popups',
+    pages: 'Admin Panel -> Settings -> Pages',
+    website: 'Admin Panel -> Theme Builder',
+  };
+  const pathMap = {
+    theme: '/admin/theme-builder',
+    layout: '/admin/layout',
+    banners: '/admin/banners',
+    pages: '/admin/settings',
+    website: '/admin/theme-builder',
+  };
+  const featureMap = {
+    theme: 'themeBuilder',
+    layout: 'layoutEditor',
+    banners: 'banners',
+    pages: null,
+    website: 'themeBuilder',
+  };
+  const requiredFeature = featureMap[focus] || null;
+  const featureAllowed = isFeatureEnabled(ctx, requiredFeature);
+
+  const findings = [
+    `Active theme: ${theme.theme || 'default'}`,
+    `Store template: ${theme.storeTemplate || 'classic/not set'}`,
+    `Font: ${theme.fontStyle || 'default/not set'}`,
+    `Logo: ${theme.logoUrlPresent ? 'configured' : 'not set'}`,
+    `Favicon: ${theme.faviconUrlPresent ? 'configured' : 'not set'}`,
+    `Custom CSS: ${theme.customCSSPresent ? 'configured' : 'not set'}`,
+    `Dark mode: ${theme.darkMode ? 'Enabled' : 'Disabled'}`,
+    `Banners: ${bannerSummary.activeCount || 0}/${bannerSummary.count || 0} active`,
+    `Business pages: ${pageSummary.activeCount || 0}/${pageSummary.count || 0} active`,
+    `Theme Builder feature: ${featureFlags.themeBuilder ? 'Enabled' : 'Not enabled'}`,
+    `Layout Builder feature: ${featureFlags.layoutEditor ? 'Enabled' : 'Not enabled'}`,
+    `Banners feature: ${featureFlags.banners ? 'Enabled' : 'Not enabled'}`,
+  ];
+
+  const troubleshootingRows = mode === 'troubleshoot'
+    ? [
+      '- Verify the saved active theme above.',
+      '- Check Layout Builder saved sections for hidden homepage/header/footer sections.',
+      '- Check active banners and required images.',
+      '- Refresh storefront/browser cache after saving.',
+      '- Check feature flags and recent StoreKit logs if the saved configuration still does not appear.',
+      '- CDN/deployment logs are not exposed through the current assistant tools, so I cannot verify CDN state from here.',
+    ]
+    : [];
+
+  return {
+    answer: [
+      `Current Theme:`,
+      `- Store: ${ctx.tenant.storeName}`,
+      `- Active saved theme: ${theme.theme || 'default'}`,
+      `- Template: ${theme.storeTemplate || 'classic/not set'}`,
+      `- Font: ${theme.fontStyle || 'default/not set'}`,
+      '- Publish state: StoreKit does not expose separate draft/published themes here; the saved tenant theme/layout is the active storefront configuration.',
+      '',
+      'Findings:',
+      ...findings.map(row => `- ${row}`),
+      ...layoutRows(data.layoutBuilder).map(row => `- ${row}`),
+      missingAssets.length ? `- Asset checks: ${missingAssets.join('; ')}` : '- Asset checks: required logo/favicon/banner image blockers were not found in the retrieved summary.',
+      featureAllowed ? `- Required feature for this request is available.` : `- Required feature ${requiredFeature || 'none'} is not enabled for this plan/context.`,
+      ...troubleshootingRows,
+      '',
+      'Action:',
+      featureAllowed
+        ? `- Open ${actionMap[focus] || actionMap.website} (${pathMap[focus] || pathMap.website}), preview/review desktop, tablet, and mobile impact, then save the customer-facing change.`
+        : `- Open Admin Panel -> Billing (/admin/billing) or ask an authorized admin to enable ${FEATURE_LABELS[requiredFeature] || 'the required website feature'} before changing this area.`,
+      '- For customer-facing changes, check storefront on mobile and desktop after saving.',
+      '',
+      'Expected Result:',
+      mode === 'troubleshoot'
+        ? '- After cache refresh and verified saved configuration, the storefront should reflect the active theme/layout/banner/page settings.'
+        : '- The storefront should use the saved colors, typography, logo, layout sections, banners, and pages for this store only.',
+    ].join('\n'),
+    actions: [
+      { label: focus === 'layout' ? 'Open Layout Builder' : focus === 'banners' ? 'Open Banners' : 'Open Theme Builder', path: pathMap[focus] || pathMap.website },
+      { label: 'Open Settings', path: '/admin/settings' },
+    ],
   };
 }
 
