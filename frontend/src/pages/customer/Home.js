@@ -16,6 +16,37 @@ import DealsSection from '../../components/DealsSection';
 
 gsap.registerPlugin(ScrollTrigger);
 
+const HOME_DATA_CACHE_TTL = 5 * 60 * 1000;
+
+const getHomeDataCacheKey = () => {
+  try { return window.location.hostname || 'default'; }
+  catch { return 'default'; }
+};
+
+const readHomeDataCache = () => {
+  try {
+    const cache = window.__STOREKIT_HOME_DATA_CACHE__;
+    const entry = cache?.[getHomeDataCacheKey()];
+    if (!entry || Date.now() - entry.savedAt > HOME_DATA_CACHE_TTL) return null;
+    return entry.data || null;
+  } catch {
+    return null;
+  }
+};
+
+const writeHomeDataCache = (data) => {
+  try {
+    window.__STOREKIT_HOME_DATA_CACHE__ = window.__STOREKIT_HOME_DATA_CACHE__ || {};
+    window.__STOREKIT_HOME_DATA_CACHE__[getHomeDataCacheKey()] = { data, savedAt: Date.now() };
+    window.__STOREKIT_HOME_LOADED_ONCE__ = true;
+  } catch {}
+};
+
+const hasLoadedHomeOnce = () => {
+  try { return !!window.__STOREKIT_HOME_LOADED_ONCE__; }
+  catch { return false; }
+};
+
 /* ── Stars ─────────────────────────────────────────────────────────────── */
 const Stars = ({ r = 0 }) => (
   <div className="flex gap-0.5">
@@ -28,7 +59,7 @@ const Stars = ({ r = 0 }) => (
 );
 
 /* ── 3D Product Card ────────────────────────────────────────────────────── */
-const ProductCard = ({ product, settings }) => {
+const ProductCard = ({ product, settings, priority = false }) => {
   const { addItem }   = useCart();
   const { config }    = useAnimation();
   const cardRef       = useRef(null);
@@ -120,7 +151,8 @@ const ProductCard = ({ product, settings }) => {
     <article ref={cardRef} className="product-card group" style={{ transformStyle:'preserve-3d', willChange:'transform' }}>
       <Link to={`/product/${product.slug}`} className="block relative overflow-hidden bg-gray-50" style={{ aspectRatio:'1/1' }}>
         <img ref={imgRef} src={product.thumbnail||product.images?.[0]||'https://via.placeholder.com/300'} alt={product.name}
-          loading="lazy" className="w-full h-full object-cover" style={{ willChange:'transform' }}/>
+          loading={priority ? 'eager' : 'lazy'} decoding="async" fetchPriority={priority ? 'high' : 'auto'}
+          className="w-full h-full object-cover" style={{ willChange: config.reducedMotion ? 'auto' : 'transform' }}/>
         <div ref={shineRef} className="absolute inset-0 pointer-events-none z-10"
           style={{ background:'linear-gradient(105deg,transparent 20%,rgba(255,255,255,0.3) 50%,transparent 80%)', transform:'translateX(-120%)' }}/>
         <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-500"/>
@@ -293,7 +325,7 @@ const HeroSlider = ({ banners, settings, campaign, anim }) => {
       {/* BG */}
       <div ref={bgRef} className="absolute will-change-transform" style={{ inset:0, top:'-14%', height:'128%', transformOrigin:'center center' }}>
         {slide.image
-          ? <img src={slide.image} alt="" className="w-full h-full object-cover"/>
+          ? <img src={slide.image} alt="" className="w-full h-full object-cover" loading="eager" decoding="async" fetchPriority="high"/>
           : (
             <div className="w-full h-full relative" style={{ background:'var(--hero-gradient)' }}>
               {/* Animated orbs */}
@@ -405,6 +437,7 @@ const HeroSlider = ({ banners, settings, campaign, anim }) => {
 /* ── Trust Bar — fully from settings ──────────────────────────────────── */
 const TrustBar = ({ settings }) => {
   const ref = useRef(null);
+  const { config } = useAnimation();
   const badges = useMemo(() => {
     try { return JSON.parse(settings?.trustBadges||'[]').filter(b=>b.enabled!==false); }
     catch { return []; }
@@ -412,13 +445,14 @@ const TrustBar = ({ settings }) => {
 
   useEffect(() => {
     if (!ref.current || !badges.length) return;
+    if (config.reducedMotion) return;
     const items = [...ref.current.children];
     gsap.fromTo(items,
       { opacity:0, y:20, scale:0.9 },
       { opacity:1, y:0, scale:1, duration:0.55, stagger:0.1, ease:'back.out(1.5)',
         scrollTrigger:{ trigger:ref.current, start:'top 90%', toggleActions:'play none none none' } }
     );
-  }, [badges]);
+  }, [badges, config.reducedMotion]);
 
   if (!badges.length) return null;
 
@@ -465,7 +499,7 @@ const CategoryCard = ({ cat }) => {
       <div ref={iconRef} className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-2xl sm:text-3xl"
         style={{ background:'linear-gradient(135deg,var(--color-primary)20,var(--color-accent)10)', willChange:'transform' }}>
         {cat.image
-          ? <img src={cat.image} alt={cat.name} className="w-8 h-8 sm:w-10 sm:h-10 object-cover rounded-xl"/>
+          ? <img src={cat.image} alt={cat.name} className="w-8 h-8 sm:w-10 sm:h-10 object-cover rounded-xl" loading="lazy" decoding="async"/>
           : <span>{ICONS[cat.slug]||'🛍️'}</span>}
       </div>
       <span className="text-xs sm:text-sm font-bold text-center leading-tight" style={{ color:'var(--color-dark)' }}>{cat.name}</span>
@@ -494,7 +528,7 @@ const BrandLogoCard = ({ brand }) => {
       <div className="mx-auto w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center overflow-hidden mb-3"
         style={{ background:'linear-gradient(135deg,var(--color-primary)10,var(--color-accent)08)' }}>
         {brand.image ? (
-          <img src={brand.image} alt={brand.name} className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"/>
+          <img src={brand.image} alt={brand.name} className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300" loading="lazy" decoding="async"/>
         ) : (
           <span className="text-lg sm:text-xl font-black" style={{ color:'var(--color-primary)', fontFamily:'var(--font-display)' }}>{initials}</span>
         )}
@@ -540,6 +574,10 @@ const AnimatedGrid = ({ products, settings }) => {
   const gridRef = useRef(null);
   useEffect(() => {
     if (!gridRef.current||!products.length) return;
+    if (config.reducedMotion) {
+      gsap.set([...gridRef.current.children], { opacity: 1, y: 0, rotateX: 0, rotateY: 0, scale: 1 });
+      return;
+    }
     const style = config.cardRevealStyle||'3d';
     const froms = {
       '3d':    (i)=>({ opacity:0, y:70, rotateX:20, rotateY:i%2===0?-5:5, transformPerspective:1000 }),
@@ -555,10 +593,10 @@ const AnimatedGrid = ({ products, settings }) => {
           scrollTrigger:{ trigger:card, start:'top 91%', toggleActions:'play none none none' } }
       );
     });
-  }, [products, config.cardRevealStyle, config.staggerDelay]);
+  }, [products, config.cardRevealStyle, config.reducedMotion, config.staggerDelay]);
   return (
     <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
-      {products.map(p => <ProductCard key={p._id} product={p} settings={settings}/>)}
+      {products.map((p, index) => <ProductCard key={p._id} product={p} settings={settings} priority={index < 4}/>)}
     </div>
   );
 };
@@ -570,13 +608,14 @@ const PromoBanner = ({ banner, tall=false }) => {
   /* Entrance 3D */
   useEffect(() => {
     if (!wrapRef.current) return;
+    if (config.reducedMotion) return;
     const anim = gsap.fromTo(wrapRef.current,
       { opacity:0, y:80, rotateX:20, rotateY:-5, transformPerspective:900 },
       { opacity:1, y:0, rotateX:0, rotateY:0, duration:1, ease:'power3.out',
         scrollTrigger:{ trigger:wrapRef.current, start:'top 88%', toggleActions:'play none none none' } }
     );
     return()=>{anim.scrollTrigger?.kill();anim.kill();};
-  },[]);
+  },[config.reducedMotion]);
   /* Deep parallax on image */
   useEffect(() => {
     if (!imgRef.current||!wrapRef.current||!config.bannerParallax) return;
@@ -589,13 +628,13 @@ const PromoBanner = ({ banner, tall=false }) => {
   },[config.bannerParallax, config.parallaxIntensity]);
   /* Text counter-parallax */
   useEffect(() => {
-    if (!txtRef.current||!wrapRef.current) return;
+    if (!txtRef.current||!wrapRef.current||config.reducedMotion) return;
     const st = ScrollTrigger.create({
       trigger:wrapRef.current, start:'top bottom', end:'bottom top', scrub:0.8,
       onUpdate: s => gsap.set(txtRef.current,{ y: s.progress*-35 }),
     });
     return()=>st.kill();
-  },[]);
+  },[config.reducedMotion]);
   /* Shine */
   useEffect(() => {
     if (!wrapRef.current||!shineRef.current||!config.bannerShine) return;
@@ -611,7 +650,7 @@ const PromoBanner = ({ banner, tall=false }) => {
       style={{ minHeight:tall?280:210, transformStyle:'preserve-3d', willChange:'transform' }}>
       <div ref={imgRef} className="absolute will-change-transform" style={{ inset:'-12%', top:'-16%', height:'132%' }}>
         {banner.image
-          ? <img src={banner.image} alt={banner.title||''} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"/>
+          ? <img src={banner.image} alt={banner.title||''} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" decoding="async"/>
           : <div className="w-full h-full" style={{ background:'var(--theme-gradient)' }}/>}
       </div>
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent"/>
@@ -791,18 +830,21 @@ export default function Home() {
   // ── SEO for homepage ────────────────────────────────────────────────────
   useSEO({ type: 'website' });
 
-  const [featured,    setFeatured]    = useState([]);
-  const [newArrivals, setNewArrivals] = useState([]);
-  const [onSale,      setOnSale]      = useState([]);
-  const [categories,  setCategories]  = useState([]);
-  const [brands,      setBrands]      = useState([]);
-  const [heroBanners, setHeroBanners] = useState([]);
-  const [promoBanners,setPromoBanners]= useState([]);
-  // dbReady: true once all 6 API calls resolve (or fail)
+  const initialHomeData = useMemo(() => readHomeDataCache(), []);
+
+  const [featured,    setFeatured]    = useState(() => initialHomeData?.featured || []);
+  const [newArrivals, setNewArrivals] = useState(() => initialHomeData?.newArrivals || []);
+  const [onSale,      setOnSale]      = useState(() => initialHomeData?.onSale || []);
+  const [categories,  setCategories]  = useState(() => initialHomeData?.categories || []);
+  const [brands,      setBrands]      = useState(() => initialHomeData?.brands || []);
+  const [heroBanners, setHeroBanners] = useState(() => initialHomeData?.heroBanners || []);
+  const [promoBanners,setPromoBanners]= useState(() => initialHomeData?.promoBanners || []);
+  // dbReady: true once all homepage API calls resolve (or when cached home data exists)
   // settingsLoaded: true once ThemeContext has fetched real settings from API
-  const [dbReady, setDbReady] = useState(false);
+  const [dbReady, setDbReady] = useState(() => !!initialHomeData);
   // Loading is true until BOTH db data AND live settings are available
   const loading = !dbReady || !settings;
+  const showInitialLoader = loading && !initialHomeData && !hasLoadedHomeOnce();
   const [sectionOrder, setSectionOrder] = useState(null);
   // settingsReady: true once we have settings from cache or API.
   // Prevents newsletter / payment sections from flashing on first render.
@@ -831,14 +873,27 @@ export default function Home() {
       API.get('/banners?position=hero'),
       API.get('/banners?position=promo'),
     ]).then(([feat,newest,sale,cats,brandRes,hero,promo]) => {
-      setFeatured(feat.data.products||[]);
-      setNewArrivals(newest.data.products||[]);
-      setOnSale(sale.data.products||[]);
-      setCategories(cats.data||[]);
-      setBrands(brandRes.data.brands||[]);
-      setHeroBanners(hero.data||[]);
-      setPromoBanners(promo.data||[]);
-    }).catch(()=>{}).finally(()=>setDbReady(true));
+      const nextHomeData = {
+        featured: feat.data.products || [],
+        newArrivals: newest.data.products || [],
+        onSale: sale.data.products || [],
+        categories: cats.data || [],
+        brands: brandRes.data.brands || [],
+        heroBanners: hero.data || [],
+        promoBanners: promo.data || [],
+      };
+      setFeatured(nextHomeData.featured);
+      setNewArrivals(nextHomeData.newArrivals);
+      setOnSale(nextHomeData.onSale);
+      setCategories(nextHomeData.categories);
+      setBrands(nextHomeData.brands);
+      setHeroBanners(nextHomeData.heroBanners);
+      setPromoBanners(nextHomeData.promoBanners);
+      writeHomeDataCache(nextHomeData);
+    }).catch(()=>{}).finally(()=>{
+      window.__STOREKIT_HOME_LOADED_ONCE__ = true;
+      setDbReady(true);
+    });
   },[]);
 
   // Kill stale ScrollTriggers from previous page so GSAP recalculates from top.
@@ -956,7 +1011,7 @@ export default function Home() {
   // Loading screen: shown every visit until DB data + live settings are both ready.
   // Uses HARDCODED neutral colors — never depends on CSS vars or theme settings
   // so it looks identical and premium on every device, first visit or returning.
-  if (loading) {
+  if (showInitialLoader) {
     const storeName    = settings?.storeName    || 'StoreKit';
     const storeTagline = settings?.storeTagline || 'Delivering the finest products';
     const logoUrl      = settings?.logoUrl;
@@ -1033,15 +1088,15 @@ export default function Home() {
         <div style={{position:'absolute',inset:0,overflow:'hidden',pointerEvents:'none'}}>
           <div className="szl-orb" style={{
             position:'absolute', top:'-100px', left:'-100px',
-            width:'440px', height:'440px', borderRadius:'50%',
-            background: PRIMARY, opacity:0.12, filter:'blur(100px)',
-            animation:'szl-orb1 18s ease-in-out infinite',
+            width:'320px', height:'320px', borderRadius:'50%',
+            background: PRIMARY, opacity:0.08, filter:'blur(52px)',
+            animation:'szl-orb1 24s ease-in-out infinite',
           }}/>
           <div className="szl-orb" style={{
             position:'absolute', bottom:'-80px', right:'-80px',
-            width:'360px', height:'360px', borderRadius:'50%',
-            background: ACCENT, opacity:0.10, filter:'blur(85px)',
-            animation:'szl-orb2 22s ease-in-out infinite',
+            width:'280px', height:'280px', borderRadius:'50%',
+            background: ACCENT, opacity:0.07, filter:'blur(46px)',
+            animation:'szl-orb2 28s ease-in-out infinite',
           }}/>
           {/* Dot grid — light on white, barely visible */}
           <div style={{

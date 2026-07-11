@@ -11,14 +11,14 @@ export const ScrollProgressBar = () => {
   const { config } = useAnimation();
 
   useEffect(() => {
-    if (!config.scrollProgress || !barRef.current) return;
+    if (!config.scrollProgress || config.reducedMotion || !barRef.current) return;
     const update = () => {
       const pct = (window.scrollY / (document.body.scrollHeight - window.innerHeight)) * 100;
       gsap.set(barRef.current, { width: `${pct}%` });
     };
     window.addEventListener('scroll', update, { passive: true });
     return () => window.removeEventListener('scroll', update);
-  }, [config.scrollProgress]);
+  }, [config.scrollProgress, config.reducedMotion]);
 
   if (!config.scrollProgress) return null;
   return (
@@ -34,7 +34,7 @@ export const FloatingShapes = () => {
   const containerRef = useRef(null);
 
   useEffect(() => {
-    if (!config.pageFloatingShapes || !containerRef.current) return;
+    if (!config.pageFloatingShapes || config.reducedMotion || !containerRef.current) return;
     const container = containerRef.current;
     const shapes = [...container.children];
     shapes.forEach((shape, i) => {
@@ -49,9 +49,9 @@ export const FloatingShapes = () => {
         delay:    i * 0.7,
       });
     });
-  }, [config.pageFloatingShapes]);
+  }, [config.pageFloatingShapes, config.reducedMotion]);
 
-  if (!config.pageFloatingShapes) return null;
+  if (!config.pageFloatingShapes || config.reducedMotion) return null;
   return (
     <div ref={containerRef} className="fixed inset-0 pointer-events-none overflow-hidden z-0" aria-hidden>
       {[
@@ -79,7 +79,7 @@ export function use3DTilt(ref, { rotMax = 15, scaleHover = 1.04, glowColor } = {
   const { config } = useAnimation();
   useEffect(() => {
     const el = ref.current;
-    if (!el || !config.cardTilt) return;
+    if (!el || !config.cardTilt || config.reducedMotion) return;
     if (window.matchMedia('(hover: none)').matches) return;
     const max = config.cardTiltMax || rotMax;
     let bounds;
@@ -99,7 +99,7 @@ export function use3DTilt(ref, { rotMax = 15, scaleHover = 1.04, glowColor } = {
       el.removeEventListener('mousemove',  onMove);
       el.removeEventListener('mouseleave', onLeave);
     };
-  }, [ref, rotMax, scaleHover, glowColor, config.cardTilt, config.cardTiltMax, config.cardHoverGlow]);
+  }, [ref, rotMax, scaleHover, glowColor, config.cardTilt, config.cardTiltMax, config.cardHoverGlow, config.reducedMotion]);
 }
 
 /* ─── Scroll Reveal Hook ─────────────────────────────────────── */
@@ -108,6 +108,10 @@ export function useScrollReveal(ref, opts = {}) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    if (config.reducedMotion) {
+      gsap.set(opts.targets ? gsap.utils.toArray(opts.targets, el) : el, { opacity: 1, y: 0, rotateX: 0, rotateY: 0, scale: 1 });
+      return;
+    }
     const style  = config.sectionReveal || '3d';
     const stagger = opts.stagger ?? config.staggerDelay ?? 0.09;
     const pi      = config.parallaxIntensity ?? 1;
@@ -126,7 +130,7 @@ export function useScrollReveal(ref, opts = {}) {
       scrollTrigger: { trigger: el, start: opts.start || 'top 87%', toggleActions: 'play none none none' },
     });
     return () => { anim.scrollTrigger?.kill(); anim.kill(); };
-  }, [config.sectionReveal, config.staggerDelay, config.parallaxIntensity, opts.duration, opts.ease, opts.from, opts.stagger, opts.start, opts.targets, opts.to, ref]);
+  }, [config.sectionReveal, config.staggerDelay, config.parallaxIntensity, config.reducedMotion, opts.duration, opts.ease, opts.from, opts.stagger, opts.start, opts.targets, opts.to, ref]);
 }
 
 /* ─── Magnetic Button ────────────────────────────────────────── */
@@ -165,14 +169,14 @@ export const ParallaxSection = ({ children, speed = 0.4, className, style }) => 
   const ref    = useRef(null);
   const { config } = useAnimation();
   useEffect(() => {
-    if (!ref.current || !config.bannerParallax) return;
+    if (!ref.current || !config.bannerParallax || config.reducedMotion) return;
     const pi = config.parallaxIntensity || 1;
     const st = ScrollTrigger.create({
       trigger: ref.current, start: 'top bottom', end: 'bottom top', scrub: 1,
       onUpdate: (s) => gsap.set(ref.current, { y: s.progress * 120 * speed * pi }),
     });
     return () => st.kill();
-  }, [speed, config.bannerParallax, config.parallaxIntensity]);
+  }, [speed, config.bannerParallax, config.parallaxIntensity, config.reducedMotion]);
   return <div ref={ref} className={className} style={{ ...style, willChange: 'transform' }}>{children}</div>;
 };
 
@@ -206,10 +210,11 @@ export const TextReveal = ({ text, tag: Tag = 'h2', className, style, delay = 0 
 /* ─── Glowing Orb ────────────────────────────────────────────── */
 export const GlowOrb = ({ color, size = 300, top, left, right, bottom, opacity = 0.25, speed = 8, delay = 0 }) => {
   const ref = useRef(null);
+  const { config } = useAnimation();
   useEffect(() => {
-    if (!ref.current) return;
+    if (!ref.current || config.reducedMotion) return;
     gsap.to(ref.current, { x: 40, y: -30, duration: speed, yoyo: true, repeat: -1, ease: 'sine.inOut', delay });
-  }, [speed, delay]);
+  }, [speed, delay, config.reducedMotion]);
   return (
     <div ref={ref} className="absolute pointer-events-none will-change-transform"
       style={{ top, left, right, bottom, width: size, height: size }}>

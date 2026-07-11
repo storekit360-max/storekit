@@ -923,7 +923,8 @@ const Footer = ({ settings }) => {
 
         <div className="border-t pt-5 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs" style={{borderColor:'rgba(255,255,255,0.06)',color:'#475569'}}>
           <p>© {new Date().getFullYear()} {storeName}. All rights reserved.</p>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-x-4 gap-y-1">
+            <span>Developed by Zenstack360</span>
             {footerPages.filter(p=>['terms','privacy'].includes(p.slug)).map(p=>(
               <Link key={p.slug} to={`/page/${p.slug}`} className="hover:text-white transition-colors">{p.title}</Link>
             ))}
