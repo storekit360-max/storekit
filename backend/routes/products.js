@@ -17,7 +17,7 @@ const { adminAuth } = require('../middleware/auth');
 const { dispatchForTrigger, manualPublish } = require('../services/publisherService');
 
 // ─── IMAGE URL NORMALIZATION MIDDLEWARE ─────────────────────────────────────
-const { normalizeImagesMiddleware } = require('../utils/imageUrlHelper');
+const { normalizeImageUrl, normalizeImagesMiddleware } = require('../utils/imageUrlHelper');
 
 // In-memory upload for bulk-import excel files (not saved to disk)
 const bulkUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -673,6 +673,49 @@ router.get('/admin/brands', adminAuth, async (req, res) => {
     if (!tenantId) return;
     const brands = await Product.distinct('brand', { tenantId, brand: { $nin: [null, ''] } });
     res.json(brands.filter(Boolean).sort((a, b) => a.localeCompare(b)));
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// Public — active brands for the current storefront tenant.
+// Product.brand is a text field, so use a representative product image as the
+// brand tile image until a dedicated brand-logo model exists.
+router.get('/brands', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 16, 48);
+    const products = await Product.find({
+      isActive: true,
+      brand: { $exists: true, $nin: [null, ''] },
+    })
+      .select('brand thumbnail images slug soldCount updatedAt')
+      .sort({ soldCount: -1, updatedAt: -1 })
+      .limit(1000)
+      .lean();
+
+    const byBrand = new Map();
+    products.forEach(product => {
+      const name = String(product.brand || '').trim();
+      if (!name) return;
+      const key = name.toLowerCase();
+      const image = product.thumbnail || product.images?.[0] || '';
+      const existing = byBrand.get(key);
+      if (existing) {
+        existing.productCount += 1;
+        if (!existing.image && image) existing.image = normalizeImageUrl(image);
+        return;
+      }
+      byBrand.set(key, {
+        name,
+        slug: slugify(name),
+        image: image ? normalizeImageUrl(image) : '',
+        productCount: 1,
+      });
+    });
+
+    const brands = Array.from(byBrand.values())
+      .sort((a, b) => b.productCount - a.productCount || a.name.localeCompare(b.name))
+      .slice(0, limit);
+
+    res.json({ brands });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 

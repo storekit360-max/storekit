@@ -473,6 +473,38 @@ const CategoryCard = ({ cat }) => {
   );
 };
 
+/* ── Brand Logo Tile ───────────────────────────────────────────────────── */
+const BrandLogoCard = ({ brand }) => {
+  const ref = useRef(null);
+  const initials = String(brand.name || 'Brand')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(word => word[0])
+    .join('')
+    .toUpperCase();
+
+  use3DTilt(ref, { rotMax:12, scaleHover:1.04 });
+
+  return (
+    <Link ref={ref} to={`/brand/${brand.slug}`} className="group block rounded-2xl border p-4 sm:p-5 transition-all"
+      style={{ background:'var(--card-bg)', borderColor:'var(--card-border)', transformStyle:'preserve-3d', willChange:'transform' }}
+      onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--color-primary)';e.currentTarget.style.boxShadow='0 16px 44px rgba(0,0,0,0.09)';}}
+      onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--card-border)';e.currentTarget.style.boxShadow='';}}>
+      <div className="mx-auto w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center overflow-hidden mb-3"
+        style={{ background:'linear-gradient(135deg,var(--color-primary)10,var(--color-accent)08)' }}>
+        {brand.image ? (
+          <img src={brand.image} alt={brand.name} className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"/>
+        ) : (
+          <span className="text-lg sm:text-xl font-black" style={{ color:'var(--color-primary)', fontFamily:'var(--font-display)' }}>{initials}</span>
+        )}
+      </div>
+      <p className="text-sm font-black text-center truncate" style={{ color:'var(--color-dark)', fontFamily:'var(--font-display)' }}>{brand.name}</p>
+      <p className="text-[11px] text-gray-400 text-center mt-1">{brand.productCount} product{brand.productCount===1?'':'s'}</p>
+    </Link>
+  );
+};
+
 /* ── Section Heading — from settings ─────────────────────────────────── */
 const SectionHeading = ({ title, subtitle, link, linkLabel='View All →' }) => {
   const headRef=useRef(null), subRef=useRef(null), lnkRef=useRef(null);
@@ -658,30 +690,30 @@ const normalizeTemplateKey = (settings = {}) => {
 };
 
 const TEMPLATE_HOME_PROFILES = {
-  classic:       { order:['hero','categories','featured','deals','promo','bestsellers','seasonal','new_arrivals','newsletter'], shell:'standard' },
-  modern:        { order:['hero','featured','categories','promo','new_arrivals','deals','bestsellers','newsletter'], shell:'floating' },
-  marketplace:   { order:['hero','categories','deals','featured','bestsellers','promo','new_arrivals','newsletter'], shell:'market' },
-  fashion:       { order:['hero','promo','featured','categories','new_arrivals','bestsellers','newsletter'], shell:'editorial' },
-  electronics:   { order:['hero','categories','featured','deals','bestsellers','promo','new_arrivals','newsletter'], shell:'tech' },
-  mobile:        { order:['hero','featured','deals','categories','bestsellers','new_arrivals','promo','newsletter'], shell:'tech' },
-  grocery:       { order:['categories','hero','deals','bestsellers','featured','new_arrivals','promo','newsletter'], shell:'quickshop' },
-  beauty:        { order:['hero','featured','promo','categories','new_arrivals','bestsellers','newsletter'], shell:'soft' },
-  furniture:     { order:['hero','categories','promo','featured','new_arrivals','deals','newsletter'], shell:'catalog' },
-  sports:        { order:['hero','bestsellers','categories','featured','promo','new_arrivals','newsletter'], shell:'dynamic' },
-  kids:          { order:['hero','categories','new_arrivals','featured','promo','deals','newsletter'], shell:'playful' },
-  organic:       { order:['hero','categories','featured','deals','new_arrivals','promo','newsletter'], shell:'natural' },
-  luxury:        { order:['hero','featured','promo','categories','new_arrivals','newsletter'], shell:'luxury' },
-  jewelry:       { order:['hero','featured','categories','promo','new_arrivals','newsletter'], shell:'luxury' },
-  premiumApple:  { order:['hero','featured','categories','new_arrivals','promo','newsletter'], shell:'apple' },
-  pharmacy:      { order:['categories','hero','featured','deals','new_arrivals','newsletter'], shell:'clinical' },
-  b2b:           { order:['categories','featured','hero','deals','new_arrivals','newsletter'], shell:'professional' },
-  wholesale:     { order:['deals','categories','featured','hero','new_arrivals','newsletter'], shell:'professional' },
-  minimal:       { order:['hero','featured','categories','new_arrivals','newsletter'], shell:'minimal' },
-  books:         { order:['categories','hero','featured','new_arrivals','promo','newsletter'], shell:'editorial' },
-  neon:          { order:['hero','featured','deals','categories','bestsellers','new_arrivals','newsletter'], shell:'neon' },
-  automotive:    { order:['hero','categories','featured','deals','promo','new_arrivals','newsletter'], shell:'garage' },
-  sriLanka:      { order:['hero','categories','deals','featured','promo','new_arrivals','newsletter'], shell:'local' },
-  startup:       { order:['hero','featured','categories','deals','new_arrivals','promo','newsletter'], shell:'startup' },
+  classic:       { order:['hero','categories','brands','featured','deals','promo','bestsellers','seasonal','new_arrivals','newsletter'], shell:'standard' },
+  modern:        { order:['hero','featured','categories','brands','promo','new_arrivals','deals','bestsellers','newsletter'], shell:'floating' },
+  marketplace:   { order:['hero','categories','brands','deals','featured','bestsellers','promo','new_arrivals','newsletter'], shell:'market' },
+  fashion:       { order:['hero','promo','featured','brands','categories','new_arrivals','bestsellers','newsletter'], shell:'editorial' },
+  electronics:   { order:['hero','categories','brands','featured','deals','bestsellers','promo','new_arrivals','newsletter'], shell:'tech' },
+  mobile:        { order:['hero','featured','deals','brands','categories','bestsellers','new_arrivals','promo','newsletter'], shell:'tech' },
+  grocery:       { order:['categories','brands','hero','deals','bestsellers','featured','new_arrivals','promo','newsletter'], shell:'quickshop' },
+  beauty:        { order:['hero','featured','promo','brands','categories','new_arrivals','bestsellers','newsletter'], shell:'soft' },
+  furniture:     { order:['hero','categories','brands','promo','featured','new_arrivals','deals','newsletter'], shell:'catalog' },
+  sports:        { order:['hero','bestsellers','categories','brands','featured','promo','new_arrivals','newsletter'], shell:'dynamic' },
+  kids:          { order:['hero','categories','brands','new_arrivals','featured','promo','deals','newsletter'], shell:'playful' },
+  organic:       { order:['hero','categories','brands','featured','deals','new_arrivals','promo','newsletter'], shell:'natural' },
+  luxury:        { order:['hero','featured','brands','promo','categories','new_arrivals','newsletter'], shell:'luxury' },
+  jewelry:       { order:['hero','featured','brands','categories','promo','new_arrivals','newsletter'], shell:'luxury' },
+  premiumApple:  { order:['hero','featured','brands','categories','new_arrivals','promo','newsletter'], shell:'apple' },
+  pharmacy:      { order:['categories','brands','hero','featured','deals','new_arrivals','newsletter'], shell:'clinical' },
+  b2b:           { order:['categories','brands','featured','hero','deals','new_arrivals','newsletter'], shell:'professional' },
+  wholesale:     { order:['deals','categories','brands','featured','hero','new_arrivals','newsletter'], shell:'professional' },
+  minimal:       { order:['hero','featured','brands','categories','new_arrivals','newsletter'], shell:'minimal' },
+  books:         { order:['categories','brands','hero','featured','new_arrivals','promo','newsletter'], shell:'editorial' },
+  neon:          { order:['hero','featured','deals','brands','categories','bestsellers','new_arrivals','newsletter'], shell:'neon' },
+  automotive:    { order:['hero','categories','brands','featured','deals','promo','new_arrivals','newsletter'], shell:'garage' },
+  sriLanka:      { order:['hero','categories','brands','deals','featured','promo','new_arrivals','newsletter'], shell:'local' },
+  startup:       { order:['hero','featured','brands','categories','deals','new_arrivals','promo','newsletter'], shell:'startup' },
 };
 
 const TemplateHomeRenderer = ({ settings, isOn, sections, orderedIds }) => {
@@ -763,6 +795,7 @@ export default function Home() {
   const [newArrivals, setNewArrivals] = useState([]);
   const [onSale,      setOnSale]      = useState([]);
   const [categories,  setCategories]  = useState([]);
+  const [brands,      setBrands]      = useState([]);
   const [heroBanners, setHeroBanners] = useState([]);
   const [promoBanners,setPromoBanners]= useState([]);
   // dbReady: true once all 6 API calls resolve (or fail)
@@ -794,13 +827,15 @@ export default function Home() {
       API.get('/products?limit=8'),
       API.get('/products?onSale=true&limit=8'),
       API.get('/categories?limit=12'),
+      API.get('/products/brands?limit=16'),
       API.get('/banners?position=hero'),
       API.get('/banners?position=promo'),
-    ]).then(([feat,newest,sale,cats,hero,promo]) => {
+    ]).then(([feat,newest,sale,cats,brandRes,hero,promo]) => {
       setFeatured(feat.data.products||[]);
       setNewArrivals(newest.data.products||[]);
       setOnSale(sale.data.products||[]);
       setCategories(cats.data||[]);
+      setBrands(brandRes.data.brands||[]);
       setHeroBanners(hero.data||[]);
       setPromoBanners(promo.data||[]);
     }).catch(()=>{}).finally(()=>setDbReady(true));
@@ -829,7 +864,7 @@ export default function Home() {
   };
 
   // Build ordered section list
-  const DEFAULT_ORDER = ['hero','categories','featured','deals','promo','bestsellers','seasonal','new_arrivals','newsletter','recently'];
+  const DEFAULT_ORDER = ['hero','categories','brands','featured','deals','promo','bestsellers','seasonal','new_arrivals','newsletter','recently'];
   // If admin has a saved layout that doesn't include 'deals', append it after 'featured'
   const orderedIds = (() => {
     if (!sectionOrder) return DEFAULT_ORDER;
@@ -851,6 +886,14 @@ export default function Home() {
         <SectionHeading title={S('sectionCatTitle','Browse Categories')} subtitle={S('sectionCatSubtitle','Find exactly what you need')}/>
         <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-4">
           {categories.map(cat=><CategoryCard key={cat._id} cat={cat}/>)}
+        </div>
+      </section>
+    ),
+    brands: brands.length>0 && (
+      <section key="brands" className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <SectionHeading title={S('sectionBrandsTitle','Shop by Brand')} subtitle={S('sectionBrandsSubtitle','Browse brands available in this store')} link="/shop"/>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+          {brands.map(brand=><BrandLogoCard key={brand.slug || brand.name} brand={brand}/>)}
         </div>
       </section>
     ),
@@ -908,7 +951,6 @@ export default function Home() {
     recently: null, // placeholder — reserved for future recently-viewed component
     gift_cards: null,
     testimonials: null,
-    brands: null,
   };
 
   // Loading screen: shown every visit until DB data + live settings are both ready.

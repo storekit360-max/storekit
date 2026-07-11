@@ -46,6 +46,7 @@ const getCacheTTL = (config = {}) => {
   if ([
     '/settings',
     '/products',
+    '/products/brands',
     '/categories',
     '/banners',
     '/pages',
