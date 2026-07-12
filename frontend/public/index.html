@@ -174,7 +174,7 @@
 
       var controller=null, timeout=null;
       if(window.AbortController){controller=new AbortController();timeout=setTimeout(function(){try{controller.abort();}catch(e){}},3500);}
-      fetch(settingsUrl,{
+      var settingsRequest=fetch(settingsUrl,{
         credentials:'include',
         headers:{'Accept':'application/json','X-Tenant-Domain':host},
         signal:controller?controller.signal:undefined
@@ -198,6 +198,10 @@
           if(cached) applySettings(cached);
           else document.documentElement.classList.add('storekit-theme-ready');
         });
+      // React waits only on a tenant's first uncached visit. Returning visitors
+      // can mount immediately from the tenant-scoped cache while this refreshes
+      // settings in the background.
+      window.__STOREKIT_SETTINGS_READY__=cached?Promise.resolve():settingsRequest;
     })();
     </script>
       <meta name="google-site-verification" content="JBwfXhDxBe4cSEra_DYfuPe1BtNCXxW0yMBPCo8VSwI"/>
