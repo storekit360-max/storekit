@@ -50,6 +50,12 @@ const tenantSchema = new mongoose.Schema({
     googleSearchConsole: { type: String, default: '' },
     facebookPixel: { type: String, default: '' },
     currencyCode: { type: String, default: 'LKR' },
+    bankTransferEnabled: { type: Boolean, default: true },
+    bankName: { type: String, default: '' },
+    bankAccountName: { type: String, default: '' },
+    bankAccountNumber: { type: String, default: '' },
+    bankBranch: { type: String, default: '' },
+    codEnabled: { type: Boolean, default: true },
     robotsTxt: { type: String, default: '' },
     seo_config: { type: mongoose.Schema.Types.Mixed, default: {} },
     // Ordered/enabled storefront sections saved by Admin > Layout Builder.

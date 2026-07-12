@@ -549,7 +549,17 @@ export default function Checkout() {
 
   // Load payment gateways and delivery services
   useEffect(() => {
-    API.get('/payments/gateways').then(r => setGateways(r.data || [])).catch(() => {});
+    API.get('/payments/gateways').then(r => {
+      const supported = new Set(['payhere', 'stripe', 'paypal']);
+      const unique = new Map();
+      (Array.isArray(r.data) ? r.data : []).forEach(gateway => {
+        const key = String(gateway?.gateway || '').toLowerCase().trim();
+        if (supported.has(key) && !unique.has(key)) {
+          unique.set(key, { ...gateway, gateway: key });
+        }
+      });
+      setGateways(Array.from(unique.values()));
+    }).catch(() => setGateways([]));
     API.get('/delivery').then(r => {
       const svcs = r.data?.services || r.data || [];
       setDeliveryServices(svcs);

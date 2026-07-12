@@ -225,7 +225,7 @@ safeMount('/api/gift-cards',    require('./routes/giftcards'), tenantScope);
 safeMount('/api/seasonal',      require('./routes/seasonal'), tenantScope);
 safeMount('/api/upload',        require('./routes/upload'));
 safeMount('/api/scrape',        require('./routes/scrape'));
-safeMount('/api/payments',      require('./routes/payments'));
+safeMount('/api/payments',      require('./routes/payments'), tenantScope);
 safeMount('/api/delivery',      require('./routes/delivery'), tenantScope);
 safeMount('/api/pages',         require('./routes/pages'), tenantScope);
 safeMount('/api/subscribers',   require('./routes/subscribers'), tenantScope);

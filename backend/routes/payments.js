@@ -5,6 +5,12 @@ const rateLimit = require('express-rate-limit');
 const { PaymentGateway } = require('../models/index');
 const { adminAuth } = require('../middleware/auth');
 
+function tenantIdForRequest(req) {
+  return req.user?.tenantId || req.tenantId || null;
+}
+
+const GATEWAY_NAMES = { payhere: 'PayHere', stripe: 'Stripe', paypal: 'PayPal' };
+
 // ── Rate limiters ─────────────────────────────────────────────────────────────
 // Prevent brute-force / enumeration attacks on payment endpoints
 const paymentInitLimiter = rateLimit({
@@ -66,7 +72,9 @@ function requireAuth(req, res, next) {
 // ── Public: get enabled gateways (no secrets ever exposed) ───────────────────
 router.get('/gateways', async (req, res) => {
   try {
-    const gateways = await PaymentGateway.find({ isEnabled: true });
+    const tenantId = tenantIdForRequest(req);
+    if (!tenantId) return res.json([]);
+    const gateways = await PaymentGateway.find({ tenantId, isEnabled: true });
     const safe = gateways.map(g => ({
       _id:                 g._id,
       gateway:             g.gateway,
@@ -89,18 +97,23 @@ router.get('/gateways', async (req, res) => {
 // ── Admin: get all gateways with full config ──────────────────────────────────
 router.get('/admin/all', adminAuth, async (req, res) => {
   try {
-    const gateways = await PaymentGateway.find().sort({ gateway: 1 });
+    const tenantId = tenantIdForRequest(req);
+    if (!tenantId) return res.status(400).json({ message: 'Tenant not resolved' });
+    const gateways = await PaymentGateway.find({ tenantId }).sort({ gateway: 1 });
     res.json(gateways);
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
 router.put('/admin/:gateway', adminAuth, async (req, res) => {
   try {
-    const { gateway } = req.params;
+    const tenantId = tenantIdForRequest(req);
+    if (!tenantId) return res.status(400).json({ message: 'Tenant not resolved' });
+    const gateway = String(req.params.gateway || '').toLowerCase();
+    if (!GATEWAY_NAMES[gateway]) return res.status(400).json({ message: 'Unsupported gateway' });
     const { isEnabled, isLive, displayName, description, logo, config } = req.body;
     const result = await PaymentGateway.findOneAndUpdate(
-      { gateway },
-      { gateway, isEnabled, isLive, displayName, description, logo, config, updatedAt: Date.now() },
+      { tenantId, gateway },
+      { tenantId, gateway, isEnabled, isLive, displayName, description, logo, config, updatedAt: Date.now() },
       { upsert: true, new: true }
     );
     res.json(result);
@@ -109,8 +122,14 @@ router.put('/admin/:gateway', adminAuth, async (req, res) => {
 
 router.put('/admin/:gateway/toggle', adminAuth, async (req, res) => {
   try {
-    const gw = await PaymentGateway.findOne({ gateway: req.params.gateway });
-    if (!gw) return res.status(404).json({ message: 'Gateway not found' });
+    const tenantId = tenantIdForRequest(req);
+    if (!tenantId) return res.status(400).json({ message: 'Tenant not resolved' });
+    const gateway = String(req.params.gateway || '').toLowerCase();
+    if (!GATEWAY_NAMES[gateway]) return res.status(400).json({ message: 'Unsupported gateway' });
+    let gw = await PaymentGateway.findOne({ tenantId, gateway });
+    if (!gw) {
+      gw = new PaymentGateway({ tenantId, gateway, displayName: GATEWAY_NAMES[gateway], isEnabled: false });
+    }
     gw.isEnabled = !gw.isEnabled;
     await gw.save();
     res.json(gw);
@@ -133,7 +152,8 @@ function buildPayHereHash(merchantId, orderId, amount, currency, merchantSecret)
 // Rate limited to prevent hash-fishing attacks.
 router.post('/payhere/preflight', requireAuth, paymentInitLimiter, async (req, res) => {
   try {
-    const gw = await PaymentGateway.findOne({ gateway: 'payhere', isEnabled: true });
+    const tenantId = tenantIdForRequest(req);
+    const gw = await PaymentGateway.findOne({ tenantId, gateway: 'payhere', isEnabled: true });
     if (!gw?.config?.merchantId) return res.status(400).json({ message: 'PayHere not configured' });
 
     const { amount, currency = 'LKR', customerName, email, phone, address, city, country } = req.body;
@@ -292,7 +312,8 @@ router.post('/payhere/notify', webhookLimiter, async (req, res) => {
 // Requires auth — prevents anonymous users from creating intents
 router.post('/stripe/create-intent', requireAuth, paymentInitLimiter, async (req, res) => {
   try {
-    const gw = await PaymentGateway.findOne({ gateway: 'stripe', isEnabled: true });
+    const tenantId = tenantIdForRequest(req);
+    const gw = await PaymentGateway.findOne({ tenantId, gateway: 'stripe', isEnabled: true });
     if (!gw?.config?.secretKey) return res.status(400).json({ message: 'Stripe not configured' });
 
     const { amount, currency = 'usd' } = req.body;
@@ -385,7 +406,8 @@ router.post('/paypal/capture', requireAuth, paymentInitLimiter, async (req, res)
   try {
     const Order            = require('../models/Order');
     const { Notification } = require('../models/index');
-    const gw = await PaymentGateway.findOne({ gateway: 'paypal', isEnabled: true });
+    const tenantId = tenantIdForRequest(req);
+    const gw = await PaymentGateway.findOne({ tenantId, gateway: 'paypal', isEnabled: true });
     if (!gw?.config?.clientId || !gw?.config?.clientSecret) {
       return res.status(400).json({ message: 'PayPal not configured' });
     }
