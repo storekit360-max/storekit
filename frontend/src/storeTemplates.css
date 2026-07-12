@@ -312,4 +312,5 @@ html[data-store-template] .template-section .grid>.product-card .product-card-fo
    same two-line-title and bottom-aligned price/action contract. */
 .catalog-product-card{align-self:stretch}
 .catalog-product-card .catalog-product-body h3{height:2.75em;min-height:2.75em;max-height:2.75em;overflow:hidden}
+.catalog-product-card .catalog-product-title{height:2.75em;min-height:2.75em;max-height:2.75em;overflow:hidden}
 .catalog-product-card .catalog-product-footer{margin-top:auto}

@@ -173,7 +173,7 @@ export default function CampaignPage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
               {products.map(p => (
                 <Link key={p._id} to={`/product/${p.slug}`}
-                  className="bg-white rounded-2xl border border-gray-100 overflow-hidden group hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                  className="catalog-product-card bg-white rounded-2xl border border-gray-100 overflow-hidden group hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col h-full">
                   <div className="relative aspect-square bg-gray-50 overflow-hidden">
                     <img src={p.images?.[0]||'https://via.placeholder.com/300'} alt={p.name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>
@@ -184,9 +184,9 @@ export default function CampaignPage() {
                       </div>
                     )}
                   </div>
-                  <div className="p-3">
-                    <p className="text-sm font-semibold text-gray-800 line-clamp-2 leading-snug mb-1">{p.name}</p>
-                    <div className="flex items-center gap-2">
+                  <div className="catalog-product-body p-3 flex flex-col flex-1">
+                    <p className="catalog-product-title text-sm font-semibold text-gray-800 line-clamp-2 leading-snug mb-1">{p.name}</p>
+                    <div className="catalog-product-footer flex items-center gap-2 mt-auto">
                       <span className="font-bold text-base" style={{color:primaryColor}}>{sym} {(p.salePrice||p.price).toLocaleString()}</span>
                       {p.salePrice && p.price > p.salePrice && (
                         <span className="text-xs text-gray-400 line-through">{sym} {p.price.toLocaleString()}</span>
