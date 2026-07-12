@@ -120,7 +120,7 @@ export default function ProductDetail() {
   // "<snippet>. Rs.<price> (was Rs.<orig>). Fast delivery across Sri Lanka. Shop at StoreKit."
   const seoDescription = React.useMemo(() => {
     if (!product) return undefined;
-    const price     = product.salePrice || product.price;
+    const price     = product.isOnSale && product.salePrice ? product.salePrice : product.price;
     const origPrice = product.isOnSale && product.price ? product.price : null;
     const priceStr  = price ? `Rs.${price.toLocaleString()}` : '';
     const wasStr    = origPrice && origPrice !== price ? ` (was Rs.${origPrice.toLocaleString()})` : '';
@@ -166,6 +166,7 @@ export default function ProductDetail() {
     type:        'product',
     product,
     reviews,
+    noindex: !loading && !product,
     keywords:    seoKeywords,
     breadcrumbs: product ? [
       { name: 'Shop', url: '/shop' },

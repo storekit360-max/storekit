@@ -9,6 +9,7 @@
  * GET  /api/seo/categories-sitemap.xml   — Category + brand pages (per-tenant)
  * GET  /api/seo/brands-sitemap.xml        — Brand pages (per-tenant)
  * GET  /api/seo/pages-sitemap.xml        — Static + business pages (per-tenant)
+ * GET  /api/seo/google-shopping-feed.xml — Merchant Center product feed (per-tenant)
  * GET  /api/seo/robots.txt              — Dynamic robots.txt (per-tenant)
  * GET  /api/seo/meta                    — Store-level meta tags (per-tenant)
  * GET  /api/seo/product-meta/:slug      — Per-product meta for SSR (per-tenant)
@@ -27,7 +28,7 @@ const fs       = require('fs');
 const path     = require('path');
 
 const Product          = require('../models/Product');
-const { Category, Settings, Review } = require('../models/index');
+const { Category, Settings, Review, BusinessPage } = require('../models/index');
 const Tenant           = require('../models/Tenant');
 const { normalizeDomain, getHeaderDomainCandidates, isTenantAvailable } = require('../middleware/tenant');
 
@@ -196,7 +197,9 @@ async function resolveTenantForSEO(req) {
   return {
     tenant,
     tenantId: tenant._id,
-    siteUrl: (mergedConfig.siteUrl || siteUrl).replace(/\/$/, ''),
+    // Canonicals and sitemap URLs must always use a verified active tenant
+    // domain. An old/manual siteUrl setting must not point Google elsewhere.
+    siteUrl: siteUrl.replace(/\/$/, ''),
     storeName: mergedConfig.siteName || tenant.storeName || 'StoreKit',
     logoUrl: mergedConfig.logoUrl || tenant.settings?.logoUrl || '',
     ogImage: mergedConfig.defaultOgImage || tenant.settings?.ogImage || tenant.settings?.logoUrl || '',
@@ -310,6 +313,58 @@ ${entries.join('\n')}
   }
 });
 
+// ── GET /api/seo/google-shopping-feed.xml — Merchant Center RSS feed ────────
+router.get('/google-shopping-feed.xml', async (req, res) => {
+  try {
+    const { siteUrl, tenantId, storeName, tenantSettings, unavailable, notFound } = await resolveTenantForSEO(req);
+    if (unavailable) return noIndexXml(res, 503, 'Store unavailable');
+    if (notFound) return noIndexXml(res, 404, 'Store not found');
+
+    const rawCurrency = String(tenantSettings?.currencyCode || 'LKR').toUpperCase();
+    const currency = /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : 'LKR';
+    const products = await Product.find(
+      tenantFilter(tenantId, { isActive: true, price: { $gt: 0 } }),
+      'name slug description shortDescription thumbnail images price salePrice isOnSale stock sku brand updatedAt'
+    ).sort({ updatedAt: -1 }).lean();
+
+    const items = products.filter(product => product.thumbnail || product.images?.[0]).map(product => {
+      const activePrice = product.isOnSale && product.salePrice > 0 ? product.salePrice : product.price;
+      const description = String(product.shortDescription || product.description || product.name)
+        .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 5000);
+      const image = product.thumbnail || product.images?.[0] || '';
+      return `  <item>
+    <g:id>${xe(product.sku || product._id)}</g:id>
+    <title>${xe(product.name)}</title>
+    <description>${xe(description)}</description>
+    <link>${xe(`${siteUrl}/product/${product.slug}`)}</link>
+    ${image ? `<g:image_link>${xe(image)}</g:image_link>` : ''}
+    <g:availability>${product.stock > 0 ? 'in_stock' : 'out_of_stock'}</g:availability>
+    <g:price>${Number(activePrice).toFixed(2)} ${currency}</g:price>
+    <g:condition>new</g:condition>
+    ${product.brand ? `<g:brand>${xe(product.brand)}</g:brand>` : ''}
+    ${product.brand && product.sku ? `<g:mpn>${xe(product.sku)}</g:mpn>` : '<g:identifier_exists>no</g:identifier_exists>'}
+  </item>`;
+    }).join('\n');
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">
+<channel>
+  <title>${xe(storeName)} Products</title>
+  <link>${xe(siteUrl)}</link>
+  <description>${xe(`Active products available from ${storeName}`)}</description>
+${items}
+</channel>
+</rss>`;
+
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.send(xml);
+  } catch (err) {
+    console.error('Google shopping feed error:', err.message);
+    return res.status(500).send('<?xml version="1.0"?><error>Feed generation failed</error>');
+  }
+});
+
 // ── GET /api/seo/categories-sitemap.xml — Per-tenant categories ──────────────
 router.get('/categories-sitemap.xml', async (req, res) => {
   try {
@@ -404,6 +459,18 @@ router.get('/pages-sitemap.xml', async (req, res) => {
     const entries = staticPages.map(p =>
       urlEntry(`${siteUrl}${p.path}`, today, p.changefreq, p.priority)
     );
+
+    const businessPages = await BusinessPage.find(
+      tenantFilter(tenantId, { isActive: true }),
+      'slug updatedAt'
+    ).lean();
+    businessPages.forEach(page => {
+      entries.push(urlEntry(
+        `${siteUrl}/page/${page.slug}`,
+        page.updatedAt ? new Date(page.updatedAt).toISOString().split('T')[0] : today,
+        'monthly', '0.5'
+      ));
+    });
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -515,6 +582,7 @@ function injectMeta(html, { title, desc, canonical, ogImage, ogType = 'website',
   const head = `
   <title>${xe(title)}</title>
   <meta name="description" content="${xe(desc)}">
+  <meta name="robots" content="index,follow,max-image-preview:large">
   <meta name="keywords" content="${xe(keywords || '')}">
   <link rel="canonical" href="${xe(canonical)}">
   <meta property="og:title" content="${xe(title)}">
@@ -534,6 +602,11 @@ function injectMeta(html, { title, desc, canonical, ogImage, ogType = 'website',
   return html
     .replace(/<title>[^<]*<\/title>/, '')
     .replace(/<meta name="description"[^>]*>/g, '')
+    .replace(/<meta name="robots"[^>]*>/g, '')
+    .replace(/<link rel="canonical"[^>]*>/g, '')
+    .replace(/<meta property="og:[^"]+"[^>]*>/g, '')
+    .replace(/<meta name="twitter:[^"]+"[^>]*>/g, '')
+    .replace(/<script[^>]*type="application\/ld\+json"[^>]*>[\s\S]*?<\/script>/g, '')
     .replace(/<\/head>/, `${head}\n</head>`);
 }
 
@@ -572,7 +645,7 @@ function injectWindowConfig(html, tenantInfo) {
 // ── Schema helpers ─────────────────────────────────────────────────────────────
 function buildProductTitle(product, storeName) {
   const brand = product.brand ? `${product.brand} ` : '';
-  const price = product.salePrice || product.price;
+  const price = product.isOnSale && product.salePrice ? product.salePrice : product.price;
   return `${brand}${product.name} — Price in Sri Lanka Rs.${price?.toLocaleString()} | ${storeName}`;
 }
 
@@ -594,7 +667,7 @@ async function getReviewSchemas(productId, tenantId) {
 }
 
 function buildProductFAQ(product, siteUrl, storeName) {
-  const price = product.salePrice || product.price;
+  const price = product.isOnSale && product.salePrice ? product.salePrice : product.price;
   const qs = [
     { q: `What is the price of ${product.name} in Sri Lanka?`, a: `${product.name} is available at Rs.${price?.toLocaleString()} at ${storeName}.` },
     { q: `Is ${product.name} available in Sri Lanka?`, a: `Yes, ${product.name} is available for purchase at ${storeName} with fast delivery across Sri Lanka.` },
@@ -714,7 +787,8 @@ const seoRenderMiddleware = async (req, res) => {
         const productUrl   = `${siteUrl}/product/${product.slug}`;
         const metaTitle    = buildProductTitle(product, storeName);
         const plainDesc    = String(product.shortDescription || product.description || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-        const priceText    = product.salePrice ? `Rs.${product.salePrice.toLocaleString()} (was Rs.${product.price.toLocaleString()})` : `Rs.${product.price?.toLocaleString()}`;
+        const activePrice  = product.isOnSale && product.salePrice ? product.salePrice : product.price;
+        const priceText    = product.isOnSale && product.salePrice ? `Rs.${product.salePrice.toLocaleString()} (was Rs.${product.price.toLocaleString()})` : `Rs.${product.price?.toLocaleString()}`;
         const _raw         = (plainDesc.split('.')[0] || plainDesc).trim();
         const baseDesc     = _raw.length <= 85 ? _raw : _raw.slice(0, _raw.lastIndexOf(' ', 85));
         const metaDesc     = `${baseDesc || product.name}. ${priceText}. Fast delivery. Shop at ${storeName}.`.slice(0, 165);
@@ -734,31 +808,16 @@ const seoRenderMiddleware = async (req, res) => {
           ...(product.sku ? { mpn: product.sku } : {}),
           ...(product.brand ? { brand: { '@type': 'Brand', name: product.brand } } : {}),
           offers: {
-            '@type': 'Offer', url: productUrl, priceCurrency: tenantSettings.currency || seoSettings.currencyCode || 'LKR',
-            price: String(product.salePrice || product.price),
-            priceValidUntil: product.saleEndsAt
-              ? new Date(product.saleEndsAt).toISOString().split('T')[0]
-              : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            '@type': 'Offer', url: productUrl,
+            priceCurrency: /^[A-Z]{3}$/.test(String(seoSettings.currencyCode || tenantSettings.currency || '').toUpperCase())
+              ? String(seoSettings.currencyCode || tenantSettings.currency).toUpperCase() : 'LKR',
+            price: Number(activePrice),
+            ...(product.isOnSale && product.saleEndsAt ? {
+              priceValidUntil: new Date(product.saleEndsAt).toISOString().split('T')[0],
+            } : {}),
             availability: product.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
             itemCondition: 'https://schema.org/NewCondition',
             seller: { '@type': 'Organization', name: storeName },
-            shippingDetails: {
-              '@type': 'OfferShippingDetails',
-              shippingRate: { '@type': 'MonetaryAmount', value: '0', currency: tenantSettings.currency || seoSettings.currencyCode || 'LKR' },
-              deliveryTime: {
-                '@type': 'ShippingDeliveryTime',
-                handlingTime: { '@type': 'QuantitativeValue', minValue: 0, maxValue: 1, unitCode: 'DAY' },
-                transitTime:  { '@type': 'QuantitativeValue', minValue: 1, maxValue: 5, unitCode: 'DAY' },
-              },
-              shippingDestination: { '@type': 'DefinedRegion', addressCountry: tenantSettings.country ? 'LK' : 'LK' },
-            },
-            hasMerchantReturnPolicy: {
-              '@type': 'MerchantReturnPolicy',
-              applicableCountry: 'LK',
-              returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
-              merchantReturnDays: 14, returnMethod: 'https://schema.org/ReturnByMail',
-              returnFees: 'https://schema.org/FreeReturn',
-            },
           },
           ...(product.ratings?.count > 0 ? {
             aggregateRating: {
@@ -781,12 +840,12 @@ const seoRenderMiddleware = async (req, res) => {
           ],
         };
 
-        const faqSchema = buildProductFAQ(product, siteUrl, storeName);
-        const out = injectMeta(html, { title: metaTitle, desc: metaDesc, canonical: productUrl, ogImage, ogType: 'product', keywords, schemas: [schema, breadcrumb, orgSchema, faqSchema] });
+        const out = injectMeta(html, { title: metaTitle, desc: metaDesc, canonical: productUrl, ogImage, ogType: 'product', keywords, schemas: [schema, breadcrumb, orgSchema] });
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-cache, must-revalidate');
         return res.status(200).send(injectWindowConfig(out, tenantInfo));
       }
+      return noIndexResponse(res, 404, '<!doctype html><meta name="robots" content="noindex"><title>Product not found</title><h1>Product not found</h1>');
     } catch (err) { console.error('[SSR product]', err.message); }
   }
 
@@ -814,9 +873,8 @@ const seoRenderMiddleware = async (req, res) => {
           { '@type': 'ListItem', position: 2, name: 'Shop', item: `${siteUrl}/shop` },
           { '@type': 'ListItem', position: 3, name: cat.name, item: catUrl },
         ]};
-        const faqSchema      = buildCategoryFAQ(cat.name, siteUrl);
         const itemListSchema = buildItemListSchema(catProducts, catUrl, `${cat.name} — Buy Online`);
-        const out = injectMeta(html, { title, desc, canonical: catUrl, ogImage, ogType: 'website', keywords, schemas: [breadcrumb, orgSchema, faqSchema, itemListSchema].filter(Boolean) });
+        const out = injectMeta(html, { title, desc, canonical: catUrl, ogImage, ogType: 'website', keywords, schemas: [breadcrumb, orgSchema, itemListSchema].filter(Boolean) });
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-cache, must-revalidate');
         return res.status(200).send(injectWindowConfig(out, tenantInfo));
@@ -846,9 +904,8 @@ const seoRenderMiddleware = async (req, res) => {
         { '@type': 'ListItem', position: 2, name: 'Shop', item: `${siteUrl}/shop` },
         { '@type': 'ListItem', position: 3, name: `${brandName} Products`, item: brandUrl },
       ]};
-      const faqSchema      = buildBrandFAQ(brandName, siteUrl, slug);
       const itemListSchema = buildItemListSchema(brandProducts, brandUrl, `${brandName} Products`);
-      const out = injectMeta(html, { title, desc, canonical: brandUrl, ogImage, ogType: 'website', keywords, schemas: [breadcrumb, orgSchema, faqSchema, itemListSchema].filter(Boolean) });
+      const out = injectMeta(html, { title, desc, canonical: brandUrl, ogImage, ogType: 'website', keywords, schemas: [breadcrumb, orgSchema, itemListSchema].filter(Boolean) });
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, must-revalidate');
       return res.status(200).send(injectWindowConfig(out, tenantInfo));
@@ -867,7 +924,7 @@ const seoRenderMiddleware = async (req, res) => {
         name: storeName, url: siteUrl,
         potentialAction: {
           '@type': 'SearchAction',
-          target: { '@type': 'EntryPoint', urlTemplate: `${siteUrl}/shop?q={search_term_string}` },
+          target: { '@type': 'EntryPoint', urlTemplate: `${siteUrl}/shop?search={search_term_string}` },
           'query-input': 'required name=search_term_string',
         },
       };

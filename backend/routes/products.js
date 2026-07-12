@@ -942,6 +942,7 @@ router.get('/', normalizeImagesMiddleware(), async (req, res) => {
   try {
     const { category, subCategory, search, minPrice, maxPrice, sort, page = 1, limit = 12, featured, onSale, brand } = req.query;
     const filter = { isActive: true };
+    if (req.tenantId) filter.tenantId = req.tenantId;
     if (category) filter.category  = category;
     if (subCategory) filter.subCategory = subCategory;
     if (featured) filter.isFeatured = true;
@@ -991,7 +992,10 @@ router.get('/', normalizeImagesMiddleware(), async (req, res) => {
 router.get('/:id/similar', normalizeImagesMiddleware(), async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 6, 12);
-    const source = await Product.findById(req.params.id).populate('category', 'name slug').lean();
+    const source = await Product.findOne({
+      _id: req.params.id,
+      ...(req.tenantId ? { tenantId: req.tenantId } : {}),
+    }).populate('category', 'name slug').lean();
     if (!source) return res.status(404).json({ message: 'Product not found' });
 
     // Build a broad candidate pool: same category OR overlapping tags OR same brand
@@ -1003,6 +1007,7 @@ router.get('/:id/similar', normalizeImagesMiddleware(), async (req, res) => {
     const candidates = await Product.find({
       _id:      { $ne: source._id },
       isActive: true,
+      ...(req.tenantId ? { tenantId: req.tenantId } : {}),
       ...(orConditions.length ? { $or: orConditions } : {}),
     })
       .populate('category', 'name slug')
@@ -1059,7 +1064,7 @@ router.get('/:id/similar', normalizeImagesMiddleware(), async (req, res) => {
 router.get('/:slug', normalizeImagesMiddleware(), async (req, res) => {
   try {
     const product = await Product.findOneAndUpdate(
-      { slug: req.params.slug, isActive: true },
+      { slug: req.params.slug, isActive: true, ...(req.tenantId ? { tenantId: req.tenantId } : {}) },
       { $inc: { views: 1 } },
       { new: true }
     ).populate('category', 'name slug');

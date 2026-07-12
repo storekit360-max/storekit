@@ -352,13 +352,13 @@ export default function useSEO({
 
   let finalTitle;
   if (title && type === 'product') {
-    const withPriceSuffix = `${title} Price in Sri Lanka | StoreKit`;
-    const withShort       = `${title} | StoreKit`;
+    const withPriceSuffix = `${title} Price in Sri Lanka | ${siteName}`;
+    const withShort       = `${title} | ${siteName}`;
     finalTitle = withPriceSuffix.length <= 65
       ? withPriceSuffix
       : withShort.length <= 65
         ? withShort
-        : title.slice(0, 50) + ' | StoreKit';
+        : title.slice(0, 50) + ` | ${siteName}`;
   } else {
     finalTitle = title ? `${title} | ${siteName}` : siteName;
   }
@@ -484,9 +484,11 @@ export default function useSEO({
     }
 
     if (product) {
-      const price = product.salePrice || product.price;
+      const price = product.isOnSale && product.salePrice ? product.salePrice : product.price;
       const availability = product.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
-      const imageArr = (product.images?.length ? product.images : [product.thumbnail]).filter(Boolean);
+      const imageArr = [...new Set([product.thumbnail, ...(product.images || [])].filter(Boolean))];
+      const rawCurrency = String(cfg.currencyCode || 'LKR').trim().toUpperCase();
+      const priceCurrency = /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : 'LKR';
 
       const productSchema = {
         '@context': 'https://schema.org',
@@ -503,32 +505,14 @@ export default function useSEO({
         offers: {
           '@type': 'Offer',
           url: finalUrl,
-          priceCurrency: cfg.currencyCode || 'LKR',
-          price: price != null ? String(price) : '0',
+          priceCurrency,
+          price: Number(price),
           availability,
           itemCondition: 'https://schema.org/NewCondition',
-          priceValidUntil: product.saleEndsAt
-            ? new Date(product.saleEndsAt).toISOString().split('T')[0]
-            : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          ...(product.isOnSale && product.saleEndsAt ? {
+            priceValidUntil: new Date(product.saleEndsAt).toISOString().split('T')[0],
+          } : {}),
           seller: { '@type': 'Organization', name: siteName },
-          shippingDetails: {
-            '@type': 'OfferShippingDetails',
-            shippingRate: { '@type': 'MonetaryAmount', value: '0', currency: cfg.currencyCode || 'LKR' },
-            deliveryTime: {
-              '@type': 'ShippingDeliveryTime',
-              handlingTime: { '@type': 'QuantitativeValue', minValue: 0, maxValue: 1, unitCode: 'DAY' },
-              transitTime:  { '@type': 'QuantitativeValue', minValue: 1, maxValue: 5, unitCode: 'DAY' },
-            },
-            shippingDestination: { '@type': 'DefinedRegion', addressCountry: cfg.countryCode || 'LK' },
-          },
-          hasMerchantReturnPolicy: {
-            '@type': 'MerchantReturnPolicy',
-            applicableCountry: cfg.countryCode || 'LK',
-            returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
-            merchantReturnDays: 14,
-            returnMethod: 'https://schema.org/ReturnByMail',
-            returnFees: 'https://schema.org/FreeReturn',
-          },
         },
       };
 

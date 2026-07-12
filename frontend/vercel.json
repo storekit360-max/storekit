@@ -14,6 +14,26 @@
       "destination": "https://storekit-production.up.railway.app/api/seo/sitemap.xml"
     },
     {
+      "source": "/products-sitemap.xml",
+      "destination": "https://storekit-production.up.railway.app/api/seo/products-sitemap.xml"
+    },
+    {
+      "source": "/categories-sitemap.xml",
+      "destination": "https://storekit-production.up.railway.app/api/seo/categories-sitemap.xml"
+    },
+    {
+      "source": "/brands-sitemap.xml",
+      "destination": "https://storekit-production.up.railway.app/api/seo/brands-sitemap.xml"
+    },
+    {
+      "source": "/pages-sitemap.xml",
+      "destination": "https://storekit-production.up.railway.app/api/seo/pages-sitemap.xml"
+    },
+    {
+      "source": "/google-shopping-feed.xml",
+      "destination": "https://storekit-production.up.railway.app/api/seo/google-shopping-feed.xml"
+    },
+    {
       "source": "/robots.txt",
       "destination": "https://storekit-production.up.railway.app/api/seo/robots.txt"
     },
