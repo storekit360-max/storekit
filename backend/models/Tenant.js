@@ -52,6 +52,10 @@ const tenantSchema = new mongoose.Schema({
     currencyCode: { type: String, default: 'LKR' },
     robotsTxt: { type: String, default: '' },
     seo_config: { type: mongoose.Schema.Types.Mixed, default: {} },
+    // Ordered/enabled storefront sections saved by Admin > Layout Builder.
+    // This must be declared because Mongoose strict mode drops unknown nested
+    // settings keys even though tenant.save() itself succeeds.
+    layout_builder: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
 
   subscription: {

@@ -214,7 +214,10 @@ export default function LayoutEditor() {
       PAGE_TABS.forEach(p => {
         toSave[p.id] = (layouts[p.id] || initLayout(p.id)).map(({ id, enabled, order }) => ({ id, enabled, order }));
       });
-      await API.put('/settings', { layout_builder: toSave });
+      const { data } = await API.put('/settings', { layout_builder: toSave });
+      if (!data?.settings?.layout_builder) {
+        throw new Error('The server did not persist the layout configuration');
+      }
       // Keep the storefront settings context in sync when the admin opens the
       // customer side in the same browser session.
       await refreshTheme();
