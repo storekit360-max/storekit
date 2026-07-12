@@ -6,7 +6,7 @@
  *  1. helmet()          → sets 14 HTTP security headers (CSP, HSTS, etc.)
  *  2. mongoSanitize()   → strips MongoDB operator keys ($, .) from req.body/query
  *  3. xssClean()        → HTML-encodes XSS payloads in req.body/query/params
- *  4. globalLimiter     → 200 req / 15 min per IP across all endpoints
+ *  4. globalLimiter     → 600 req / 15 min per IP across all endpoints
  *  5. loginLimiter      → 10 req / 15 min per IP on /api/auth/login
  *  6. sanitizeBody      → removes prototype-polluting keys from every request
  *  7. auditLog          → writes one-line JSON for every mutating admin action
@@ -20,9 +20,11 @@
  *    SPA's inline scripts and Cloudinary image sources.
  *
  * INSTALLATION (server.js changes only — see updated server.js)
- *  const { applySecurityMiddleware, loginLimiter, auditLog, errorHandler }
+ *  const { applyEarlySecurityMiddleware, applyBodySecurityMiddleware,
+ *          loginLimiter, auditLog, errorHandler }
  *        = require('./middleware/security');
- *  applySecurityMiddleware(app);          ← call BEFORE any route
+ *  applyEarlySecurityMiddleware(app);     ← before body parsing
+ *  app.use(applyBodySecurityMiddleware);  ← after body parsing
  *  app.use('/api/auth/login', loginLimiter);
  *  app.use('/api/admin', auditLog);
  *  app.use(errorHandler);                 ← call AFTER all routes
@@ -224,7 +226,7 @@ function xssClean(req, _res, next) {
 const isProd = process.env.NODE_ENV === 'production';
 const globalLimiter = rateLimit({
   windowMs:          15 * 60 * 1000,  // 15 minutes
-  max:               200,              // per IP per window
+  max:               600,              // accommodates storefront asset/API bursts and shared networks
   standardHeaders:   true,            // Return rate limit info in RateLimit-* headers
   legacyHeaders:     false,           // Disable X-RateLimit-* headers
   // SECURITY: Generic message — do not hint at whether the account exists.
@@ -394,25 +396,27 @@ function errorHandler(err, req, res, _next) { // eslint-disable-line no-unused-v
 //   helmet  → must be first so security headers are set before any response
 //   sanitize → must be before routes so injection is cleaned before handlers
 //   rate limit → after body parsing so we can read the body in limiters
-function applySecurityMiddleware(app) {
+function applyEarlySecurityMiddleware(app) {
   // 1. Security headers — before anything else
   app.use(helmetMiddleware);
 
   // 2. Global rate limiting — after headers, before routes
   app.use(globalLimiter);
+}
 
-  // 3. MongoDB injection protection — before route handlers
-  app.use(mongoSanitizeMiddleware);
-
-  // 4. XSS / input sanitisation — before route handlers
-  app.use(xssClean);
-
-  // 5. Prototype pollution protection — before route handlers
-  app.use(sanitizeBody);
+function applyBodySecurityMiddleware(req, res, next) {
+  mongoSanitizeMiddleware(req, res, (mongoError) => {
+    if (mongoError) return next(mongoError);
+    xssClean(req, res, (xssError) => {
+      if (xssError) return next(xssError);
+      sanitizeBody(req, res, next);
+    });
+  });
 }
 
 module.exports = {
-  applySecurityMiddleware,
+  applyEarlySecurityMiddleware,
+  applyBodySecurityMiddleware,
   loginLimiter,
   auditLog,
   errorHandler,

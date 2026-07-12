@@ -72,5 +72,11 @@ productSchema.pre('save', function(next) {
 });
 
 productSchema.index({ tenantId: 1, slug: 1 }, { unique: true, sparse: true });
+productSchema.index({ tenantId: 1, isActive: 1, createdAt: -1 });
+productSchema.index({ tenantId: 1, isActive: 1, category: 1, createdAt: -1 });
+productSchema.index({ tenantId: 1, isActive: 1, brand: 1 });
+productSchema.index({ tenantId: 1, isActive: 1, isFeatured: 1 });
+productSchema.index({ tenantId: 1, isActive: 1, isOnSale: 1 });
+productSchema.index({ tenantId: 1, isActive: 1, soldCount: -1 });
 
 module.exports = mongoose.models.Product || mongoose.model('Product', productSchema);

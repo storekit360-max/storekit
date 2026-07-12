@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const crypto = require('crypto');
 const Plan = require('../models/Plan');
 const Tenant = require('../models/Tenant');
 const User = require('../models/User');
@@ -439,7 +440,11 @@ router.post('/tenants/:id/reset-admin-password', async (req, res, next) => {
   try {
     const tenant = await Tenant.findById(req.params.id);
     if (!tenant) return res.status(404).json({ message: 'Tenant not found' });
-    const password = req.body.password || 'Admin@123456';
+    const suppliedPassword = typeof req.body.password === 'string' ? req.body.password : '';
+    if (suppliedPassword && suppliedPassword.length < 12) {
+      return res.status(400).json({ message: 'Password must contain at least 12 characters' });
+    }
+    const password = suppliedPassword || `${crypto.randomBytes(12).toString('base64url')}!9a`;
     const admin = await User.findOne({ tenantId: tenant._id, role: 'admin' });
     if (!admin) return res.status(404).json({ message: 'Tenant admin not found' });
     admin.password = password;

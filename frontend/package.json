@@ -3,20 +3,18 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "@headlessui/react": "^1.7.17",
-    "@heroicons/react": "^2.0.18",
-    "@imgly/background-removal": "^1.5.7",
-    "autoprefixer": "^10.4.19",
     "axios": "^1.4.0",
     "gsap": "^3.12.5",
-    "postcss": "^8.4.38",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.4.1",
     "react-router-dom": "^6.14.1",
+    "recharts": "^2.7.2"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
     "react-scripts": "5.0.1",
-    "recharts": "^2.7.2",
-    "swiper": "^10.1.0",
     "tailwindcss": "^3.4.4"
   },
   "scripts": {

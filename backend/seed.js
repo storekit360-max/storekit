@@ -1,6 +1,7 @@
 'use strict';
 
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const User = require('./models/User');
@@ -8,6 +9,12 @@ const Tenant = require('./models/Tenant');
 const Plan = require('./models/Plan');
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/storekit';
+const superAdminPassword = process.env.SEED_SUPERADMIN_PASSWORD || `${crypto.randomBytes(14).toString('base64url')}!9a`;
+const storeAdminPassword = process.env.SEED_STORE_ADMIN_PASSWORD || `${crypto.randomBytes(14).toString('base64url')}!9a`;
+
+if (process.env.NODE_ENV === 'production' && process.env.ALLOW_PRODUCTION_SEED !== 'true') {
+  throw new Error('Production seeding is disabled. Set ALLOW_PRODUCTION_SEED=true only for an intentional seed run.');
+}
 
 async function dropLegacyIndexes() {
   try {
@@ -168,21 +175,21 @@ async function main() {
       lastName: 'Admin',
       username: 'superadmin',
       email: 'superadmin@storekit.local',
-      password: 'SuperAdmin@123456',
+      password: superAdminPassword,
       role: 'superadmin',
       tenantId: null,
       isActive: true,
       isVerified: true,
     });
 
-    console.log('✅ Super Admin: superadmin@storekit.local / SuperAdmin@123456');
+    console.log(`✅ Super Admin: superadmin@storekit.local / ${superAdminPassword}`);
 
     const storeAdmin = await User.create({
       firstName: 'Store',
       lastName: 'Admin',
       username: 'storeadmin',
       email: 'admin@storekit.local',
-      password: 'Admin@123456',
+      password: storeAdminPassword,
       role: 'admin',
       tenantId: demoTenant._id,
       isActive: true,
@@ -197,7 +204,7 @@ async function main() {
     await User.syncIndexes();
     await Tenant.syncIndexes();
 
-    console.log('✅ Store Admin: admin@storekit.local / Admin@123456');
+    console.log(`✅ Store Admin: admin@storekit.local / ${storeAdminPassword}`);
     console.log('✅ Tenant owner assigned');
     console.log('');
     console.log('======================================');
@@ -205,11 +212,11 @@ async function main() {
     console.log('======================================');
     console.log('Super Admin URL: http://localhost:3000/superadmin/login');
     console.log('Super Admin Email: superadmin@storekit.local');
-    console.log('Super Admin Password: SuperAdmin@123456');
+    console.log(`Super Admin Password: ${superAdminPassword}`);
     console.log('');
     console.log('Store Admin URL: http://localhost:3000/login then /admin');
     console.log('Store Admin Email: admin@storekit.local');
-    console.log('Store Admin Password: Admin@123456');
+    console.log(`Store Admin Password: ${storeAdminPassword}`);
     console.log('======================================');
 
     await mongoose.disconnect();

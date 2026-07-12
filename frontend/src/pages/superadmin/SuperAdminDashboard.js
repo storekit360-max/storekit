@@ -248,7 +248,7 @@ export default function SuperAdminDashboard() {
 
   async function resetAdminPassword(id) {
     try {
-      const { data } = await API.post(`/superadmin/tenants/${id}/reset-admin-password`, { password: 'Admin@123456' });
+      const { data } = await API.post(`/superadmin/tenants/${id}/reset-admin-password`, {});
       notify('success', `Password reset for ${data.email}: ${data.password}`);
     } catch (err) { notify('error', err.response?.data?.message || err.message || 'Could not reset password'); }
   }

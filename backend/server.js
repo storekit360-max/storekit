@@ -3,7 +3,7 @@
  *
  * SECURITY CHANGES vs original (all backward-compatible):
  *  1. helmet / rate-limiting / mongo-sanitize / XSS clean / prototype-pollution
- *     guard are applied via applySecurityMiddleware() BEFORE any route.
+ *     guard are applied before any route; body protections run after parsing.
  *  2. A stricter loginLimiter is applied specifically on /api/auth/login.
  *  3. Audit logging is applied on /api/admin so every mutating admin action
  *     is written to logs/audit.log.
@@ -23,6 +23,7 @@
 const express    = require('express');
 const mongoose   = require('mongoose');
 const cors       = require('cors');
+const compression = require('compression');
 const path       = require('path');
 require('dotenv').config();
 
@@ -35,7 +36,7 @@ require('dotenv').config();
 // function, it throws BEFORE express does — with the real caller's file+line
 // (captured via a clean stack trace) and the index of the bad argument.
 // Remove this block once the crash is resolved; it's a debugging aid only.
-(function patchRouterForDiagnostics() {
+if (process.env.NODE_ENV !== 'production') (function patchRouterForDiagnostics() {
   const Router = express.Router;
   const proto = Router.prototype;
   const methodsToPatch = ['get', 'post', 'put', 'patch', 'delete', 'use', 'all'];
@@ -75,6 +76,9 @@ installTenantScope(mongoose);
 
 const { optionalTenant, blockUnavailableStore } = require('./middleware/tenant');
 const tenantScope = [optionalTenant, blockUnavailableStore, tenantContextMiddleware];
+// Provider webhooks arrive directly at Railway and have no tenant storefront
+// domain. Resolve a tenant when possible but do not reject provider callbacks.
+const tenantContextOnly = [optionalTenant, tenantContextMiddleware];
 
 const app = express();
 
@@ -104,6 +108,31 @@ const allowedOrigins = [
   /^https:\/\/(www\.)?storekit\.lk$/,
 ];
 
+// Cache custom-domain CORS decisions briefly to avoid a MongoDB query on every
+// API request while still allowing newly mapped tenant domains to propagate.
+const tenantOriginCache = new Map();
+const TENANT_ORIGIN_CACHE_TTL = 5 * 60 * 1000;
+
+async function isMappedTenantOrigin(origin) {
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol !== 'https:' && process.env.NODE_ENV === 'production') return false;
+    const domain = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    const cached = tenantOriginCache.get(domain);
+    if (cached && Date.now() - cached.at < TENANT_ORIGIN_CACHE_TTL) return cached.allowed;
+    const Tenant = require('./models/Tenant');
+    const exists = await Tenant.exists({
+      status: 'active',
+      domains: { $elemMatch: { domain: { $in: [domain, `www.${domain}`] }, active: true } },
+    });
+    const allowed = Boolean(exists);
+    tenantOriginCache.set(domain, { allowed, at: Date.now() });
+    return allowed;
+  } catch (_) {
+    return false;
+  }
+}
+
 // Extra origins from env (comma-separated), e.g. EXTRA_ORIGINS=https://staging.storekit.lk
 // SECURITY (hardened): Each extra origin is escaped before being turned into a
 //   RegExp so that a value like "https://evil.com.*" cannot match unintended
@@ -119,15 +148,13 @@ if (process.env.EXTRA_ORIGINS) {
 }
 
 app.use(cors({
-  origin: (origin, cb) => {
+  origin: async (origin, cb) => {
     // No origin = server-to-server (Vercel rewrite, curl, health checks) — allow
     if (!origin) return cb(null, true);
     const ok = allowedOrigins.some(o => o.test(origin));
     if (ok) return cb(null, true);
-    // StoreKit is a custom-domain SaaS. Customer domains are added dynamically
-    // in Super Admin, so CORS must accept mapped storefront origins. Keep this
-    // enabled unless you implement database-backed CORS validation.
-    if (process.env.ALLOW_ALL_ORIGINS !== 'false') return cb(null, true);
+    if (process.env.NODE_ENV !== 'production' && process.env.ALLOW_ALL_ORIGINS === 'true') return cb(null, true);
+    if (await isMappedTenantOrigin(origin)) return cb(null, true);
     console.warn(`[CORS] Blocked origin: ${origin}`);
     cb(new Error('CORS blocked: ' + origin));
   },
@@ -139,7 +166,8 @@ app.use(cors({
 //           sanitised before any route handler can read them.
 // NOTE: We import here (after dotenv.config) so env vars are available.
 const {
-  applySecurityMiddleware,
+  applyEarlySecurityMiddleware,
+  applyBodySecurityMiddleware,
   loginLimiter,
   auditLog,
   errorHandler,
@@ -150,7 +178,7 @@ const {
 // these four resolved to `undefined` (bad export name, wrong require path,
 // or middleware/security.js throwing before reaching module.exports). This
 // fails fast with the exact culprit instead of a bare Express internals error.
-for (const [name, val] of Object.entries({ applySecurityMiddleware, loginLimiter, auditLog, errorHandler })) {
+for (const [name, val] of Object.entries({ applyEarlySecurityMiddleware, applyBodySecurityMiddleware, loginLimiter, auditLog, errorHandler })) {
   if (typeof val !== 'function') {
     throw new TypeError(
       `[server.js] "${name}" from middleware/security.js is ${val === undefined ? 'undefined' : typeof val}, ` +
@@ -159,13 +187,51 @@ for (const [name, val] of Object.entries({ applySecurityMiddleware, loginLimiter
   }
 }
 
-applySecurityMiddleware(app);
+applyEarlySecurityMiddleware(app);
+
+// Compress JSON, HTML, XML, JavaScript, and CSS responses. Skip tiny responses
+// and already-compressed formats to reduce CPU use on small Railway instances.
+app.use(compression({
+  threshold: 1024,
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) return false;
+    return compression.filter(req, res);
+  },
+}));
 
 // ─── Body parsing ─────────────────────────────────────────────────────────────
-// SECURITY: 50 MB limit is retained from original to avoid breaking large
-//           product-import or image-upload payloads.
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// Keep ordinary API payloads bounded. File uploads use multipart parsing and
+// route-specific limits, so they are unaffected by this JSON limit.
+const jsonParser = express.json({ limit: '15mb' });
+app.use((req, res, next) => {
+  // Stripe requires the exact raw bytes for cryptographic signature checks.
+  if (req.originalUrl?.split('?')[0] === '/api/payments/stripe/webhook') return next();
+  return jsonParser(req, res, next);
+});
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
+
+// Body-dependent protections must run after parsers. The Stripe route is left
+// untouched because its signature verification requires the original bytes.
+app.use((req, res, next) => {
+  if (req.originalUrl?.split('?')[0] === '/api/payments/stripe/webhook') return next();
+  return applyBodySecurityMiddleware(req, res, next);
+});
+
+// Tenant-aware cache semantics. Shared caches must vary by host/domain and must
+// never cache authenticated responses. Individual routes can override this.
+app.use('/api', (req, res, next) => {
+  res.vary('Host');
+  res.vary('X-Tenant-Domain');
+  res.vary('Origin');
+  const publicPath = String(req.originalUrl || '').split('?')[0];
+  if (req.method === 'GET' && !req.headers.authorization && [
+    '/api/products', '/api/categories', '/api/banners', '/api/pages',
+    '/api/deals', '/api/seasonal', '/api/delivery',
+  ].some(prefix => publicPath.startsWith(prefix))) {
+    res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=300');
+  }
+  next();
+});
 
 // ─── Monitoring middleware — must come before routes ──────────────────────────
 const { monitoringMiddleware } = require('./middleware/monitoring');
@@ -178,7 +244,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // SECURITY: Log only method + path (no query string or body) to prevent tokens
 //           or PII from appearing in server logs.
 app.use((req, _res, next) => {
-  console.log(`→ ${req.method} ${req.path}`);
+  if (process.env.NODE_ENV !== 'production') console.log(`→ ${req.method} ${req.path}`);
   next();
 });
 
@@ -223,15 +289,15 @@ safeMount('/api/settings',      require('./routes/settings'), tenantScope);
 safeMount('/api/returns',       require('./routes/returns'), tenantScope);
 safeMount('/api/gift-cards',    require('./routes/giftcards'), tenantScope);
 safeMount('/api/seasonal',      require('./routes/seasonal'), tenantScope);
-safeMount('/api/upload',        require('./routes/upload'));
-safeMount('/api/scrape',        require('./routes/scrape'));
-safeMount('/api/payments',      require('./routes/payments'), tenantScope);
+safeMount('/api/upload',        require('./routes/upload'), tenantScope);
+safeMount('/api/scrape',        require('./routes/scrape'), tenantScope);
+safeMount('/api/payments',      require('./routes/payments'), tenantContextOnly);
 safeMount('/api/delivery',      require('./routes/delivery'), tenantScope);
 safeMount('/api/pages',         require('./routes/pages'), tenantScope);
 safeMount('/api/subscribers',   require('./routes/subscribers'), tenantScope);
 const seoRoutes = require('./routes/seo');
 safeMount('/api/seo',           seoRoutes, tenantScope);
-safeMount('/api/meta',          require('./routes/meta'));   // Meta CAPI relay
+safeMount('/api/meta',          require('./routes/meta'), tenantScope);   // Meta CAPI relay
 
 // ─── SEO aliases ──────────────────────────────────────────────────────────────
 function serveSeoAlias(pathname) {
@@ -259,12 +325,12 @@ safeMount('/api/billing', require('./routes/billing'), tenantScope);
 // ─── Other routes ─────────────────────────────────────────────────────────────
 safeMount('/api/whatsapp',      require('./routes/whatsapp'), tenantScope);
 safeMount('/api/social-media',  require('./routes/socialMedia'), tenantScope);
-safeMount('/api/ai-post-creator', require('./routes/aiPostCreator'));
-safeMount('/api/automation',    require('./routes/automation'));
+safeMount('/api/ai-post-creator', require('./routes/aiPostCreator'), tenantScope);
+safeMount('/api/automation',    require('./routes/automation'), tenantScope);
 safeMount('/api/deals',         require('./routes/deals'), tenantScope);
-safeMount('/api/ai',            require('./routes/ai'));
-safeMount('/api/monitoring',    require('./routes/monitoring'));
-safeMount('/api/backup',        require('./routes/backup'));
+safeMount('/api/ai',            require('./routes/ai'), tenantScope);
+safeMount('/api/monitoring',    require('./routes/monitoring'), tenantScope);
+safeMount('/api/backup',        require('./routes/backup'), tenantScope);
 
 // ─── Page SSR for crawlers ────────────────────────────────────────────────────
 const { seoRenderMiddleware } = seoRoutes;

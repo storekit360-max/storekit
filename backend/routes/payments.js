@@ -239,7 +239,10 @@ router.post('/payhere/notify', webhookLimiter, async (req, res) => {
       return res.sendStatus(400);
     }
 
-    const gw = await PaymentGateway.findOne({ gateway: 'payhere' });
+    const gw = await PaymentGateway.findOne({
+      gateway: 'payhere',
+      'config.merchantId': merchant_id.trim(),
+    });
     if (!gw) return res.sendStatus(400);
 
     // Verify merchant_id matches ours — prevents spoofed webhooks for other merchants
@@ -267,7 +270,7 @@ router.post('/payhere/notify', webhookLimiter, async (req, res) => {
       return res.sendStatus(400);
     }
 
-    const query = { payhereOrderId: order_id };
+    const query = { tenantId: gw.tenantId, payhereOrderId: order_id };
 
     if (status_code === '2') {
       // PAID — only update if currently not already paid (idempotent)
@@ -283,6 +286,7 @@ router.post('/payhere/notify', webhookLimiter, async (req, res) => {
       );
       if (order) {
         await Notification.create({
+          tenantId: gw.tenantId,
           type: 'new_order', title: '✅ PayHere Payment Confirmed',
           message: `Order ${order.orderNumber} — Rs. ${order.total?.toLocaleString()}`,
           link: `/admin/orders/${order._id}`,
@@ -351,28 +355,32 @@ router.post('/stripe/webhook', express.raw({ type: 'application/json' }), webhoo
   try {
     const Order            = require('../models/Order');
     const { Notification } = require('../models/index');
-    const gw = await PaymentGateway.findOne({ gateway: 'stripe' });
-    if (!gw) return res.sendStatus(400);
-
-    const stripe = require('stripe')(gw.config.secretKey);
-    let event;
-    try {
-      // Stripe's own signature verification — cryptographically secure
-      event = stripe.webhooks.constructEvent(
-        req.body,
-        req.headers['stripe-signature'],
-        gw.config.webhookSecret
-      );
-    } catch (err) {
-      console.warn('[Stripe webhook] signature failed:', err.message);
-      return res.status(400).send(`Webhook signature verification failed`);
+    const gateways = await PaymentGateway.find({ gateway: 'stripe', isEnabled: true });
+    let gw = null;
+    let event = null;
+    for (const candidate of gateways) {
+      if (!candidate.config?.secretKey || !candidate.config?.webhookSecret) continue;
+      try {
+        const stripeClient = require('stripe')(candidate.config.secretKey);
+        event = stripeClient.webhooks.constructEvent(
+          req.body,
+          req.headers['stripe-signature'],
+          candidate.config.webhookSecret
+        );
+        gw = candidate;
+        break;
+      } catch (_) { /* try the next tenant's signing secret */ }
+    }
+    if (!gw || !event) {
+      console.warn('[Stripe webhook] signature did not match an enabled tenant gateway');
+      return res.status(400).send('Webhook signature verification failed');
     }
 
     if (event.type === 'payment_intent.succeeded') {
       const orderId = event.data.object.metadata?.orderId;
       if (orderId) {
-        const order = await Order.findByIdAndUpdate(
-          orderId,
+        const order = await Order.findOneAndUpdate(
+          { _id: orderId, tenantId: gw.tenantId },
           {
             paymentStatus:    'paid',
             orderStatus:      'confirmed',
@@ -383,6 +391,7 @@ router.post('/stripe/webhook', express.raw({ type: 'application/json' }), webhoo
         );
         if (order) {
           await Notification.create({
+            tenantId: gw.tenantId,
             type: 'new_order', title: '✅ Stripe Payment Confirmed',
             message: `Order ${order.orderNumber}`, link: `/admin/orders/${order._id}`,
           });
@@ -391,7 +400,7 @@ router.post('/stripe/webhook', express.raw({ type: 'application/json' }), webhoo
     } else if (event.type === 'payment_intent.payment_failed') {
       const orderId = event.data.object.metadata?.orderId;
       if (orderId) {
-        await Order.findByIdAndUpdate(orderId, {
+        await Order.findOneAndUpdate({ _id: orderId, tenantId: gw.tenantId }, {
           paymentStatus: 'failed',
           $push: { statusHistory: { status: 'cancelled', note: 'Stripe payment failed via webhook', updatedBy: 'stripe-webhook' } }
         });

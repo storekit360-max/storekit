@@ -940,7 +940,9 @@ router.delete('/:id', adminAuth, async (req, res) => {
 // Public — list with filters (✅ WITH IMAGE NORMALIZATION)
 router.get('/', normalizeImagesMiddleware(), async (req, res) => {
   try {
-    const { category, subCategory, search, minPrice, maxPrice, sort, page = 1, limit = 12, featured, onSale, brand } = req.query;
+    const { category, subCategory, search, minPrice, maxPrice, sort, featured, onSale, brand } = req.query;
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 12, 1), 100);
     const filter = { isActive: true };
     if (req.tenantId) filter.tenantId = req.tenantId;
     if (category) filter.category  = category;
@@ -979,11 +981,13 @@ router.get('/', normalizeImagesMiddleware(), async (req, res) => {
     if (sort === 'rating')     sortObj = { 'ratings.average': -1 };
     const total    = await Product.countDocuments(filter);
     const products = await Product.find(filter)
+      .select('name slug price salePrice isOnSale thumbnail images stock lowStockThreshold category subCategory brand ratings variants isFeatured tags soldCount createdAt updatedAt')
       .populate('category', 'name slug')
       .sort(sortObj)
       .skip((page - 1) * limit)
-      .limit(Number(limit));
-    res.json({ products, total, pages: Math.ceil(total / limit), page: Number(page) });
+      .limit(limit)
+      .lean();
+    res.json({ products, total, pages: Math.ceil(total / limit), page });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 

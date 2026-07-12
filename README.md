@@ -350,16 +350,18 @@ The seed script:
 - Deletes and recreates users matching the built-in demo admin identities
 - Synchronizes selected indexes
 
-Development accounts created by the current seed:
+The seed prints newly generated strong passwords once at the end of the run. To
+choose them explicitly, set `SEED_SUPERADMIN_PASSWORD` and
+`SEED_STORE_ADMIN_PASSWORD` before running the command.
 
-| Role | Email | Password |
-|---|---|---|
-| Super admin | `superadmin@storekit.local` | `SuperAdmin@123456` |
-| Demo store admin | `admin@storekit.local` | `Admin@123456` |
+| Role | Email |
+|---|---|
+| Super admin | `superadmin@storekit.local` |
+| Demo store admin | `admin@storekit.local` |
 
-Do not leave these credentials active on a public deployment. Create secure production accounts and disable or replace seeded accounts immediately.
-
-Do not run the seed casually against production: it deliberately recreates the known demo users.
+Production seeding is blocked unless `ALLOW_PRODUCTION_SEED=true` is explicitly
+set. The script deliberately recreates the demo users, so use that override only
+for an intentional deployment operation.
 
 ## Running and building
 
