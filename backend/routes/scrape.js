@@ -45,6 +45,7 @@ const axios      = require('axios');
 const https      = require('https');
 const { URL }    = require('url');
 const { adminAuth } = require('../middleware/auth');
+const { Category } = require('../models/index');
 const { generateProductDescription, generateProductSpecs, generateBrand, generateShortDescription } = require('./ai');
 
 // ─── Cloudinary (optional) ────────────────────────────────────────────────────
@@ -799,6 +800,25 @@ router.post('/bulk', adminAuth, async (req, res) => {
     return res.status(400).json({ message: 'categoryId is required' });
   }
 
+  // Bulk-created products must belong to the same tenant used by the admin
+  // product list. Without this field the insert succeeds, but the product is
+  // invisible because /products/admin/all is tenant-scoped.
+  const tenantId = req.user?.tenantId || req.tenantId || null;
+  if (!tenantId) {
+    return res.status(400).json({
+      message: 'Tenant not resolved. Open admin through the tenant store domain or re-login.',
+    });
+  }
+
+  try {
+    const categoryBelongsToTenant = await Category.exists({ _id: categoryId, tenantId });
+    if (!categoryBelongsToTenant) {
+      return res.status(400).json({ message: 'Selected category does not belong to this store.' });
+    }
+  } catch (_) {
+    return res.status(400).json({ message: 'Invalid categoryId.' });
+  }
+
   const urls   = rawUrls.map(u => u.trim()).filter(Boolean);
   const total  = urls.length;
   const MAX    = 200;
@@ -950,7 +970,7 @@ router.post('/bulk', adminAuth, async (req, res) => {
       const baseSku  = scraped.sku || '';
 
       // Resolve a unique slug
-      const candidateSlug = await Product.findOne({ slug: baseSlug }).lean().select('_id')
+      const candidateSlug = await Product.findOne({ tenantId, slug: baseSlug }).lean().select('_id')
         ? `${baseSlug}-${Math.random().toString(36).slice(2, 7)}`
         : baseSlug;
 
@@ -962,6 +982,7 @@ router.post('/bulk', adminAuth, async (req, res) => {
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
           product = await Product.create({
+            tenantId,
             name,
             slug,
             description:      aiDescription              || name,
