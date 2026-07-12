@@ -347,7 +347,7 @@ export default function Shop() {
                     const wasAdded = addedId === product._id;
                     return (
                       <article key={product._id} className="product-card group">
-                        <Link to={`/product/${product.slug}`} className="block relative overflow-hidden bg-gray-50" style={{aspectRatio:'1/1'}}>
+                        <Link to={`/product/${product.slug}`} className="product-card-media block relative overflow-hidden bg-gray-50" style={{aspectRatio:'1/1'}}>
                           <img src={product.thumbnail||product.images?.[0]||'https://via.placeholder.com/300'} alt={product.name} loading="lazy" className="card-img w-full h-full object-cover"/>
                           <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"/>
                           <div className="absolute top-2 left-2 flex flex-col gap-1">
@@ -356,11 +356,11 @@ export default function Shop() {
                             {product.stock===0 && <span className="badge badge-hot">Sold Out</span>}
                           </div>
                         </Link>
-                        <div className="p-2.5 sm:p-3.5">
+                        <div className="product-card-body p-2.5 sm:p-3.5">
                           <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">{product.category?.name}</p>
                           <Link to={`/product/${product.slug}`}><h3 className="font-bold text-xs sm:text-sm leading-snug text-gray-900 line-clamp-2 hover:opacity-60 transition-opacity mb-1 sm:mb-1.5">{product.name}</h3></Link>
                           {product.ratings?.count > 0 && <div className="flex items-center gap-1 mb-1 sm:mb-1.5"><Stars rating={product.ratings.average}/><span className="text-[10px] sm:text-[11px] text-gray-400">({product.ratings.count})</span></div>}
-                          <div className="flex items-center justify-between gap-1.5">
+                          <div className="product-card-footer flex items-center justify-between gap-1.5">
                             <div className="min-w-0">
                               <span className="font-black text-sm sm:text-base text-gray-900 leading-tight" style={{fontFamily:'var(--font-display)'}}>{sym} {price?.toLocaleString()}</span>
                               {isOnSale && <span className="text-xs text-gray-400 line-through ml-1 block sm:inline">{sym} {product.price?.toLocaleString()}</span>}

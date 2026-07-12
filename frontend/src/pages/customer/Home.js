@@ -145,7 +145,7 @@ const ProductCard = ({ product, settings, priority = false }) => {
 
   return (
     <article ref={cardRef} className="product-card group" style={{ transformStyle:'preserve-3d', willChange:'transform' }}>
-      <Link to={`/product/${product.slug}`} className="block relative overflow-hidden bg-gray-50" style={{ aspectRatio:'1/1' }}>
+      <Link to={`/product/${product.slug}`} className="product-card-media block relative overflow-hidden bg-gray-50" style={{ aspectRatio:'1/1' }}>
         <img ref={imgRef} src={product.thumbnail||product.images?.[0]||'https://via.placeholder.com/300'} alt={product.name}
           loading={priority ? 'eager' : 'lazy'} decoding="async" fetchPriority={priority ? 'high' : 'auto'}
           className="w-full h-full object-cover" style={{ willChange: config.reducedMotion ? 'auto' : 'transform' }}/>
@@ -170,7 +170,7 @@ const ProductCard = ({ product, settings, priority = false }) => {
           </Link>
         </div>
       </Link>
-      <div className="p-3.5 sm:p-4" style={{ background:'var(--card-bg)' }}>
+      <div className="product-card-body p-3.5 sm:p-4" style={{ background:'var(--card-bg)' }}>
         <p className="text-[10px] font-black uppercase tracking-widest mb-0.5" style={{ color:'var(--color-primary)', opacity:0.65 }}>
           {product.category?.name||''}
         </p>
@@ -181,7 +181,7 @@ const ProductCard = ({ product, settings, priority = false }) => {
         {product.ratings?.count>0 && (
           <div className="flex items-center gap-1 mb-2"><Stars r={product.ratings.average}/><span className="text-[11px] text-gray-400">({product.ratings.count})</span></div>
         )}
-        <div className="flex items-center justify-between gap-2">
+        <div className="product-card-footer flex items-center justify-between gap-2">
           <div>
             <span className="font-black text-base sm:text-lg" style={{ fontFamily:'var(--font-display)', color:'var(--color-dark)' }}>
               {sym} {price?.toLocaleString()}

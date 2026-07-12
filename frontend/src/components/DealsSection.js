@@ -88,7 +88,7 @@ function DealCard({ product, accentColor, settings }) {
   return (
     <Link
       to={`/product/${product.slug}`}
-      className="group bg-white rounded-2xl overflow-hidden border border-gray-100 hover:border-gray-200 hover:shadow-xl transition-all duration-300 flex flex-col"
+      className="deal-product-card group bg-white rounded-2xl overflow-hidden border border-gray-100 hover:border-gray-200 hover:shadow-xl transition-all duration-300 flex flex-col h-full"
       style={{ '--accent': accentColor }}
     >
       {/* Image */}

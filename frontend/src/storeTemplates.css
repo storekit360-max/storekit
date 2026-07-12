@@ -20,6 +20,27 @@ html[data-store-template] .shop-toolbar{flex-direction:var(--tpl-toolbar-directi
 html[data-store-template] .badge{border-radius:var(--tpl-badge-radius,99px)!important;border:var(--tpl-badge-border,0);clip-path:var(--tpl-badge-clip,none)}
 html[data-store-template] svg{stroke-linecap:var(--tpl-icon-cap,round);stroke-linejoin:var(--tpl-icon-join,round)}
 
+/* Product-grid contract: every card in a row shares one media ratio and keeps
+   its category, title, price and action aligned regardless of source image or
+   optional rating content. Templates can still select a template-wide ratio. */
+html[data-store-template] .template-section .grid{align-items:stretch}
+html[data-store-template] .product-card{display:flex;flex-direction:column;height:100%;align-self:stretch}
+html[data-store-template] .product-card>.product-card-media{
+  width:100%;flex:0 0 auto;
+  aspect-ratio:var(--tpl-product-media-ratio,1/1)!important;
+}
+html[data-store-template] .product-card>.product-card-body{display:flex;flex:1;flex-direction:column;min-width:0}
+html[data-store-template] .product-card>.product-card-body>p:first-child{min-height:1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html[data-store-template] .product-card>.product-card-body h3{height:2.75em;min-height:2.75em;overflow:hidden}
+html[data-store-template] .product-card .product-card-footer{margin-top:auto;min-height:2.5rem}
+
+html[data-store-template="furniture"],html[data-store-template="cafe"]{--tpl-product-media-ratio:4/3}
+html[data-store-template="books"]{--tpl-product-media-ratio:2/3}
+html[data-store-template="premiumApple"]{--tpl-product-media-ratio:1.18/1}
+html[data-store-template="nordic"],html[data-store-template="capsule"]{--tpl-product-media-ratio:4/5}
+html[data-store-template="zen"]{--tpl-product-media-ratio:3/4}
+html[data-store-template="photography"]{--tpl-product-media-ratio:3/2}
+
 /* 1 Classic: framed catalogue and traditional hierarchy */
 html[data-store-template="classic"]{--tpl-bg:#fafaf8;--tpl-card-radius:16px;--tpl-flow-gap:10px;--tpl-card-border:1px solid #e7e5e4}
 html[data-store-template="classic"] .template-section>section{border-bottom:1px solid #e7e5e4}
