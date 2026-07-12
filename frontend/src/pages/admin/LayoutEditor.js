@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import API from '../../utils/api';
 import toast from 'react-hot-toast';
+import { useTheme } from '../../context/ThemeContext';
 
 /* ── Section Definitions ──────────────────────────────────────── */
 const SECTION_DEFS = {
@@ -12,7 +13,7 @@ const SECTION_DEFS = {
     { id: 'promo',           label: '🎯 Promo Banner',         desc: 'Mid-page promotional strip', icon: '🎯' },
     { id: 'new_arrivals',    label: '🆕 New Arrivals',         desc: 'Latest products carousel', icon: '🆕' },
     { id: 'bestsellers',     label: '🏆 Best Sellers',         desc: 'Top-selling products row', icon: '🏆' },
-    { id: 'flash_sale',      label: '⚡ Flash Sale Strip',     desc: 'Countdown flash sale section', icon: '⚡' },
+    { id: 'deals',           label: '⚡ Flash Sale Strip',     desc: 'Countdown flash sale section', icon: '⚡' },
     { id: 'newsletter',      label: '📧 Newsletter Bar',       desc: 'Email signup strip', icon: '📧' },
     { id: 'testimonials',    label: '💬 Testimonials',         desc: 'Customer review quotes', icon: '💬' },
     { id: 'brands',          label: '🏷️ Brand Logos',          desc: 'Trusted brands marquee', icon: '🏷️' },
@@ -153,6 +154,7 @@ const SectionRow = ({ section, idx, total, onToggle, onMoveUp, onMoveDown, onDra
 
 /* ── Main Layout Editor ───────────────────────────────────────── */
 export default function LayoutEditor() {
+  const { refreshTheme } = useTheme();
   const [activePage, setActivePage] = useState('homepage');
   const [layouts, setLayouts] = useState({});
   const [saving, setSaving] = useState(false);
@@ -213,6 +215,9 @@ export default function LayoutEditor() {
         toSave[p.id] = (layouts[p.id] || initLayout(p.id)).map(({ id, enabled, order }) => ({ id, enabled, order }));
       });
       await API.put('/settings', { layout_builder: toSave });
+      // Keep the storefront settings context in sync when the admin opens the
+      // customer side in the same browser session.
+      await refreshTheme();
       toast.success('✅ All layouts saved!');
     } catch { toast.error('Failed to save layouts'); }
     finally { setSaving(false); }

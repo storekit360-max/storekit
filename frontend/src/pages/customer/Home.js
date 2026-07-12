@@ -755,12 +755,29 @@ const TEMPLATE_HOME_PROFILES = {
   startup:       { order:['hero','featured','brands','categories','deals','new_arrivals','promo','newsletter'], shell:'startup' },
 };
 
-const TemplateHomeRenderer = ({ settings, isOn, sections, orderedIds }) => {
+const TemplateHomeRenderer = ({ settings, isOn, sections, orderedIds, hasCustomLayout }) => {
   const template = normalizeTemplateKey(settings);
   const profile = TEMPLATE_HOME_PROFILES[template] || TEMPLATE_HOME_PROFILES.classic;
   const preferredOrder = profile.order || orderedIds;
   const finalOrder = preferredOrder.filter(id => id !== 'hero' && isOn(id));
   const renderSection = (id) => sections[id] || null;
+
+  // A saved Layout Builder configuration is authoritative, including the
+  // hero's position. Template profiles remain the default only until the
+  // merchant explicitly saves a homepage layout.
+  if (hasCustomLayout) {
+    return (
+      <div className={`storefront-template-home template-home-${template} template-shell-${profile.shell || 'standard'}`} style={{ background:'var(--body-bg)' }}>
+        <TrustBar settings={settings}/>
+        <div className="template-standard-flow">
+          {orderedIds.filter(isOn).map(id => (
+            <div key={id} className={`template-section template-section-${id}`}>{renderSection(id)}</div>
+          ))}
+        </div>
+        <div className="h-6"/>
+      </div>
+    );
+  }
 
   if (profile.shell === 'market') {
     return (
@@ -859,7 +876,13 @@ export default function Home() {
       ? layoutBuilder.homepage
       : null;
     if (Array.isArray(layout)) {
-      setSectionOrder([...layout].sort((a,b)=>a.order-b.order));
+      // `flash_sale` was the original Layout Builder id while the storefront
+      // renderer calls the same section `deals`. Normalize old and new
+      // saved layouts so its order/visibility settings are actually applied.
+      setSectionOrder(layout.map(section => ({
+        ...section,
+        id: section.id === 'flash_sale' ? 'deals' : section.id,
+      })).sort((a,b)=>a.order-b.order));
     }
   }, [settings]);
 
@@ -1216,6 +1239,7 @@ export default function Home() {
       isOn={isOn}
       sections={SECTIONS}
       orderedIds={orderedIds}
+      hasCustomLayout={Array.isArray(sectionOrder)}
     />
   );
 }

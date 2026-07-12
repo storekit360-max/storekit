@@ -406,7 +406,7 @@ export const ThemeProvider = ({ children }) => {
 
   const refreshTheme = useCallback(() => {
     lastSaveRef.current = 0; // bypass grace period for explicit refresh
-    loadAndApply();
+    return loadAndApply();
   }, [loadAndApply]);
 
   return (
