@@ -75,18 +75,24 @@ router.get('/gateways', async (req, res) => {
     const tenantId = tenantIdForRequest(req);
     if (!tenantId) return res.json([]);
     const gateways = await PaymentGateway.find({ tenantId, isEnabled: true });
-    const safe = gateways.map(g => ({
-      _id:                 g._id,
-      gateway:             g.gateway,
-      displayName:         g.displayName,
-      description:         g.description,
-      logo:                g.logo,
-      isLive:              g.isLive,
-      supportedCurrencies: g.supportedCurrencies,
-      // Only expose the public/non-secret key
-      publicKey: g.config?.publicKey || g.config?.merchantId || g.config?.clientId || null,
-      // NEVER include: secretKey, merchantSecret, clientSecret, webhookSecret
-    }));
+    const safe = gateways
+      .filter(g => GATEWAY_NAMES[g.gateway])
+      .map(g => ({
+        _id:                 g._id,
+        gateway:             g.gateway,
+        // Use canonical labels; never let a corrupted/custom displayName make
+        // an online gateway appear as another manual COD method.
+        displayName:         GATEWAY_NAMES[g.gateway],
+        description:         g.description,
+        logo:                g.logo,
+        isLive:              g.isLive,
+        supportedCurrencies: g.supportedCurrencies,
+        // Only expose the public/non-secret key
+        publicKey: g.config?.publicKey || g.config?.merchantId || g.config?.clientId || null,
+        // NEVER include: secretKey, merchantSecret, clientSecret, webhookSecret
+      }))
+      // An enabled but incomplete record is not a usable checkout method.
+      .filter(g => Boolean(g.publicKey));
     res.json(safe);
   } catch (err) {
     console.error('[gateways]', err);

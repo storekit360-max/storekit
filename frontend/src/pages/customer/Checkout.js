@@ -551,11 +551,12 @@ export default function Checkout() {
   useEffect(() => {
     API.get('/payments/gateways').then(r => {
       const supported = new Set(['payhere', 'stripe', 'paypal']);
+      const canonicalNames = { payhere: 'PayHere', stripe: 'Stripe', paypal: 'PayPal' };
       const unique = new Map();
       (Array.isArray(r.data) ? r.data : []).forEach(gateway => {
         const key = String(gateway?.gateway || '').toLowerCase().trim();
         if (supported.has(key) && !unique.has(key)) {
-          unique.set(key, { ...gateway, gateway: key });
+          unique.set(key, { ...gateway, gateway: key, displayName: canonicalNames[key] });
         }
       });
       setGateways(Array.from(unique.values()));
