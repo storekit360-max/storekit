@@ -314,3 +314,28 @@ html[data-store-template] .template-section .grid>.product-card .product-card-fo
 .catalog-product-card .catalog-product-body h3{height:2.75em;min-height:2.75em;max-height:2.75em;overflow:hidden}
 .catalog-product-card .catalog-product-title{height:2.75em;min-height:2.75em;max-height:2.75em;overflow:hidden}
 .catalog-product-card .catalog-product-footer{margin-top:auto}
+
+/* Shop, wishlist and product-detail grids live outside `.template-section`.
+   Repeat the final contract with deliberately higher specificity than legacy
+   template nth-child rules such as Creator and Masonry. */
+html[data-store-template] body .product-card.product-card{
+ display:flex!important;flex-direction:column!important;align-self:stretch!important;height:100%!important;
+}
+html[data-store-template] body .product-card.product-card>a:first-of-type{
+ display:block!important;width:100%!important;height:auto!important;flex:0 0 auto!important;
+ aspect-ratio:var(--tpl-product-media-ratio,1/1)!important;
+}
+html[data-store-template] body .product-card.product-card>a:first-of-type>img{
+ display:block!important;width:100%!important;height:100%!important;
+}
+html[data-store-template] body .product-card.product-card>div:last-child{
+ display:flex!important;flex:1 1 auto!important;flex-direction:column!important;min-width:0!important;
+}
+html[data-store-template] body .product-card.product-card>div:last-child>a:first-child>h3,
+html[data-store-template] body .product-card.product-card>div:last-child>a:first-child>p{
+ height:2.75em!important;min-height:2.75em!important;max-height:2.75em!important;overflow:hidden!important;
+}
+html[data-store-template] body .product-card.product-card .product-card-footer,
+html[data-store-template] body .product-card.product-card>div:last-child>div:last-child{
+ margin-top:auto!important;
+}
