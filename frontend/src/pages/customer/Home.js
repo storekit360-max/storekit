@@ -1075,7 +1075,10 @@ export default function Home() {
   };
 
   // Tenant-configurable loading screen shared with route-level lazy loading.
-  if (showInitialLoader) return <StoreLoader settings={settings || {}}/>;
+  // Do not render a default StoreKit loader and then replace it with the
+  // tenant-branded loader. The first-paint guard remains hidden until settings
+  // resolve, after which customers see exactly one stable entrance screen.
+  if (showInitialLoader) return settings ? <StoreLoader settings={settings}/> : null;
 
   // Legacy loader kept temporarily as a fallback reference; StoreLoader above
   // is now the active customer-facing implementation.

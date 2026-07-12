@@ -104,12 +104,6 @@ const AdminReviews = (props) => {
 };
 
 // ─── Page loading fallback ────────────────────────────────────────────────────
-// Internal route chunks load without reusing the storefront entrance screen.
-// The branded loader belongs exclusively to Home's first database bootstrap.
-function PageLoader() {
-  return null;
-}
-
 // ─── Scroll restoration ───────────────────────────────────────────────────────
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -201,7 +195,7 @@ export default function App() {
                   error which ErrorBoundary in index.js catches and shows
                   a "Reload" button instead of a white screen.
                 */}
-                <Suspense fallback={<PageLoader/>}>
+                <Suspense fallback={null}>
                   <Routes>
                     <Route element={<CustomerLayout/>}>
                       <Route path="/"                    element={<Home/>}/>

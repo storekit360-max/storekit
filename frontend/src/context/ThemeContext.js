@@ -335,9 +335,10 @@ try {
 
 /* ── ThemeProvider ───────────────────────────────────────────────────── */
 export const ThemeProvider = ({ children }) => {
-  const [settings, setSettings] = useState(() => readCache());
-  const [themeKey, setThemeKey] = useState(() => readCache()?.theme || 'default');
-  const [darkMode, setDarkModeState] = useState(() => readCache()?.darkMode || false);
+  const initialSettings = () => window.__STOREKIT_BOOTSTRAP_SETTINGS__ || readCache();
+  const [settings, setSettings] = useState(initialSettings);
+  const [themeKey, setThemeKey] = useState(() => initialSettings()?.theme || 'default');
+  const [darkMode, setDarkModeState] = useState(() => initialSettings()?.darkMode || false);
   const [storeStatus, setStoreStatus] = useState({ checked: false, unavailable: false, message: '' });
 
   useLayoutEffect(() => {
