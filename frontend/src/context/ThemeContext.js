@@ -336,10 +336,14 @@ try {
 /* ── ThemeProvider ───────────────────────────────────────────────────── */
 export const ThemeProvider = ({ children }) => {
   const initialSettings = () => window.__STOREKIT_BOOTSTRAP_SETTINGS__ || readCache();
+  const hasBootstrapSettings = Boolean(initialSettings());
   const [settings, setSettings] = useState(initialSettings);
   const [themeKey, setThemeKey] = useState(() => initialSettings()?.theme || 'default');
   const [darkMode, setDarkModeState] = useState(() => initialSettings()?.darkMode || false);
-  const [storeStatus, setStoreStatus] = useState({ checked: false, unavailable: false, message: '' });
+  // The pre-React bootstrap has already validated and loaded tenant settings.
+  // Treat that as the initial successful check so CustomerLayout does not show
+  // a second transitional loading component before Home's main loader.
+  const [storeStatus, setStoreStatus] = useState({ checked: hasBootstrapSettings, unavailable: false, message: '' });
 
   useLayoutEffect(() => {
     const boot = window.__STOREKIT_BOOTSTRAP_SETTINGS__ || readCache();

@@ -11,6 +11,7 @@ import RunningBanner from '../../components/RunningBanner';
 import PopupBanner from '../../components/PopupBanner';
 import FlashSaleBanner from '../../components/FlashSaleBanner';
 import CouponBanner from '../../components/CouponBanner';
+import StoreLoader from '../../components/StoreLoader';
 
 /* ─────────────────────────────────────────────────────────────────
    RESPONSIVE LAYOUT FIXES — v2
@@ -953,11 +954,7 @@ export default function CustomerLayout() {
   }, [settings?.googleSearchConsole]);
 
   if (!storeStatus?.checked) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-6" style={{fontFamily:'var(--font-body)'}}>
-        <div className="w-10 h-10 rounded-full border-4 border-slate-200 border-t-slate-500 animate-spin" />
-      </div>
-    );
+    return <StoreLoader settings={settings || window.__STOREKIT_BOOTSTRAP_SETTINGS__ || {}}/>;
   }
 
   if (storeStatus?.unavailable) {
