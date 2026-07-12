@@ -183,7 +183,7 @@ if (USE_CLOUDINARY) {
     api_key:    process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET,
   });
-  const { CloudinaryStorage: CS } = require('multer-storage-cloudinary');
+  const { CloudinaryStorage: CS } = require('../utils/CloudinaryStorage');
   CloudinaryStorage = CS;
   console.log('🌥️  Upload storage: Cloudinary');
 } else {

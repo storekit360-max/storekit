@@ -64,7 +64,7 @@ if (USE_CLOUDINARY) {
     api_key:    process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET,
   });
-  const { CloudinaryStorage } = require('multer-storage-cloudinary');
+  const { CloudinaryStorage } = require('../utils/CloudinaryStorage');
   const slipStorage = new CloudinaryStorage({
     cloudinary,
     params: (req, file) => {
@@ -798,7 +798,7 @@ router.post('/:id/payment-slip', uploadSlipMiddleware, async (req, res) => {
 
     let slipUrl, slipRelPath;
     if (USE_CLOUDINARY) {
-      // multer-storage-cloudinary sets req.file.path to the full Cloudinary URL.
+      // The Cloudinary storage engine sets req.file.path to the secure URL.
       // For raw (PDF) uploads Cloudinary returns the correct /raw/upload/ URL,
       // so we use it directly — no adjustment needed.
       slipUrl = req.file.path;

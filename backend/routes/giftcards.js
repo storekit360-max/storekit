@@ -37,7 +37,7 @@ const ensureUniqueCode = async () => {
 let uploadSlip;
 try {
   const { v2: cloudinary } = require('cloudinary');
-  const { CloudinaryStorage } = require('multer-storage-cloudinary');
+  const { CloudinaryStorage } = require('../utils/CloudinaryStorage');
   if (process.env.CLOUDINARY_CLOUD_NAME) {
     cloudinary.config({
       cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
