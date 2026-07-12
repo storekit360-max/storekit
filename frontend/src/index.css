@@ -374,6 +374,28 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
   border-color: var(--border-color) !important;
 }
 
+/* Adaptive storefront contrast. Admin pages never receive the
+   `.customer-storefront` scope, so storefront dark mode cannot recolor them. */
+.customer-storefront{color:var(--text-primary)}
+.customer-storefront .product-card,
+.customer-storefront .catalog-product-card,
+.customer-storefront .deal-product-card{color:var(--text-on-card);background-color:var(--card-bg)}
+.customer-storefront .product-card h3,
+.customer-storefront .product-card .font-black,
+.customer-storefront .catalog-product-card h3,
+.customer-storefront .catalog-product-title{color:var(--text-on-card)!important}
+.customer-storefront .product-card>div:last-child>p:first-child,
+.customer-storefront .catalog-product-card .text-gray-400{color:var(--text-muted-on-card)!important}
+.customer-storefront.dark-mode .template-section>section,
+.customer-storefront.dark-mode .template-section>div,
+.customer-storefront.dark-mode .template-standard-flow>section{
+  color:var(--text-primary);
+}
+.customer-storefront.dark-mode .template-section>section[style*="background"],
+.customer-storefront.dark-mode .template-section>section.bg-white{
+  background-color:var(--card-bg)!important;
+}
+
 /* ── Analytics Dashboard ───────────────────────────────────────────────── */
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }

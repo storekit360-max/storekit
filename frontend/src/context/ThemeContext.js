@@ -255,15 +255,31 @@ export const applyTheme = (settings) => {
 
   const cardBg  = settings?.cardBgColor || (isDark ? (t.darkCardBg || '#1a1a2e') : t.cardBg);
   const bodyBg  = settings?.bodyBgColor || (isDark ? (t.darkBodyBg || '#0d0d1a') : t.bodyBg);
-  const textPrimary   = isDark ? '#f1f5f9' : '#0f172a';
-  const textSecondary = isDark ? '#94a3b8' : '#64748b';
+  const contrastText = (color, light = '#f8fafc', darkText = '#0f172a') => {
+    const match = String(color || '').trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (!match) return isDark ? light : darkText;
+    let hex = match[1];
+    if (hex.length === 3) hex = hex.split('').map(char => char + char).join('');
+    const channels = [0, 2, 4].map(offset => parseInt(hex.slice(offset, offset + 2), 16) / 255)
+      .map(value => value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+    const luminance = 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+    return luminance < 0.36 ? light : darkText;
+  };
+  const textPrimary   = contrastText(bodyBg);
+  const textSecondary = textPrimary === '#f8fafc' ? '#cbd5e1' : '#64748b';
+  const textOnCard    = contrastText(cardBg);
+  const textMutedOnCard = textOnCard === '#f8fafc' ? '#cbd5e1' : '#64748b';
   const borderColor   = isDark ? '#1e293b' : '#e5e7eb';
 
   root.style.setProperty('--color-primary',        primary);
   root.style.setProperty('--color-primary-dark',   primaryDark);
   root.style.setProperty('--color-primary-light',  primaryLight);
   root.style.setProperty('--color-accent',         accent);
-  root.style.setProperty('--color-dark',           dark);
+  // `--color-dark` is historically used as foreground text throughout the
+  // storefront. Keep it contrast-safe and expose the actual dark brand shade
+  // separately for backgrounds and gradients.
+  root.style.setProperty('--color-dark',           textPrimary);
+  root.style.setProperty('--theme-dark',           dark);
   root.style.setProperty('--color-surface',        surface);
   root.style.setProperty('--theme-gradient',       themeGradient);
   root.style.setProperty('--hero-gradient',        heroGradient);
@@ -273,17 +289,21 @@ export const applyTheme = (settings) => {
   root.style.setProperty('--glow-accent',          accent  + '4d');
   root.style.setProperty('--text-primary',         textPrimary);
   root.style.setProperty('--text-secondary',       textSecondary);
+  root.style.setProperty('--text-on-card',         textOnCard);
+  root.style.setProperty('--text-muted-on-card',   textMutedOnCard);
   root.style.setProperty('--border-color',         borderColor);
 
   const metaTheme = document.getElementById('meta-theme-color');
   if (metaTheme) metaTheme.setAttribute('content', primary);
 
-  document.body.style.setProperty('background', bodyBg, 'important');
-  if (isDark) {
-    document.documentElement.classList.add('dark-mode');
+  const isAdminView = /^\/(admin|superadmin)(\/|$)/.test(window.location.pathname);
+  root.toggleAttribute('data-customer-dark', isDark);
+  root.classList.remove('dark-mode');
+  if (!isAdminView) {
+    document.body.style.setProperty('background', bodyBg, 'important');
     document.body.style.setProperty('color', textPrimary, 'important');
   } else {
-    document.documentElement.classList.remove('dark-mode');
+    document.body.style.removeProperty('background');
     document.body.style.removeProperty('color');
   }
 
@@ -446,6 +466,24 @@ export const ThemeProvider = ({ children }) => {
       clearInterval(slow);
     };
   }, [loadAndApply]);
+
+  // Keep another customer tab in sync immediately when Theme Builder saves on
+  // the same tenant domain. The admin UI itself remains visually independent.
+  useEffect(() => {
+    const onStorage = (event) => {
+      if (event.key !== getTenantThemeCacheKey() || !event.newValue) return;
+      try {
+        const next = JSON.parse(event.newValue);
+        if (!next || typeof next !== 'object') return;
+        setSettings(next);
+        setThemeKey(next.theme || 'default');
+        setDarkModeState(next.darkMode === true);
+        applyTheme(next);
+      } catch {}
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   const setDarkMode = useCallback((val) => {
     setSettings(prev => {

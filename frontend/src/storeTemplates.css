@@ -339,3 +339,51 @@ html[data-store-template] body .product-card.product-card .product-card-footer,
 html[data-store-template] body .product-card.product-card>div:last-child>div:last-child{
  margin-top:auto!important;
 }
+
+/* Templates with intrinsically dark canvases need light section copy even when
+   the customer's explicit dark-mode switch is off. Card copy still uses the
+   independently calculated on-card contrast tokens. */
+:is(
+ html[data-store-template="luxury"],
+ html[data-store-template="electronics"],
+ html[data-store-template="automotive"],
+ html[data-store-template="neon"],
+ html[data-store-template="noir"],
+ html[data-store-template="space"],
+ html[data-store-template="fitness"],
+ html[data-store-template="gaming"],
+ html[data-store-template="photography"],
+ html[data-store-template="nightMarket"]
+) .customer-storefront .storefront-template-home{
+ --text-primary:#f8fafc;
+ --text-secondary:#cbd5e1;
+ color:var(--text-primary)!important;
+}
+:is(
+ html[data-store-template="luxury"],
+ html[data-store-template="electronics"],
+ html[data-store-template="automotive"],
+ html[data-store-template="neon"],
+ html[data-store-template="noir"],
+ html[data-store-template="space"],
+ html[data-store-template="fitness"],
+ html[data-store-template="gaming"],
+ html[data-store-template="photography"],
+ html[data-store-template="nightMarket"]
+) .customer-storefront .storefront-template-home :is(h1,h2,.section-heading){
+ color:var(--text-primary)!important;
+}
+:is(
+ html[data-store-template="luxury"],
+ html[data-store-template="electronics"],
+ html[data-store-template="automotive"],
+ html[data-store-template="neon"],
+ html[data-store-template="noir"],
+ html[data-store-template="space"],
+ html[data-store-template="fitness"],
+ html[data-store-template="gaming"],
+ html[data-store-template="photography"],
+ html[data-store-template="nightMarket"]
+) .customer-storefront .storefront-template-home .text-gray-400{
+ color:var(--text-secondary)!important;
+}

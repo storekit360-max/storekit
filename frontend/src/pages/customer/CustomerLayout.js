@@ -976,7 +976,7 @@ export default function CustomerLayout() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col" style={{background:'var(--body-bg)',fontFamily:'var(--font-body)',overflowX:'hidden',maxWidth:'100vw'}}>
+    <div className={`customer-storefront min-h-screen flex flex-col ${settings?.darkMode === true ? 'dark-mode' : ''}`} style={{background:'var(--body-bg)',color:'var(--text-primary)',fontFamily:'var(--font-body)',overflowX:'hidden',maxWidth:'100vw'}}>
       {/* FIX: inject responsive overrides */}
       <ResponsiveStyles />
       {campaign?.theme?.snowEffect     && <SnowEffect/>}

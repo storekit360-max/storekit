@@ -130,20 +130,23 @@
         var hg='linear-gradient(135deg,'+dk+' 0%,'+sf+' 50%,'+pd+' 100%)';
         var cardBg=s.cardBgColor||(isDark?(t.dcb||'#1a1a2e'):t.cb);
         var bodyBg=s.bodyBgColor||(isDark?(t.dbb||'#0d0d1a'):t.bb);
-        var tp=isDark?'#f1f5f9':'#0f172a', ts=isDark?'#94a3b8':'#64748b', bc=isDark?'#1e293b':'#e5e7eb';
+        function contrast(c){var m=String(c||'').match(/^#([0-9a-f]{6})$/i);if(!m)return isDark?'#f8fafc':'#0f172a';var h=m[1],v=[0,2,4].map(function(i){var x=parseInt(h.slice(i,i+2),16)/255;return x<=.03928?x/12.92:Math.pow((x+.055)/1.055,2.4)}),l=.2126*v[0]+.7152*v[1]+.0722*v[2];return l<.36?'#f8fafc':'#0f172a'}
+        var tp=contrast(bodyBg), ts=tp==='#f8fafc'?'#cbd5e1':'#64748b', tc=contrast(cardBg), tcm=tc==='#f8fafc'?'#cbd5e1':'#64748b', bc=isDark?'#334155':'#e5e7eb';
         var r=document.documentElement;
         r.style.setProperty('--color-primary',pr);r.style.setProperty('--color-primary-dark',pd);
         r.style.setProperty('--color-primary-light',pl);r.style.setProperty('--color-accent',ac);
-        r.style.setProperty('--color-dark',dk);r.style.setProperty('--color-surface',sf);
+        r.style.setProperty('--color-dark',tp);r.style.setProperty('--theme-dark',dk);r.style.setProperty('--color-surface',sf);
         r.style.setProperty('--theme-gradient',tg);r.style.setProperty('--hero-gradient',hg);
         r.style.setProperty('--card-bg',cardBg);r.style.setProperty('--body-bg',bodyBg);
         r.style.setProperty('--glow-primary',pr+'66');r.style.setProperty('--glow-accent',ac+'4d');
-        r.style.setProperty('--text-primary',tp);r.style.setProperty('--text-secondary',ts);
+        r.style.setProperty('--text-primary',tp);r.style.setProperty('--text-secondary',ts);r.style.setProperty('--text-on-card',tc);r.style.setProperty('--text-muted-on-card',tcm);
         r.style.setProperty('--border-color',bc);
         var bs=document.getElementById('theme-bootstrap-bg');
         if(!bs){bs=document.createElement('style');bs.id='theme-bootstrap-bg';document.head.appendChild(bs);}
-        bs.textContent='html,body{background:'+bodyBg+' !important;color:'+tp+'} body{font-family:var(--font-body) !important;}';
-        if(isDark)r.classList.add('dark-mode');else r.classList.remove('dark-mode');
+        var adminView=/^\/(admin|superadmin)(\/|$)/.test(location.pathname);
+        bs.textContent=adminView?'body{font-family:var(--font-body) !important;}':'html,body{background:'+bodyBg+' !important;color:'+tp+'} body{font-family:var(--font-body) !important;}';
+        r.toggleAttribute('data-customer-dark',isDark);
+        r.classList.remove('dark-mode');
         var fk=s.fontStyle||s.fontFamily||'default', f=F[fk]||F.default;
         r.style.setProperty('--font-display',f.fd);r.style.setProperty('--font-body',f.fb);
         var fl=document.getElementById('theme-font');
