@@ -280,3 +280,36 @@ html[data-store-template="nightMarket"] .storefront-template-home{background-ima
  html[data-store-template="capsule"] .template-section .grid{grid-template-columns:1fr!important;gap:28px!important}
  html[data-store-template="warehouse"]{--tpl-toolbar-direction:row}
 }
+
+/* FINAL CARD GEOMETRY OVERRIDE
+   This intentionally comes after all 56 template definitions. No staggered,
+   editorial, creator, or masonry rule may give one product a different card
+   size from its neighbours. Visual uniqueness remains in colors, borders,
+   typography and the template-wide media ratio. */
+html[data-store-template] .template-section .grid>.product-card{
+ display:flex!important;flex-direction:column!important;align-self:stretch!important;
+ height:100%!important;grid-column:auto!important;
+}
+html[data-store-template] .template-section .grid>.product-card>a:first-child{
+ display:block!important;width:100%!important;height:auto!important;flex:0 0 auto!important;
+ aspect-ratio:var(--tpl-product-media-ratio,1/1)!important;
+}
+html[data-store-template] .template-section .grid>.product-card>a:first-child>img{
+ display:block!important;width:100%!important;height:100%!important;
+}
+html[data-store-template] .template-section .grid>.product-card>div:last-child{
+ display:flex!important;flex:1 1 auto!important;flex-direction:column!important;min-width:0!important;
+}
+html[data-store-template] .template-section .grid>.product-card>div:last-child h3{
+ height:2.75em!important;min-height:2.75em!important;max-height:2.75em!important;
+ overflow:hidden!important;
+}
+html[data-store-template] .template-section .grid>.product-card .product-card-footer{
+ margin-top:auto!important;min-height:2.5rem!important;
+}
+
+/* Category and brand listings use a lighter card component but follow the
+   same two-line-title and bottom-aligned price/action contract. */
+.catalog-product-card{align-self:stretch}
+.catalog-product-card .catalog-product-body h3{height:2.75em;min-height:2.75em;max-height:2.75em;overflow:hidden}
+.catalog-product-card .catalog-product-footer{margin-top:auto}

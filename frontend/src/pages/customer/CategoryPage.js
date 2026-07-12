@@ -382,7 +382,7 @@ export default function CategoryPage() {
 
               return (
                 <Link key={product._id} to={`/product/${product.slug}`}
-                  className="group rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1"
+                  className="catalog-product-card group rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1 flex flex-col h-full"
                   style={{ background: 'var(--card-bg)', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
                   {/* Image */}
                   <div className="relative overflow-hidden aspect-square bg-gray-50">
@@ -402,7 +402,7 @@ export default function CategoryPage() {
                     )}
                   </div>
                   {/* Info */}
-                  <div className="p-3">
+                  <div className="catalog-product-body p-3 flex flex-col flex-1">
                     {product.brand && (
                       <p className="text-xs text-gray-400 mb-0.5">{product.brand}</p>
                     )}
@@ -416,7 +416,7 @@ export default function CategoryPage() {
                         <span className="text-xs text-gray-400">({product.ratings.count})</span>
                       </div>
                     )}
-                    <div className="flex items-center justify-between mt-2">
+                    <div className="catalog-product-footer flex items-center justify-between mt-auto pt-2">
                       <div>
                         <span className="font-bold text-gray-900" style={{ fontFamily: 'var(--font-display)' }}>
                           {sym}{price?.toLocaleString()}

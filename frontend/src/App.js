@@ -4,11 +4,10 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { SeasonalProvider } from './context/SeasonalContext';
-import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { AnimationProvider } from './context/AnimationContext';
 import { ScrollProgressBar, FloatingShapes } from './components/Cinematic';
 import AnalyticsBootstrap from './hooks/useAnalytics';
-import StoreLoader from './components/StoreLoader';
 
 // ─── Lazy-loaded Customer Pages ───────────────────────────────────────────────
 // Each page is code-split into its own chunk. If one chunk fails to load
@@ -105,15 +104,10 @@ const AdminReviews = (props) => {
 };
 
 // ─── Page loading fallback ────────────────────────────────────────────────────
-// Shown while a lazy chunk is downloading. Matches the site's bg colour so
-// there's no jarring flash — it just looks like the page is thinking.
+// Internal route chunks load without reusing the storefront entrance screen.
+// The branded loader belongs exclusively to Home's first database bootstrap.
 function PageLoader() {
-  const { pathname } = useLocation();
-  const { settings } = useTheme();
-  // Admin tab changes should preserve the dashboard shell without covering it
-  // with the customer storefront loading experience.
-  if (pathname.startsWith('/admin') || pathname.startsWith('/superadmin')) return null;
-  return <StoreLoader settings={settings || {}}/>;
+  return null;
 }
 
 // ─── Scroll restoration ───────────────────────────────────────────────────────
