@@ -43,11 +43,6 @@ const writeHomeDataCache = (data) => {
   } catch {}
 };
 
-const hasLoadedHomeOnce = () => {
-  try { return !!window.__STOREKIT_HOME_LOADED_ONCE__; }
-  catch { return false; }
-};
-
 /* ── Stars ─────────────────────────────────────────────────────────────── */
 const Stars = ({ r = 0 }) => (
   <div className="flex gap-0.5">
@@ -890,11 +885,10 @@ export default function Home() {
   const [heroBanners, setHeroBanners] = useState(() => initialHomeData?.heroBanners || []);
   const [promoBanners,setPromoBanners]= useState(() => initialHomeData?.promoBanners || []);
   // dbReady: true once all homepage API calls resolve (or when cached home data exists)
-  // settingsLoaded: true once ThemeContext has fetched real settings from API
   const [dbReady, setDbReady] = useState(() => !!initialHomeData);
-  // Loading is true until BOTH db data AND live settings are available
-  const loading = !dbReady || !settings;
-  const showInitialLoader = loading && !initialHomeData && !hasLoadedHomeOnce();
+  // Never reveal an empty homepage while its live database data is still being
+  // resolved. Cached product data may render once live/cached settings exist.
+  const showInitialLoader = !settings || (!dbReady && !initialHomeData);
   const [sectionOrder, setSectionOrder] = useState(null);
   // settingsReady: true once we have settings from cache or API.
   // Prevents newsletter / payment sections from flashing on first render.
@@ -920,15 +914,20 @@ export default function Home() {
   }, [settings]);
 
   useEffect(() => {
-    Promise.all([
-      API.get('/products?featured=true&limit=8'),
-      API.get('/products?limit=8'),
-      API.get('/products?onSale=true&limit=8'),
-      API.get('/categories?limit=12'),
-      API.get('/products/brands?limit=16'),
-      API.get('/banners?position=hero'),
-      API.get('/banners?position=promo'),
-    ]).then(([feat,newest,sale,cats,brandRes,hero,promo]) => {
+    let cancelled = false;
+    let retryTimer;
+    let attempt = 0;
+
+    const loadHome = () => Promise.all([
+        API.get('/products?featured=true&limit=8'),
+        API.get('/products?limit=8'),
+        API.get('/products?onSale=true&limit=8'),
+        API.get('/categories?limit=12'),
+        API.get('/products/brands?limit=16'),
+        API.get('/banners?position=hero'),
+        API.get('/banners?position=promo'),
+      ]).then(([feat,newest,sale,cats,brandRes,hero,promo]) => {
+      if (cancelled) return;
       const nextHomeData = {
         featured: feat.data.products || [],
         newArrivals: newest.data.products || [],
@@ -946,10 +945,21 @@ export default function Home() {
       setHeroBanners(nextHomeData.heroBanners);
       setPromoBanners(nextHomeData.promoBanners);
       writeHomeDataCache(nextHomeData);
-    }).catch(()=>{}).finally(()=>{
       window.__STOREKIT_HOME_LOADED_ONCE__ = true;
       setDbReady(true);
+    }).catch(() => {
+      if (cancelled) return;
+      // Keep the single welcome loader visible and retry with a bounded delay;
+      // never reveal a half-empty homepage after a transient database outage.
+      attempt += 1;
+      retryTimer = window.setTimeout(loadHome, Math.min(1500 * attempt, 10000));
     });
+
+    loadHome();
+    return () => {
+      cancelled = true;
+      if (retryTimer) window.clearTimeout(retryTimer);
+    };
   },[]);
 
   // Kill stale ScrollTriggers from previous page so GSAP recalculates from top.

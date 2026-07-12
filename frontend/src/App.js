@@ -62,50 +62,57 @@ const AdminDeals         = lazy(() => import('./pages/admin/Deals'));
 const SuperAdminLogin = lazy(() => import('./pages/superadmin/SuperAdminLogin'));
 const SuperAdminDashboard = lazy(() => import('./pages/superadmin/SuperAdminDashboard'));
 
+// Keep named lazy components at module scope. Creating lazy() inside a render
+// produces a new component identity and can show the loader again unnecessarily.
+const OrderSuccessPage = lazy(() => import('./pages/customer/OrderSuccess').then(m => ({ default: m.OrderSuccess })));
+const OrderTrackingPage = lazy(() => import('./pages/customer/OrderSuccess').then(m => ({ default: m.OrderTracking })));
+const LoginPage = lazy(() => import('./pages/customer/Login').then(m => ({ default: m.Login })));
+const RegisterPage = lazy(() => import('./pages/customer/Login').then(m => ({ default: m.Register })));
+const AdminCategoriesPage = lazy(() => import('./pages/admin/Categories').then(m => ({ default: m.AdminCategories })));
+const AdminCustomersPage = lazy(() => import('./pages/admin/Categories').then(m => ({ default: m.AdminCustomers })));
+const AdminCouponsPage = lazy(() => import('./pages/admin/Coupons'));
+const AdminBannersPage = lazy(() => import('./pages/admin/Banners').then(m => ({ default: m.AdminBanners })));
+const AdminReviewsPage = lazy(() => import('./pages/admin/Banners').then(m => ({ default: m.AdminReviews })));
+
 // ─── Lazy wrapper helpers for named exports ───────────────────────────────────
 // Some modules export multiple components; we unwrap them here so lazy() works.
 const OrderSuccess   = (props) => {
-  const Mod = lazy(() => import('./pages/customer/OrderSuccess').then(m => ({ default: m.OrderSuccess })));
-  return <Suspense fallback={<PageLoader/>}><Mod {...props}/></Suspense>;
+  return <OrderSuccessPage {...props}/>;
 };
 const OrderTracking  = (props) => {
-  const Mod = lazy(() => import('./pages/customer/OrderSuccess').then(m => ({ default: m.OrderTracking })));
-  return <Suspense fallback={<PageLoader/>}><Mod {...props}/></Suspense>;
+  return <OrderTrackingPage {...props}/>;
 };
 const Login = (props) => {
-  const Mod = lazy(() => import('./pages/customer/Login').then(m => ({ default: m.Login })));
-  return <Suspense fallback={<PageLoader/>}><Mod {...props}/></Suspense>;
+  return <LoginPage {...props}/>;
 };
 const Register = (props) => {
-  const Mod = lazy(() => import('./pages/customer/Login').then(m => ({ default: m.Register })));
-  return <Suspense fallback={<PageLoader/>}><Mod {...props}/></Suspense>;
+  return <RegisterPage {...props}/>;
 };
 const AdminCategories = (props) => {
-  const Mod = lazy(() => import('./pages/admin/Categories').then(m => ({ default: m.AdminCategories })));
-  return <Suspense fallback={<PageLoader/>}><Mod {...props}/></Suspense>;
+  return <AdminCategoriesPage {...props}/>;
 };
 const AdminCustomers = (props) => {
-  const Mod = lazy(() => import('./pages/admin/Categories').then(m => ({ default: m.AdminCustomers })));
-  return <Suspense fallback={<PageLoader/>}><Mod {...props}/></Suspense>;
+  return <AdminCustomersPage {...props}/>;
 };
 const AdminCoupons = (props) => {
-  const Mod = lazy(() => import('./pages/admin/Coupons'));
-  return <Suspense fallback={<PageLoader/>}><Mod {...props}/></Suspense>;
+  return <AdminCouponsPage {...props}/>;
 };
 const AdminBanners = (props) => {
-  const Mod = lazy(() => import('./pages/admin/Banners').then(m => ({ default: m.AdminBanners })));
-  return <Suspense fallback={<PageLoader/>}><Mod {...props}/></Suspense>;
+  return <AdminBannersPage {...props}/>;
 };
 const AdminReviews = (props) => {
-  const Mod = lazy(() => import('./pages/admin/Banners').then(m => ({ default: m.AdminReviews })));
-  return <Suspense fallback={<PageLoader/>}><Mod {...props}/></Suspense>;
+  return <AdminReviewsPage {...props}/>;
 };
 
 // ─── Page loading fallback ────────────────────────────────────────────────────
 // Shown while a lazy chunk is downloading. Matches the site's bg colour so
 // there's no jarring flash — it just looks like the page is thinking.
 function PageLoader() {
+  const { pathname } = useLocation();
   const { settings } = useTheme();
+  // Admin tab changes should preserve the dashboard shell without covering it
+  // with the customer storefront loading experience.
+  if (pathname.startsWith('/admin') || pathname.startsWith('/superadmin')) return null;
   return <StoreLoader settings={settings || {}}/>;
 }
 

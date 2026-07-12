@@ -47,9 +47,14 @@ export default function StoreLoader({ settings = {}, compact = false, styleId })
   return <div className={`store-loader ${compact ? 'compact' : ''}`} style={{'--lp':primary,'--la':accent,'--lbg':bg,'--lt':text,'--lm':muted}}>
     <style>{loaderCss}</style>
     <div className="skl-glow a"/><div className="skl-glow b"/>
-    <div className="skl-content">
+    <div className="skl-content" role="status" aria-live="polite" aria-label={`Loading ${storeName}`}>
       <LoaderGraphic styleId={selected} logoUrl={settings.logoUrl}/>
-      {!compact && <><h1>{storeName}</h1><p>{settings.loadingText || 'Preparing your shopping experience'}</p></>}
+      {!compact && <>
+        <span className="skl-welcome">Welcome to</span>
+        <h1>{storeName}</h1>
+        <p>{settings.loadingText || 'A wonderful shopping experience is almost ready for you'}</p>
+        <div className="skl-ready-line"><i/><i/><i/></div>
+      </>}
     </div>
   </div>;
 }
@@ -66,9 +71,9 @@ const loaderCss = `
 @keyframes skl-heart{0%,100%{transform:scale(.8)}20%{transform:scale(1.15)}35%{transform:scale(.85)}50%{transform:scale(1.08)}}
 .store-loader{position:fixed;inset:0;z-index:9999;background:var(--lbg);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--lt);transition:background .4s}
 .store-loader.compact{position:relative;inset:auto;z-index:1;width:100%;height:150px;border-radius:14px}.skl-content{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;text-align:center}
-.skl-content h1{font:800 clamp(28px,5vw,48px)/1.1 system-ui;margin:30px 0 8px;color:var(--lt)}.skl-content p{font:500 13px/1.5 system-ui;margin:0;color:var(--lm);letter-spacing:.03em}
+.skl-content{padding:28px;max-width:560px}.skl-welcome{margin-top:28px;font:800 11px/1 system-ui;letter-spacing:.32em;text-transform:uppercase;color:var(--lp);animation:skl-float 2.8s ease-in-out infinite}.skl-content h1{font:900 clamp(34px,7vw,64px)/1.05 var(--font-display,system-ui);margin:12px 0 10px;color:var(--lt);letter-spacing:-.035em;text-wrap:balance}.skl-content p{font:500 clamp(13px,2vw,15px)/1.6 var(--font-body,system-ui);margin:0;color:var(--lm);letter-spacing:.02em;max-width:390px}.skl-ready-line{display:flex;gap:7px;margin-top:25px}.skl-ready-line i{width:7px;height:7px;border-radius:50%;background:var(--lp);animation:skl-pulse 1.1s ease-in-out infinite}.skl-ready-line i:nth-child(2){background:var(--la);animation-delay:.16s}.skl-ready-line i:nth-child(3){animation-delay:.32s}
 .skl-glow{position:absolute;width:280px;height:280px;border-radius:50%;filter:blur(70px);opacity:.09;background:var(--lp)}.skl-glow.a{left:-90px;top:-90px}.skl-glow.b{right:-80px;bottom:-80px;background:var(--la)}
-.store-loader.compact .skl-glow,.store-loader.compact h1,.store-loader.compact p{display:none}
+.store-loader.compact .skl-glow,.store-loader.compact h1,.store-loader.compact p,.store-loader.compact .skl-welcome,.store-loader.compact .skl-ready-line{display:none}
 .skl-rings{width:62px;height:62px;position:relative}.skl-rings i{position:absolute;inset:0;border:4px solid transparent;border-top-color:var(--lp);border-radius:50%;animation:skl-spin .9s linear infinite}.skl-rings.dual-ring i:nth-child(2){inset:9px;border-top-color:var(--la);animation:skl-rev .65s linear infinite}.skl-rings.triple-ring i:nth-child(2){inset:9px;border-right-color:var(--la);animation:skl-rev .8s linear infinite}.skl-rings.triple-ring i:nth-child(3){inset:18px;border-bottom-color:var(--lp);animation:skl-spin .55s linear infinite}.skl-rings.neon-ring{filter:drop-shadow(0 0 8px var(--lp)) drop-shadow(0 0 13px var(--la))}
 .skl-dots{display:flex;gap:9px;height:45px;align-items:center}.skl-dots i{width:13px;height:13px;border-radius:50%;background:var(--lp);animation:skl-bounce .8s ease-in-out infinite}.skl-dots i:nth-child(2){background:var(--la);animation-delay:.12s}.skl-dots i:nth-child(3){animation-delay:.24s}.skl-dots.pulse-dots i{animation-name:skl-pulse}
 .skl-bars{height:55px;display:flex;align-items:center;gap:5px}.skl-bars i{width:7px;height:50px;border-radius:8px;background:linear-gradient(var(--lp),var(--la));animation:skl-bar .8s ease-in-out infinite}.skl-bars i:nth-child(2){animation-delay:.1s}.skl-bars i:nth-child(3){animation-delay:.2s}.skl-bars i:nth-child(4){animation-delay:.3s}.skl-bars i:nth-child(5){animation-delay:.4s}.skl-bars.wave-bars i:nth-child(even){animation-direction:reverse}
