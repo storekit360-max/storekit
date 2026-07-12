@@ -4,10 +4,11 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { SeasonalProvider } from './context/SeasonalContext';
-import { ThemeProvider } from './context/ThemeContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { AnimationProvider } from './context/AnimationContext';
 import { ScrollProgressBar, FloatingShapes } from './components/Cinematic';
 import AnalyticsBootstrap from './hooks/useAnalytics';
+import StoreLoader from './components/StoreLoader';
 
 // ─── Lazy-loaded Customer Pages ───────────────────────────────────────────────
 // Each page is code-split into its own chunk. If one chunk fails to load
@@ -104,25 +105,8 @@ const AdminReviews = (props) => {
 // Shown while a lazy chunk is downloading. Matches the site's bg colour so
 // there's no jarring flash — it just looks like the page is thinking.
 function PageLoader() {
-  return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'var(--body-bg, #fafaf8)',
-    }}>
-      <div style={{
-        width: 40,
-        height: 40,
-        border: '3px solid var(--border-color, #e5e7eb)',
-        borderTopColor: 'var(--color-primary, #15803d)',
-        borderRadius: '50%',
-        animation: 'spin 0.7s linear infinite',
-      }}/>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    </div>
-  );
+  const { settings } = useTheme();
+  return <StoreLoader settings={settings || {}}/>;
 }
 
 // ─── Scroll restoration ───────────────────────────────────────────────────────

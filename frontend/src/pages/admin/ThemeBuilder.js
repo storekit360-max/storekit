@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { THEMES, THEME_CATEGORIES, FONTS, STORE_TEMPLATES, TEMPLATE_CATEGORIES, applyTheme, writeCache } from '../../context/ThemeContext';
 import { useTheme } from '../../context/ThemeContext';
+import StoreLoader, { LOADER_STYLES } from '../../components/StoreLoader';
 import API from '../../utils/api';
 import toast from 'react-hot-toast';
 
@@ -184,6 +185,8 @@ export default function ThemeBuilder() {
   const [saving, setSaving] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [templateFilter, setTemplateFilter] = useState('all');
+  const [selectedLoader, setSelectedLoader] = useState(settings?.loaderStyle || 'classic-ring');
+  const [loadingText, setLoadingText] = useState(settings?.loadingText || 'Preparing your shopping experience');
 
   useEffect(() => {
     if (!settings) return;
@@ -200,6 +203,8 @@ export default function ThemeBuilder() {
       accent: settings.secondaryColor || settings.accentColor || THEMES[nextTheme]?.accent || '#f0a500',
     });
     setCustomCSS(settings.customCSS || '');
+    setSelectedLoader(settings.loaderStyle || 'classic-ring');
+    setLoadingText(settings.loadingText || 'Preparing your shopping experience');
   }, [settings]);
 
   const applyPreview = useCallback((themeId, font, colors, dark, template = selectedTemplate) => {
@@ -269,6 +274,8 @@ export default function ThemeBuilder() {
         darkMode,
         storeTemplate: selectedTemplate,
         customCSS,
+        loaderStyle: selectedLoader,
+        loadingText,
       };
       const { data } = await API.put('/settings', payload);
       const saved = data?.settings || { ...settings, ...payload };
@@ -303,6 +310,7 @@ export default function ThemeBuilder() {
     { id: 'fonts', label: '🔤 Fonts', icon: '🔤' },
     { id: 'colors', label: '🖌️ Colors', icon: '🖌️' },
     { id: 'mode', label: '🌙 Mode', icon: '🌙' },
+    { id: 'loaders', label: '⏳ Loaders', icon: '⏳' },
     { id: 'css', label: '⌨️ CSS', icon: '⌨️' },
   ];
 
@@ -487,6 +495,34 @@ export default function ThemeBuilder() {
             <p className="text-sm font-semibold text-amber-800 mb-1">💡 Pro Tip</p>
             <p className="text-sm text-amber-600">Dark mode applies to the entire storefront including the customer-facing site. Make sure your product images look good on dark backgrounds.</p>
           </div>
+        </div>
+      )}
+
+      {/* ── LOADING SCREENS TAB ── */}
+      {activeTab === 'loaders' && (
+        <div className="space-y-5">
+          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
+            <p className="text-sm font-semibold text-blue-900">Customer Loading Screen</p>
+            <p className="text-xs text-blue-700 mt-1">Choose the animation customers see while the storefront and lazy-loaded pages are being prepared. Colors and logo follow this store's active theme.</p>
+          </div>
+          <div>
+            <label className="form-label">Loading message</label>
+            <input value={loadingText} maxLength={80} onChange={e=>setLoadingText(e.target.value)} className="form-input" placeholder="Preparing your shopping experience"/>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {LOADER_STYLES.map(loader => (
+              <button key={loader.id} type="button" onClick={()=>setSelectedLoader(loader.id)}
+                className={`relative overflow-hidden rounded-2xl border-2 p-2 transition-all hover:-translate-y-0.5 hover:shadow-md ${selectedLoader===loader.id?'border-primary shadow-md':'border-gray-100 hover:border-gray-200'}`}>
+                <StoreLoader compact styleId={loader.id} settings={{...settings, primaryColor:customColors.primary, secondaryColor:customColors.accent, darkMode}}/>
+                <p className="text-xs font-bold text-gray-700 py-2">{loader.name}</p>
+                {selectedLoader===loader.id && <span className="absolute right-2 top-2 w-6 h-6 rounded-full bg-green-500 text-white text-xs flex items-center justify-center shadow">✓</span>}
+              </button>
+            ))}
+          </div>
+          <div className="rounded-2xl overflow-hidden border border-gray-200 shadow-xl">
+            <StoreLoader compact styleId={selectedLoader} settings={{...settings, primaryColor:customColors.primary, secondaryColor:customColors.accent, darkMode}}/>
+          </div>
+          <p className="text-xs text-gray-400">Click <strong>Save &amp; Apply</strong> to publish this loader to the current tenant store.</p>
         </div>
       )}
 

@@ -4,6 +4,7 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import API from '../../utils/api';
 import useSEO from '../../hooks/useSEO';
+import StoreLoader from '../../components/StoreLoader';
 import { useCart } from '../../context/CartContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useSeasonal } from '../../context/SeasonalContext';
@@ -753,6 +754,38 @@ const TEMPLATE_HOME_PROFILES = {
   automotive:    { order:['hero','categories','brands','featured','deals','promo','new_arrivals','newsletter'], shell:'garage' },
   sriLanka:      { order:['hero','categories','brands','deals','featured','promo','new_arrivals','newsletter'], shell:'local' },
   startup:       { order:['hero','featured','brands','categories','deals','new_arrivals','promo','newsletter'], shell:'startup' },
+  nordic:        { order:['hero','featured','categories','brands','new_arrivals','newsletter'], shell:'nordic' },
+  brutalist:     { order:['categories','featured','hero','deals','new_arrivals','brands','newsletter'], shell:'brutalist' },
+  retro:         { order:['hero','categories','deals','featured','bestsellers','brands','newsletter'], shell:'retro' },
+  glass:         { order:['hero','featured','categories','deals','brands','new_arrivals','newsletter'], shell:'glass' },
+  editorialMono:{ order:['hero','featured','promo','categories','brands','new_arrivals','newsletter'], shell:'editorial' },
+  tropical:      { order:['categories','hero','deals','featured','brands','new_arrivals','newsletter'], shell:'tropical' },
+  zen:           { order:['hero','featured','brands','categories','new_arrivals','newsletter'], shell:'minimal' },
+  industrial:    { order:['categories','deals','featured','bestsellers','hero','brands','new_arrivals'], shell:'professional' },
+  noir:          { order:['hero','featured','promo','brands','new_arrivals','newsletter'], shell:'luxury' },
+  coastal:       { order:['hero','categories','featured','brands','promo','new_arrivals','newsletter'], shell:'coastal' },
+  artisan:       { order:['categories','hero','featured','brands','new_arrivals','promo','newsletter'], shell:'artisan' },
+  comic:         { order:['hero','deals','categories','featured','bestsellers','new_arrivals','newsletter'], shell:'comic' },
+  space:         { order:['hero','featured','deals','brands','categories','new_arrivals','newsletter'], shell:'space' },
+  academy:       { order:['categories','hero','featured','brands','new_arrivals','newsletter'], shell:'professional' },
+  cafe:          { order:['categories','deals','featured','hero','new_arrivals','newsletter'], shell:'cafe' },
+  pet:           { order:['hero','categories','featured','brands','new_arrivals','newsletter'], shell:'pet' },
+  wedding:       { order:['hero','featured','brands','promo','categories','new_arrivals','newsletter'], shell:'luxury' },
+  fitness:       { order:['hero','deals','bestsellers','featured','categories','brands','newsletter'], shell:'dynamic' },
+  medical:       { order:['categories','featured','hero','brands','new_arrivals','newsletter'], shell:'clinical' },
+  gaming:        { order:['hero','deals','featured','bestsellers','brands','categories','newsletter'], shell:'neon' },
+  music:         { order:['hero','featured','new_arrivals','brands','categories','newsletter'], shell:'music' },
+  photography:   { order:['hero','featured','promo','new_arrivals','brands','newsletter'], shell:'editorial' },
+  travel:        { order:['hero','categories','featured','deals','brands','new_arrivals','newsletter'], shell:'travel' },
+  ecoMarket:     { order:['categories','hero','featured','brands','deals','new_arrivals','newsletter'], shell:'natural' },
+  auction:       { order:['hero','featured','bestsellers','brands','categories','newsletter'], shell:'luxury' },
+  department:    { order:['categories','deals','featured','bestsellers','hero','brands','new_arrivals','newsletter'], shell:'market' },
+  warehouse:     { order:['deals','categories','featured','bestsellers','brands','hero','new_arrivals'], shell:'professional' },
+  creator:       { order:['hero','featured','promo','new_arrivals','categories','brands','newsletter'], shell:'startup' },
+  pastel:        { order:['hero','categories','featured','promo','brands','new_arrivals','newsletter'], shell:'soft' },
+  masonry:       { order:['featured','hero','categories','new_arrivals','promo','brands','newsletter'], shell:'masonry' },
+  capsule:       { order:['hero','featured','new_arrivals','newsletter'], shell:'minimal' },
+  nightMarket:   { order:['deals','hero','categories','bestsellers','featured','brands','new_arrivals'], shell:'market' },
 };
 
 const TemplateHomeRenderer = ({ settings, isOn, sections, orderedIds, hasCustomLayout }) => {
@@ -1031,10 +1064,14 @@ export default function Home() {
     testimonials: null,
   };
 
-  // Loading screen: shown every visit until DB data + live settings are both ready.
+  // Tenant-configurable loading screen shared with route-level lazy loading.
+  if (showInitialLoader) return <StoreLoader settings={settings || {}}/>;
+
+  // Legacy loader kept temporarily as a fallback reference; StoreLoader above
+  // is now the active customer-facing implementation.
   // Uses HARDCODED neutral colors — never depends on CSS vars or theme settings
   // so it looks identical and premium on every device, first visit or returning.
-  if (showInitialLoader) {
+  if (false && showInitialLoader) {
     const storeName    = settings?.storeName    || 'StoreKit';
     const storeTagline = settings?.storeTagline || 'Delivering the finest products';
     const logoUrl      = settings?.logoUrl;

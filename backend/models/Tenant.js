@@ -62,6 +62,8 @@ const tenantSchema = new mongoose.Schema({
     // This must be declared because Mongoose strict mode drops unknown nested
     // settings keys even though tenant.save() itself succeeds.
     layout_builder: { type: mongoose.Schema.Types.Mixed, default: {} },
+    loaderStyle: { type: String, default: 'classic-ring' },
+    loadingText: { type: String, default: 'Preparing your shopping experience' },
   },
 
   subscription: {

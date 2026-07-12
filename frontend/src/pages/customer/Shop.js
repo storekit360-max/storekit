@@ -156,9 +156,9 @@ export default function Shop() {
   });
 
   return (
-    <div style={{background:'var(--body-bg)',minHeight:'100vh'}}>
+    <div className="shop-page" style={{background:'var(--body-bg)',minHeight:'100vh'}}>
       {/* Header */}
-      <div className="border-b" style={{background:'var(--card-bg)'}}>
+      <div className="shop-header border-b" style={{background:'var(--card-bg)'}}>
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div>
@@ -173,7 +173,7 @@ export default function Shop() {
               </h1>
               <p className="text-sm text-gray-400 mt-0.5">{total} product{total!==1?'s':''} found</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="shop-toolbar flex items-center gap-2">
               <select value={sortBy} onChange={e=>setSortBy(e.target.value)} className="form-input text-sm py-2 w-auto">
                 <option value="newest">Newest</option>
                 <option value="price_asc">Price: Low → High</option>
@@ -193,8 +193,8 @@ export default function Shop() {
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
         <div className="flex gap-4 sm:gap-6">
           {/* Sidebar filter (desktop) */}
-          <aside className={`flex-shrink-0 w-52 hidden lg:block`}>
-            <div className="sticky top-24 space-y-5">
+          <aside className={`shop-sidebar flex-shrink-0 w-52 hidden lg:block`}>
+            <div className="shop-sidebar-inner sticky top-24 space-y-5">
               {/* Search */}
               <div>
                 <p className="form-label mb-2">Search</p>
