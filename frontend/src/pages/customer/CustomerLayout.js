@@ -829,6 +829,8 @@ const PLATFORM_ICONS = {
 const Footer = ({ settings }) => {
   const dark  = settings?.darkBgColor || '#0f172a';
   const storeName = settings?.storeName || 'StoreKit';
+  const contactPhone = settings?.storePhone || settings?.phone || settings?.contactNumber || '';
+  const telephoneHref = String(contactPhone).replace(/[^+\d]/g, '');
   const [footerPages, setFooterPages] = React.useState([]);
   const [socialAccounts, setSocialAccounts] = React.useState([]);
   const [logoFailed, setLogoFailed] = React.useState(false);
@@ -905,7 +907,7 @@ const Footer = ({ settings }) => {
             <h4 className="text-white font-bold mb-3 text-xs uppercase tracking-widest">Contact</h4>
             <div className="space-y-2">
               {settings?.storeAddress && <p className="text-sm">📍 {settings.storeAddress}</p>}
-              {settings?.storePhone   && <a href={`tel:${settings.storePhone}`} className="block text-sm hover:text-white transition-colors">📞 {settings.storePhone}</a>}
+              {contactPhone && <a href={`tel:${telephoneHref}`} className="block text-sm hover:text-white transition-colors">📞 {contactPhone}</a>}
               {settings?.storeEmail   && <a href={`mailto:${settings.storeEmail}`} className="block text-sm hover:text-white transition-colors">✉️ {settings.storeEmail}</a>}
             </div>
           </div>

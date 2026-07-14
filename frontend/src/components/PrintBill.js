@@ -5,7 +5,7 @@ export default function PrintBill({ order, trigger }) {
   const [storeSettings, setStoreSettings] = useState(null);
 
   useEffect(() => {
-    API.get('/settings', { cacheTTL: 5 * 60 * 1000 }).then(r => setStoreSettings(r.data)).catch(() => {});
+    API.get('/settings', { skipCache: true }).then(r => setStoreSettings(r.data)).catch(() => {});
   }, []);
 
   const handlePrint = () => {
@@ -15,9 +15,9 @@ export default function PrintBill({ order, trigger }) {
     const storeName    = s.storeName    || 'StoreKit';
     const storeTagline = s.storeTagline || '';
     const storeEmail   = s.storeEmail   || '';
-    const storePhone   = s.storePhone   || '';
+    const storePhone   = s.storePhone   || s.phone || '';
     const storeAddress = s.storeAddress || '';
-    const logoUrl      = s.logoUrl      || '';
+    const logoUrl      = String(s.logoUrl || s.storeLogo || s.logo || '').replace(/^http:\/\//i, 'https://');
     const primaryColor = s.primaryColor || '#4f46e5';
 
     const fmtDate = (d) => new Date(d).toLocaleDateString('en-LK', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -73,8 +73,8 @@ export default function PrintBill({ order, trigger }) {
       ? '<div class="note-box"><div class="note-label">Customer Note</div><p class="note-text">' + order.notes + '</p></div>'
       : '';
     const logoHtml = logoUrl
-      ? '<img src="' + logoUrl + '" alt="' + storeName + '" class="logo-img"/>'
-      : '<div class="logo-text">' + storeName + '</div>';
+      ? '<div class="logo-panel"><img src="' + logoUrl + '" alt="' + storeName + '" class="logo-img" onerror="this.hidden=true;this.nextElementSibling.hidden=false"/><div class="logo-fallback" hidden>' + storeName + '</div></div>'
+      : '<div class="logo-panel"><div class="logo-fallback">' + storeName + '</div></div>';
     const watermarkCss = order.paymentStatus !== 'paid'
       ? '.wm{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-38deg);font-size:100px;font-weight:900;color:rgba(239,68,68,0.055);pointer-events:none;z-index:0;white-space:nowrap;letter-spacing:10px;user-select:none;}'
       : '';
@@ -90,8 +90,9 @@ export default function PrintBill({ order, trigger }) {
 
       /* Header gradient strip */
       + '.header{background:linear-gradient(135deg,' + primaryColor + ' 0%,' + primaryColor + 'cc 100%);padding:32px 40px;display:flex;justify-content:space-between;align-items:center;}'
-      + '.logo-img{height:100px;object-fit:contain;max-width:300px;filter:brightness(0) invert(1);}'
-      + '.logo-text{font-size:36px;font-weight:900;color:#fff;letter-spacing:-1px;}'
+      + '.logo-panel{min-width:120px;min-height:72px;max-width:320px;padding:8px 14px;border-radius:10px;background:rgba(255,255,255,.94);display:inline-flex;align-items:center;justify-content:flex-start;}'
+      + '.logo-img{display:block;height:84px;object-fit:contain;object-position:left center;max-width:290px;filter:none;}'
+      + '.logo-fallback{font-size:30px;font-weight:900;color:#0f172a;letter-spacing:-1px;line-height:1.05;}'
       + '.store-tagline{font-size:12px;color:rgba(255,255,255,0.75);margin-top:4px;}'
       + '.inv-title{text-align:right;}'
       + '.inv-word{font-size:36px;font-weight:900;color:#fff;letter-spacing:-1px;text-transform:uppercase;line-height:1;}'

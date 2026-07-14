@@ -23,6 +23,7 @@ const Cart           = lazy(() => import('./pages/customer/Cart'));
 const Checkout       = lazy(() => import('./pages/customer/Checkout'));
 
 const ForgotPassword = lazy(() => import('./pages/customer/ForgotPassword'));
+const GoogleAuthBridge = lazy(() => import('./pages/customer/GoogleAuthBridge'));
 const Account        = lazy(() => import('./pages/customer/Account'));
 const MyOrders       = lazy(() => import('./pages/customer/MyOrders'));
 const Wishlist       = lazy(() => import('./pages/customer/Wishlist'));
@@ -220,6 +221,7 @@ export default function App() {
                     <Route path="/login"           element={<Login/>}/>
                     <Route path="/register"        element={<Register/>}/>
                     <Route path="/forgot-password" element={<ForgotPassword/>}/>
+                    <Route path="/google-auth-bridge" element={<GoogleAuthBridge/>}/>
 
                     <Route path="/superadmin/login" element={<SuperAdminLogin/>}/>
                     <Route path="/superadmin" element={<SuperAdminRoute><SuperAdminDashboard/></SuperAdminRoute>}/>

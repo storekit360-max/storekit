@@ -1,33 +1,9 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import toast from 'react-hot-toast';
 import API from '../../utils/api';
-
-const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
-
-// ─── Load GIS script once globally ───────────────────────────────────────────
-let gsiLoaded = false;
-let gsiLoading = false;
-const gsiCallbacks = [];
-function loadGSI(cb) {
-  if (gsiLoaded) { cb(); return; }
-  gsiCallbacks.push(cb);
-  if (gsiLoading) return;
-  gsiLoading = true;
-  const script = document.createElement('script');
-  script.src = 'https://accounts.google.com/gsi/client';
-  script.async = true;
-  script.defer = true;
-  script.onload = () => {
-    gsiLoaded = true;
-    gsiLoading = false;
-    gsiCallbacks.forEach(fn => fn());
-    gsiCallbacks.length = 0;
-  };
-  document.head.appendChild(script);
-}
 
 // ─── Password strength checker ────────────────────────────────────────────────
 const checkPasswordStrength = (password) => {
@@ -132,6 +108,9 @@ const Divider = () => (
 function GoogleSignInButton({ onSuccess, disabled, label = 'Continue with Google' }) {
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [authConfig, setAuthConfig] = useState(null);
+  const [configError, setConfigError] = useState('');
+  const bridgeSessionRef = useRef(null);
 
   const handleCredential = useCallback(async (response) => {
     setLoading(true);
@@ -145,51 +124,91 @@ function GoogleSignInButton({ onSuccess, disabled, label = 'Continue with Google
     }
   }, [onSuccess]);
 
+  const clearBridgeSession = useCallback(() => {
+    const session = bridgeSessionRef.current;
+    if (!session) return;
+    window.removeEventListener('message', session.onMessage);
+    window.clearInterval(session.closedTimer);
+    window.clearTimeout(session.timeoutTimer);
+    bridgeSessionRef.current = null;
+  }, []);
+
   useEffect(() => {
-    if (!GOOGLE_CLIENT_ID) return;
-    loadGSI(() => {
-      if (window.__gsiInitialized) { setReady(true); return; }
-      window.__gsiInitialized = true;
-      window.google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleCredential,
-        auto_select: false,
-        cancel_on_tap_outside: true,
-        ux_mode: 'popup',
+    let active = true;
+    API.get('/auth/google/config', { skipCache: true })
+      .then(({ data }) => {
+        if (!active) return;
+        if (!data?.enabled || !data?.bridgeUrl) throw new Error(data?.message || 'Google Sign-In is unavailable');
+        setAuthConfig(data);
+        setReady(true);
+      })
+      .catch(err => {
+        if (!active) return;
+        setConfigError(err?.response?.data?.message || err?.message || 'Google Sign-In is unavailable');
+        setReady(false);
       });
-      setReady(true);
-    });
-    return () => { window.__gsiInitialized = false; };
-  }, [handleCredential]);
+    return () => {
+      active = false;
+      clearBridgeSession();
+    };
+  }, [clearBridgeSession]);
 
   const handleClick = () => {
-    if (!GOOGLE_CLIENT_ID) {
-      toast.error('Google Sign-In is not configured. Add REACT_APP_GOOGLE_CLIENT_ID to frontend/.env');
+    if (!ready || !authConfig?.bridgeUrl) {
+      toast.error(configError || 'Google Sign-In is still loading. Please try again.');
       return;
     }
-    if (!ready || !window.google?.accounts?.id) {
-      toast.error('Google is still loading, please try again.');
+
+    clearBridgeSession();
+    const requestId = window.crypto?.randomUUID
+      ? window.crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const bridgeUrl = new URL(authConfig.bridgeUrl);
+    bridgeUrl.searchParams.set('returnOrigin', window.location.origin);
+    bridgeUrl.searchParams.set('requestId', requestId);
+    const trustedBridgeOrigin = bridgeUrl.origin;
+
+    const popup = window.open(
+      bridgeUrl.toString(),
+      'storekit-google-signin',
+      'popup=yes,width=480,height=650,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes'
+    );
+    if (!popup) {
+      toast.error('Please allow popups to continue with Google.');
       return;
     }
-    window.google.accounts.id.prompt((notification) => {
-      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-        const container = document.getElementById('__gsi_btn_container');
-        if (container) {
-          window.google.accounts.id.renderButton(container, { type: 'standard', theme: 'outline', size: 'large' });
-          const btn = container.querySelector('div[role=button]');
-          if (btn) btn.click();
-        }
-      }
-    });
+
+    setLoading(true);
+    const finish = () => {
+      clearBridgeSession();
+      setLoading(false);
+    };
+    const onMessage = event => {
+      if (event.source !== popup) return;
+      if (event.origin !== trustedBridgeOrigin) return;
+      if (event.data?.type !== 'storekit:google-credential') return;
+      if (event.data?.requestId !== requestId || !event.data?.credential) return;
+      clearBridgeSession();
+      handleCredential({ credential: event.data.credential });
+    };
+    window.addEventListener('message', onMessage);
+    const closedTimer = window.setInterval(() => {
+      if (popup.closed) finish();
+    }, 500);
+    const timeoutTimer = window.setTimeout(() => {
+      try { popup.close(); } catch (_) {}
+      finish();
+      toast.error('Google Sign-In timed out. Please try again.');
+    }, 2 * 60 * 1000);
+    bridgeSessionRef.current = { onMessage, closedTimer, timeoutTimer };
   };
 
   return (
     <>
-      <div id="__gsi_btn_container" style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', height: 0, overflow: 'hidden' }} />
       <button
         type="button"
         onClick={handleClick}
-        disabled={disabled || loading || !ready}
+        disabled={disabled || loading}
         className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-gray-200 rounded-xl bg-white hover:bg-gray-50 transition-all font-medium text-gray-700 text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {loading ? <Spinner /> : (

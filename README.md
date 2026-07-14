@@ -185,7 +185,6 @@ openssl rand -hex 32
 
 ```env
 REACT_APP_API_URL=http://localhost:5001/api
-REACT_APP_GOOGLE_CLIENT_ID=
 ```
 
 The frontend also has a proxy to `http://localhost:5001`, but explicitly setting the API URL makes the local dependency clear.
@@ -258,8 +257,8 @@ Start from the checked-in example files. The application contains optional integ
 |---|---|
 | `JWT_ISSUER` | Optional JWT issuer validation |
 | `JWT_AUDIENCE` | Optional JWT audience validation |
-| `GOOGLE_CLIENT_ID` | Backend Google Sign-In audience |
-| `REACT_APP_GOOGLE_CLIENT_ID` | Frontend Google Sign-In client ID; must match backend |
+| `GOOGLE_CLIENT_ID` | Platform Google Sign-In web client ID and backend token audience |
+| `GOOGLE_AUTH_BRIDGE_URL` | Permanent frontend bridge URL, for example `https://app.example.com/google-auth-bridge` |
 
 ### Images
 
@@ -328,7 +327,6 @@ At least one AI provider is required for AI generation features. Core ecommerce 
 | Variable | Purpose |
 |---|---|
 | `REACT_APP_API_URL` | Optional API base; production normally uses `/api` rewrites |
-| `REACT_APP_GOOGLE_CLIENT_ID` | Google Sign-In client ID |
 | `RAILWAY_BACKEND_URL` | Backend URL used by `middleware.js` |
 | `INTERNAL_SECRET` | Must exactly match Railway/backend |
 
@@ -440,10 +438,21 @@ The response should contain that tenant's store name and tenant ID.
 
 ### Google Sign-In
 
-1. Create a Web OAuth client in Google Cloud Console.
-2. Add local and production origins.
-3. Set the same client ID in `GOOGLE_CLIENT_ID` and `REACT_APP_GOOGLE_CLIENT_ID`.
-4. Redeploy both services after changing frontend environment variables.
+StoreKit uses one permanent OAuth bridge so newly created stores and custom
+domains do not need to be added to Google Cloud one by one.
+
+1. Create or select one **Web application** OAuth client in Google Cloud Console.
+2. Choose one permanent frontend origin, such as `https://storekit.example.com`.
+3. Add that origin (scheme and hostname only, without a path) to **Authorized JavaScript origins**.
+4. Set Railway `GOOGLE_CLIENT_ID` to that web client ID.
+5. Set Railway `GOOGLE_AUTH_BRIDGE_URL` to the same origin plus `/google-auth-bridge`.
+6. Ensure Railway `FRONTEND_URL` is the same permanent frontend origin.
+7. Deploy the backend and frontend, then test Google registration from a newly mapped tenant domain.
+
+The bridge validates the requesting origin against active tenant domains in
+MongoDB, returns the Google ID token to that exact origin, and the normal tenant
+API creates or signs in the customer. Do not add every tenant domain as an
+Authorized JavaScript origin.
 
 ### Email / Resend
 
@@ -738,10 +747,17 @@ Never treat an untested backup as recoverable.
 - Inspect the product URL and Merchant Center diagnostics.
 - Allow time for recrawling; eligibility does not guarantee display.
 
-### Google OAuth redirect mismatch
+### Google OAuth origin or redirect mismatch
 
-- The callback configured in Google must exactly equal `GOOGLE_OAUTH_REDIRECT_URI`.
-- Google Sign-In and Google Drive backup use different OAuth flows and may use different client configurations.
+- For customer Google Sign-In `origin_mismatch`, confirm the origin portion of
+  `GOOGLE_AUTH_BRIDGE_URL` is registered under **Authorized JavaScript origins**.
+- Confirm `GOOGLE_CLIENT_ID` belongs to that exact Google Web OAuth client.
+- Customer sign-in uses the permanent bridge; tenant domains should not require
+  separate Google Cloud entries.
+- For Google Drive backup `redirect_uri_mismatch`, the callback configured in
+  Google must exactly equal `GOOGLE_OAUTH_REDIRECT_URI`.
+- Google Sign-In and Google Drive backup are different OAuth flows and may use
+  different client configurations.
 
 ### Production build fails
 

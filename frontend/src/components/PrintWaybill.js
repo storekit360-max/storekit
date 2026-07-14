@@ -5,7 +5,7 @@ export default function PrintWaybill({ order, trigger }) {
   const [storeSettings, setStoreSettings] = useState(null);
 
   useEffect(() => {
-    API.get('/settings', { cacheTTL: 5 * 60 * 1000 }).then(r => setStoreSettings(r.data)).catch(() => {});
+    API.get('/settings', { skipCache: true }).then(r => setStoreSettings(r.data)).catch(() => {});
   }, []);
 
   const handlePrint = () => {
@@ -14,9 +14,9 @@ export default function PrintWaybill({ order, trigger }) {
     const s = storeSettings;
     const storeName    = s.storeName    || 'StoreKit';
     const storeEmail   = s.storeEmail   || '';
-    const storePhone   = s.storePhone   || '';
+    const storePhone   = s.storePhone   || s.phone || '';
     const storeAddress = s.storeAddress || '';
-    const logoUrl      = s.logoUrl      || '';
+    const logoUrl      = String(s.logoUrl || s.storeLogo || s.logo || '').replace(/^http:\/\//i, 'https://');
     const primaryColor = s.primaryColor || '#4f46e5';
 
     const fmtDate = (d) => new Date(d).toLocaleDateString('en-LK', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -42,8 +42,8 @@ export default function PrintWaybill({ order, trigger }) {
     const barcodeText = (order.orderNumber || 'STOREKIT').replace(/[^A-Z0-9]/gi, '').toUpperCase();
 
     const logoHtml = logoUrl
-      ? '<img src="' + logoUrl + '" alt="' + storeName + '" style="height:100px;object-fit:contain;max-width:300px;filter:brightness(0) invert(1);"/>'
-      : '<div style="font-size:36px;font-weight:900;color:#fff;letter-spacing:-1px;">' + storeName + '</div>';
+      ? '<div class="logo-panel"><img src="' + logoUrl + '" alt="' + storeName + '" class="logo-img" onerror="this.hidden=true;this.nextElementSibling.hidden=false"/><div class="logo-fallback" hidden>' + storeName + '</div></div>'
+      : '<div class="logo-panel"><div class="logo-fallback">' + storeName + '</div></div>';
 
     const codBadgeHtml = isPaid
       ? '<div style="background:linear-gradient(135deg,#16a34a,#15803d);border-radius:10px;padding:10px 18px;text-align:center;color:#fff;min-width:150px;">'
@@ -73,6 +73,9 @@ export default function PrintWaybill({ order, trigger }) {
 
       /* Header */
       + '.wb-header{background:linear-gradient(135deg,' + primaryColor + ' 0%,' + primaryColor + 'cc 100%);padding:28px 32px;display:flex;justify-content:space-between;align-items:center;}'
+      + '.logo-panel{min-width:120px;min-height:72px;max-width:300px;padding:8px 14px;border-radius:10px;background:rgba(255,255,255,.94);display:inline-flex;align-items:center;justify-content:flex-start;}'
+      + '.logo-img{display:block;height:84px;object-fit:contain;object-position:left center;max-width:270px;filter:none;}'
+      + '.logo-fallback{font-size:30px;font-weight:900;color:#0f172a;letter-spacing:-1px;line-height:1.05;}'
       + '.wb-right{text-align:right;}'
       + '.wb-title{font-size:32px;font-weight:900;color:#fff;letter-spacing:3px;text-transform:uppercase;line-height:1;}'
       + '.wb-ordno{font-size:13px;font-weight:600;color:rgba(255,255,255,0.8);margin-top:6px;letter-spacing:1px;font-family:monospace;}'

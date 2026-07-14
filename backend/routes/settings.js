@@ -47,6 +47,10 @@ function isLocalDomain(domain) {
 function tenantSettingsResponse(tenant) {
   const rawSettings = toPlain(tenant.settings);
   const settings = { ...rawSettings };
+  // Older tenant records use `phone`, while the current admin form uses
+  // `storePhone`. Return both names so every storefront version can display it.
+  if (!settings.storePhone && settings.phone) settings.storePhone = settings.phone;
+  if (!settings.phone && settings.storePhone) settings.phone = settings.storePhone;
   SECRET_SETTING_KEYS.forEach(key => { delete settings[key]; });
   const theme = normalizeTheme(toPlain(tenant.theme));
   return {
@@ -200,6 +204,10 @@ router.put('/', adminAuth, async (req, res) => {
           tenant.storeName = value;
         } else if (THEME_KEYS.has(key)) {
           nextTheme[key] = value;
+        } else if (key === 'storePhone' || key === 'phone') {
+          // Keep the legacy and current contact-number fields synchronized.
+          nextSettings.storePhone = value;
+          nextSettings.phone = value;
         } else {
           nextSettings[key] = value;
         }

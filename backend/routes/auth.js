@@ -42,7 +42,7 @@ const Tenant   = require('../models/Tenant');
 const { auth, generateToken, recordFailedLogin, clearFailedLogin, isAccountLocked } = require('../middleware/auth');
 const { Notification, OTP, Coupon } = require('../models/index');
 const { sendMail, otpEmailHtml }    = require('../utils/mailer');
-const { getHeaderDomainCandidates } = require('../middleware/tenant');
+const { getHeaderDomainCandidates, normalizeDomain } = require('../middleware/tenant');
 
 // ─── DIAGNOSTIC GUARD ─────────────────────────────────────────────────────────
 // A "Router.use() requires a middleware function" crash means one of the
@@ -72,7 +72,11 @@ for (const [name, val] of Object.entries(__deps)) {
 
 // SECURITY: Use the shared generateToken so issuer/audience are embedded
 //           when JWT_ISSUER / JWT_AUDIENCE are configured in .env.
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+// Customer login uses one explicit platform-level web client. Do not fall back
+// to the Google Drive OAuth client: mixing those clients causes audience and
+// authorized-origin mismatches that are difficult to diagnose.
+const GOOGLE_LOGIN_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const googleClient = new OAuth2Client(GOOGLE_LOGIN_CLIENT_ID || undefined);
 
 // SECURITY: Pre-hashed dummy value used in timing-safe "user not found" path.
 //           bcrypt.compare is slow by design — if we skip it when the user
@@ -87,6 +91,42 @@ async function resolveTenantFromRequest(req) {
     status: 'active',
     domains: { $elemMatch: { domain: { $in: candidates }, active: true } },
   }).lean();
+}
+
+function parseWebOrigin(value) {
+  try {
+    const parsed = new URL(String(value || ''));
+    if (!['https:', 'http:'].includes(parsed.protocol)) return null;
+    if (process.env.NODE_ENV === 'production' && parsed.protocol !== 'https:') return null;
+    return parsed.origin;
+  } catch (_) {
+    return null;
+  }
+}
+
+function getGoogleBridgeUrl() {
+  const explicit = String(process.env.GOOGLE_AUTH_BRIDGE_URL || '').trim();
+  if (explicit) return explicit.replace(/\/$/, '');
+  const frontendOrigin = parseWebOrigin(process.env.FRONTEND_URL);
+  return frontendOrigin ? `${frontendOrigin}/google-auth-bridge` : '';
+}
+
+async function isAllowedGoogleReturnOrigin(origin) {
+  const parsedOrigin = parseWebOrigin(origin);
+  if (!parsedOrigin) return false;
+  const parsed = new URL(parsedOrigin);
+  const domain = normalizeDomain(parsed.hostname);
+
+  if (process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1'].includes(domain)) return true;
+
+  const platformOrigin = parseWebOrigin(process.env.FRONTEND_URL);
+  if (platformOrigin && parsedOrigin === platformOrigin) return true;
+
+  const tenant = await Tenant.exists({
+    status: 'active',
+    domains: { $elemMatch: { domain: { $in: [domain, `www.${domain}`] }, active: true } },
+  });
+  return Boolean(tenant);
 }
 
 function cleanUsernameBase(value, fallback = 'user') {
@@ -258,17 +298,47 @@ router.post('/login', async (req, res, next) => {
 });
 
 // ─── Google OAuth ─────────────────────────────────────────────────────────────
-// UNCHANGED behaviour.
+// All tenant domains use one permanent, Google-authorized frontend origin.
+// This avoids adding every new store/custom domain to Google Cloud manually.
+router.get('/google/config', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const bridgeUrl = getGoogleBridgeUrl();
+  if (!GOOGLE_LOGIN_CLIENT_ID || !bridgeUrl) {
+    return res.status(503).json({
+      enabled: false,
+      message: 'Google Sign-In platform configuration is incomplete.',
+    });
+  }
+  return res.json({ enabled: true, bridgeUrl });
+});
+
+// Called only by the fixed bridge page. It releases the public OAuth client ID
+// after confirming that the requesting storefront is a mapped active tenant.
+router.get('/google/bridge-config', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!GOOGLE_LOGIN_CLIENT_ID) {
+    return res.status(503).json({ message: 'Google Sign-In is not configured.' });
+  }
+
+  const returnOrigin = parseWebOrigin(req.query.returnOrigin);
+  if (!returnOrigin || !(await isAllowedGoogleReturnOrigin(returnOrigin))) {
+    return res.status(403).json({ message: 'This storefront is not authorized for Google Sign-In.' });
+  }
+
+  return res.json({ clientId: GOOGLE_LOGIN_CLIENT_ID, returnOrigin });
+});
+
 router.post('/google', async (req, res, next) => {
   try {
     const { credential } = req.body;
     if (!credential) return res.status(400).json({ message: 'Google credential is required' });
+    if (!GOOGLE_LOGIN_CLIENT_ID) return res.status(503).json({ message: 'Google Sign-In is not configured' });
     const tenant = await resolveTenantFromRequest(req);
     const tenantId = tenant?._id || null;
 
     const ticket = await googleClient.verifyIdToken({
       idToken:  credential,
-      audience: process.env.GOOGLE_CLIENT_ID,
+      audience: GOOGLE_LOGIN_CLIENT_ID,
     });
     const payload = ticket.getPayload();
     const { email, given_name, family_name, picture, sub: googleId } = payload;
