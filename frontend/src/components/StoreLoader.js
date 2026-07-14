@@ -43,12 +43,24 @@ export default function StoreLoader({ settings = {}, compact = false, styleId })
   const text = dark ? '#f8fafc' : '#111827';
   const muted = dark ? 'rgba(248,250,252,.58)' : 'rgba(17,24,39,.48)';
   const storeName = settings.storeName || 'StoreKit';
+  const [logoFailed, setLogoFailed] = React.useState(false);
+  const isLogoLoader = ['logo-pulse', 'logo-shimmer'].includes(selected);
+  const showMainLogo = !compact && Boolean(settings.logoUrl) && !logoFailed;
+
+  React.useEffect(() => { setLogoFailed(false); }, [settings.logoUrl]);
 
   return <div className={`store-loader ${compact ? 'compact' : ''}`} style={{'--lp':primary,'--la':accent,'--lbg':bg,'--lt':text,'--lm':muted}}>
     <style>{loaderCss}</style>
     <div className="skl-glow a"/><div className="skl-glow b"/>
     <div className="skl-content" role="status" aria-live="polite" aria-label={`Loading ${storeName}`}>
-      <LoaderGraphic styleId={selected} logoUrl={settings.logoUrl}/>
+      {showMainLogo && (
+        <div className={`skl-main-logo ${isLogoLoader ? selected : ''}`}>
+          <img src={settings.logoUrl} alt={`${storeName} logo`} onError={() => setLogoFailed(true)}/>
+        </div>
+      )}
+      {(compact || !isLogoLoader || !showMainLogo) && (
+        <LoaderGraphic styleId={selected} logoUrl={logoFailed ? '' : settings.logoUrl}/>
+      )}
       {!compact && <>
         <span className="skl-welcome">Welcome to</span>
         <h1>{storeName}</h1>
@@ -74,6 +86,7 @@ const loaderCss = `
 .skl-content{padding:28px;max-width:560px}.skl-welcome{margin-top:28px;font:800 11px/1 system-ui;letter-spacing:.32em;text-transform:uppercase;color:var(--lp);animation:skl-float 2.8s ease-in-out infinite}.skl-content h1{font:900 clamp(34px,7vw,64px)/1.05 var(--font-display,system-ui);margin:12px 0 10px;color:var(--lt);letter-spacing:-.035em;text-wrap:balance}.skl-content p{font:500 clamp(13px,2vw,15px)/1.6 var(--font-body,system-ui);margin:0;color:var(--lm);letter-spacing:.02em;max-width:390px}.skl-ready-line{display:flex;gap:7px;margin-top:25px}.skl-ready-line i{width:7px;height:7px;border-radius:50%;background:var(--lp);animation:skl-pulse 1.1s ease-in-out infinite}.skl-ready-line i:nth-child(2){background:var(--la);animation-delay:.16s}.skl-ready-line i:nth-child(3){animation-delay:.32s}
 .skl-glow{position:absolute;width:280px;height:280px;border-radius:50%;filter:blur(70px);opacity:.09;background:var(--lp)}.skl-glow.a{left:-90px;top:-90px}.skl-glow.b{right:-80px;bottom:-80px;background:var(--la)}
 .store-loader.compact .skl-glow,.store-loader.compact h1,.store-loader.compact p,.store-loader.compact .skl-welcome,.store-loader.compact .skl-ready-line{display:none}
+.skl-main-logo{width:min(220px,58vw);height:86px;display:flex;align-items:center;justify-content:center;margin-bottom:24px;position:relative}.skl-main-logo img{display:block;max-width:100%;max-height:100%;object-fit:contain}.skl-main-logo.logo-pulse{animation:skl-pulse 1.5s infinite}.skl-main-logo.logo-shimmer{overflow:hidden}.skl-main-logo.logo-shimmer:after{content:'';position:absolute;inset:-35%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.72),transparent);animation:skl-slide 1.5s infinite;pointer-events:none}
 .skl-rings{width:62px;height:62px;position:relative}.skl-rings i{position:absolute;inset:0;border:4px solid transparent;border-top-color:var(--lp);border-radius:50%;animation:skl-spin .9s linear infinite}.skl-rings.dual-ring i:nth-child(2){inset:9px;border-top-color:var(--la);animation:skl-rev .65s linear infinite}.skl-rings.triple-ring i:nth-child(2){inset:9px;border-right-color:var(--la);animation:skl-rev .8s linear infinite}.skl-rings.triple-ring i:nth-child(3){inset:18px;border-bottom-color:var(--lp);animation:skl-spin .55s linear infinite}.skl-rings.neon-ring{filter:drop-shadow(0 0 8px var(--lp)) drop-shadow(0 0 13px var(--la))}
 .skl-dots{display:flex;gap:9px;height:45px;align-items:center}.skl-dots i{width:13px;height:13px;border-radius:50%;background:var(--lp);animation:skl-bounce .8s ease-in-out infinite}.skl-dots i:nth-child(2){background:var(--la);animation-delay:.12s}.skl-dots i:nth-child(3){animation-delay:.24s}.skl-dots.pulse-dots i{animation-name:skl-pulse}
 .skl-bars{height:55px;display:flex;align-items:center;gap:5px}.skl-bars i{width:7px;height:50px;border-radius:8px;background:linear-gradient(var(--lp),var(--la));animation:skl-bar .8s ease-in-out infinite}.skl-bars i:nth-child(2){animation-delay:.1s}.skl-bars i:nth-child(3){animation-delay:.2s}.skl-bars i:nth-child(4){animation-delay:.3s}.skl-bars i:nth-child(5){animation-delay:.4s}.skl-bars.wave-bars i:nth-child(even){animation-direction:reverse}
