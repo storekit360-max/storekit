@@ -6,6 +6,12 @@ const { adminAuth } = require('../middleware/auth');
 // Public - Get active banners (with optional position filter)
 router.get('/', async (req, res) => {
   try {
+    // Banners are edited live by store admins. Never allow the browser/CDN to
+    // serve the previous banner after a successful save.
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('CDN-Cache-Control', 'no-store');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     const { position } = req.query;
     const now = new Date();
     const filter = {
@@ -24,6 +30,10 @@ router.get('/', async (req, res) => {
 // Public - Get banners by position (convenience route)
 router.get('/by-position/:position', async (req, res) => {
   try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('CDN-Cache-Control', 'no-store');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     const now = new Date();
     const banners = await Banner.find({
       position: req.params.position,

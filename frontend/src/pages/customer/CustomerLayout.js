@@ -831,6 +831,9 @@ const Footer = ({ settings }) => {
   const storeName = settings?.storeName || 'StoreKit';
   const [footerPages, setFooterPages] = React.useState([]);
   const [socialAccounts, setSocialAccounts] = React.useState([]);
+  const [logoFailed, setLogoFailed] = React.useState(false);
+
+  React.useEffect(() => { setLogoFailed(false); }, [settings?.logoUrl]);
 
   React.useEffect(() => {
     API.get('/pages?footer=true').then(r=>setFooterPages(r.data||[])).catch(()=>{});
@@ -845,8 +848,13 @@ const Footer = ({ settings }) => {
           {/* Brand */}
           <div className="sz-footer-brand col-span-2 sm:col-span-1">
             <div className="flex items-center gap-2 mb-3">
-              {settings?.logoUrl
-                ? <img src={settings.logoUrl} alt={storeName} style={{height:'56px',maxWidth:'160px',objectFit:'contain',filter:'brightness(0) invert(1)'}}/>
+              {settings?.logoUrl && !logoFailed
+                ? <img
+                    src={settings.logoUrl}
+                    alt={storeName}
+                    onError={() => setLogoFailed(true)}
+                    style={{height:'56px',maxWidth:'180px',objectFit:'contain',objectPosition:'left center'}}
+                  />
                 : <span className="font-bold text-white text-lg" style={{fontFamily:'var(--font-display)'}}>{storeName}</span>
               }
             </div>

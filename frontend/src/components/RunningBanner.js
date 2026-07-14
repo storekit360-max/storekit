@@ -13,8 +13,15 @@ export default function RunningBanner() {
   const timerRef = useRef(null);
 
   useEffect(() => {
-    API.get('/banners?position=running_top')
+    let activeRequest = true;
+
+    const loadBanners = (reveal = false) => {
+      API.get('/banners?position=running_top', {
+        skipCache: true,
+        headers: { 'Cache-Control': 'no-cache' },
+      })
       .then(r => {
+        if (!activeRequest) return;
         const active = (r.data || []).filter(b => {
           if (!b.isActive) return false;
           const now = Date.now();
@@ -23,8 +30,38 @@ export default function RunningBanner() {
           return true;
         });
         setBanners(active);
+        setCurrentIdx(index => reveal ? 0 : (active.length ? Math.min(index, active.length - 1) : 0));
+        if (reveal && active.length) setVisible(true);
       })
       .catch(() => {});
+    };
+
+    loadBanners();
+
+    const handleBannerUpdate = () => loadBanners(true);
+    const handleStorage = event => {
+      if (event.key === 'storekit:banners-updated') loadBanners(true);
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') loadBanners();
+    };
+
+    window.addEventListener('storekit:banners-updated', handleBannerUpdate);
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('focus', handleBannerUpdate);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    // Fallback for storefronts on a separate custom domain from the admin.
+    const refreshTimer = window.setInterval(loadBanners, 15000);
+
+    return () => {
+      activeRequest = false;
+      window.clearInterval(refreshTimer);
+      window.removeEventListener('storekit:banners-updated', handleBannerUpdate);
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('focus', handleBannerUpdate);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   // Cycle through multiple banners every 6s
@@ -48,17 +85,26 @@ export default function RunningBanner() {
   return (
     <div className="running-banner" style={{ background: bg, color, position: 'relative', overflow: 'hidden' }}>
       <style>{`
-        @keyframes marquee {
-          0% { transform: translateX(100%); }
-          100% { transform: translateX(-100%); }
+        @keyframes running-banner-marquee {
+          from { transform: translate3d(0, 0, 0); }
+          to { transform: translate3d(-50%, 0, 0); }
         }
         .running-banner { height: 36px; display: flex; align-items: center; }
         .running-banner-track {
           display: flex;
           align-items: center;
+          width: max-content;
           white-space: nowrap;
-          animation: marquee ${speed}s linear infinite;
-          gap: 60px;
+          animation: running-banner-marquee ${speed}s linear infinite;
+          will-change: transform;
+        }
+        .running-banner-group {
+          display: flex;
+          align-items: center;
+          flex: none;
+          min-width: 100vw;
+          justify-content: space-around;
+          padding-right: 60px;
         }
         .running-banner-close {
           position: absolute;
@@ -82,33 +128,36 @@ export default function RunningBanner() {
         .running-banner-close:hover { background: rgba(255,255,255,0.3); }
       `}</style>
 
-      <div className="running-banner-track">
-        {/* Repeat text 4x for seamless loop */}
-        {[0,1,2,3].map(i => (
-          <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 500 }}>
-            <span>{icon}</span>
-            {b.link ? (
-              <a href={b.link} style={{ color: 'inherit', textDecoration: 'none' }}>{text}</a>
-            ) : (
-              <span>{text}</span>
-            )}
-            {b.buttonText && b.link && (
-              <a href={b.link}
-                style={{
-                  background: b.buttonBgColor || 'rgba(255,255,255,0.2)',
-                  color: b.buttonColor || '#fff',
-                  padding: '2px 10px',
-                  borderRadius: '20px',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  textDecoration: 'none',
-                  marginLeft: '4px',
-                }}>
-                {b.buttonText}
-              </a>
-            )}
-            <span style={{ opacity: 0.3, margin: '0 20px' }}>•</span>
-          </span>
+      <div className="running-banner-track" key={b._id || currentIdx}>
+        {[0, 1].map(group => (
+          <div className="running-banner-group" key={group} aria-hidden={group === 1 ? 'true' : undefined}>
+            {[0, 1, 2, 3].map(i => (
+              <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 500 }}>
+                <span>{icon}</span>
+                {b.link ? (
+                  <a href={b.link} style={{ color: 'inherit', textDecoration: 'none' }}>{text}</a>
+                ) : (
+                  <span>{text}</span>
+                )}
+                {b.buttonText && b.link && (
+                  <a href={b.link}
+                    style={{
+                      background: b.buttonBgColor || 'rgba(255,255,255,0.2)',
+                      color: b.buttonColor || '#fff',
+                      padding: '2px 10px',
+                      borderRadius: '20px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      textDecoration: 'none',
+                      marginLeft: '4px',
+                    }}>
+                    {b.buttonText}
+                  </a>
+                )}
+                <span style={{ opacity: 0.3, margin: '0 20px' }}>•</span>
+              </span>
+            ))}
+          </div>
         ))}
       </div>
 

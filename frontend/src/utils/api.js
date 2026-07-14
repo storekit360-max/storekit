@@ -108,6 +108,19 @@ API.interceptors.response.use(
     const method = (res.config?.method || 'get').toLowerCase();
     if (['post', 'put', 'patch', 'delete'].includes(method)) {
       clearApiCache();
+
+      // Keep an already-open storefront in sync with banner changes made in
+      // the admin. The custom event updates the current tab; the storage event
+      // updates any other storefront tabs on the same domain.
+      if (normalizeUrl(res.config?.url).startsWith('/banners')) {
+        try {
+          const changedAt = String(Date.now());
+          localStorage.setItem('storekit:banners-updated', changedAt);
+          window.dispatchEvent(new CustomEvent('storekit:banners-updated', {
+            detail: { changedAt },
+          }));
+        } catch (_) {}
+      }
     }
 
     return res;
