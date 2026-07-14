@@ -111,22 +111,30 @@ function getGoogleBridgeUrl() {
   return frontendOrigin ? `${frontendOrigin}/google-auth-bridge` : '';
 }
 
-async function isAllowedGoogleReturnOrigin(origin) {
+async function getGoogleReturnStore(origin) {
   const parsedOrigin = parseWebOrigin(origin);
-  if (!parsedOrigin) return false;
+  if (!parsedOrigin) return null;
   const parsed = new URL(parsedOrigin);
   const domain = normalizeDomain(parsed.hostname);
 
-  if (process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1'].includes(domain)) return true;
-
-  const platformOrigin = parseWebOrigin(process.env.FRONTEND_URL);
-  if (platformOrigin && parsedOrigin === platformOrigin) return true;
-
-  const tenant = await Tenant.exists({
+  const tenant = await Tenant.findOne({
     status: 'active',
     domains: { $elemMatch: { domain: { $in: [domain, `www.${domain}`] }, active: true } },
-  });
-  return Boolean(tenant);
+  }).select('storeName settings.logoUrl').lean();
+  if (tenant) {
+    return {
+      storeName: tenant.storeName || 'Your Store',
+      logoUrl: tenant.settings?.logoUrl || '',
+    };
+  }
+
+  const isLocal = process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1'].includes(domain);
+  const platformOrigin = parseWebOrigin(process.env.FRONTEND_URL);
+  if (isLocal || (platformOrigin && parsedOrigin === platformOrigin)) {
+    return { storeName: 'Online Store', logoUrl: '' };
+  }
+
+  return null;
 }
 
 function cleanUsernameBase(value, fallback = 'user') {
@@ -321,11 +329,12 @@ router.get('/google/bridge-config', async (req, res) => {
   }
 
   const returnOrigin = parseWebOrigin(req.query.returnOrigin);
-  if (!returnOrigin || !(await isAllowedGoogleReturnOrigin(returnOrigin))) {
+  const store = returnOrigin ? await getGoogleReturnStore(returnOrigin) : null;
+  if (!returnOrigin || !store) {
     return res.status(403).json({ message: 'This storefront is not authorized for Google Sign-In.' });
   }
 
-  return res.json({ clientId: GOOGLE_LOGIN_CLIENT_ID, returnOrigin });
+  return res.json({ clientId: GOOGLE_LOGIN_CLIENT_ID, returnOrigin, store });
 });
 
 router.post('/google', async (req, res, next) => {

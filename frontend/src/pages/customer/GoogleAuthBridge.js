@@ -29,6 +29,8 @@ export default function GoogleAuthBridge() {
   const buttonRef = useRef(null);
   const [status, setStatus] = useState('Preparing secure Google Sign-In…');
   const [failed, setFailed] = useState(false);
+  const [store, setStore] = useState({ storeName: 'Your Store', logoUrl: '' });
+  const [logoFailed, setLogoFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -54,6 +56,11 @@ export default function GoogleAuthBridge() {
           skipCache: true,
         });
         if (!active) return;
+        setStore({
+          storeName: data.store?.storeName || 'Your Store',
+          logoUrl: data.store?.logoUrl || '',
+        });
+        setLogoFailed(false);
 
         await loadGoogleIdentity();
         if (!active || !window.google?.accounts?.id) return;
@@ -105,12 +112,23 @@ export default function GoogleAuthBridge() {
         width: '100%', maxWidth: 390, padding: '34px 28px', borderRadius: 24,
         background: '#fff', boxShadow: '0 24px 70px rgba(15,23,42,.14)', textAlign: 'center',
       }}>
-        <div style={{
-          width: 54, height: 54, margin: '0 auto 18px', borderRadius: 16,
-          display: 'grid', placeItems: 'center', background: '#111827', color: '#fff',
-          fontSize: 24, fontWeight: 900,
-        }}>S</div>
-        <h1 style={{ margin: 0, color: '#0f172a', fontSize: 23 }}>Secure sign-in</h1>
+        {store.logoUrl && !logoFailed ? (
+          <div style={{ height: 72, margin: '0 auto 18px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <img
+              src={store.logoUrl}
+              alt={`${store.storeName} logo`}
+              onError={() => setLogoFailed(true)}
+              style={{ display: 'block', maxWidth: 220, maxHeight: 72, objectFit: 'contain' }}
+            />
+          </div>
+        ) : (
+          <div style={{
+            width: 54, height: 54, margin: '0 auto 18px', borderRadius: 16,
+            display: 'grid', placeItems: 'center', background: '#111827', color: '#fff',
+            fontSize: 24, fontWeight: 900,
+          }}>{String(store.storeName || 'Store').charAt(0).toUpperCase()}</div>
+        )}
+        <h1 style={{ margin: 0, color: '#0f172a', fontSize: 23 }}>Continue to {store.storeName}</h1>
         <p style={{ margin: '9px 0 24px', color: failed ? '#dc2626' : '#64748b', fontSize: 14, lineHeight: 1.55 }}>
           {status}
         </p>
@@ -122,7 +140,7 @@ export default function GoogleAuthBridge() {
           }}>Close window</button>
         )}
         <p style={{ margin: '22px 0 0', color: '#94a3b8', fontSize: 11 }}>
-          Authentication is securely handled by Google and StoreKit.
+          Secure authentication handled by Google.
         </p>
       </section>
     </main>
