@@ -3,6 +3,8 @@
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 require('dotenv').config();
+const { assertSafeStagingDatabase } = require('./utils/stagingSafety');
+assertSafeStagingDatabase(process.env);
 
 const User = require('./models/User');
 const Tenant = require('./models/Tenant');

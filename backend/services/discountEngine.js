@@ -108,9 +108,9 @@ function computeSubtotal(lineItems) {
  * @param {object}      settings       – store settings map { standardDelivery, freeDeliveryThreshold }
  * @returns {Promise<{ fee: number, serviceName: string }>}
  */
-async function resolveDeliveryFee(deliveryCode, city = '', subtotal = 0, settings = {}) {
+async function resolveDeliveryFee(deliveryCode, city = '', subtotal = 0, settings = {}, tenantId = null) {
   if (deliveryCode) {
-    const svc = await DeliveryService.findOne({ code: deliveryCode, isEnabled: true });
+    const svc = await DeliveryService.findOne({ ...(tenantId ? { tenantId } : {}), code: deliveryCode, isEnabled: true });
     if (svc) {
       const cityLower = city.toLowerCase();
       let rate = null;
@@ -125,12 +125,13 @@ async function resolveDeliveryFee(deliveryCode, city = '', subtotal = 0, setting
         return { fee, serviceName: svc.name };
       }
     }
+    if (!svc) throw Object.assign(new Error('Selected delivery service is not available for this store'), { statusCode: 400 });
   }
 
   // Fall back to store-wide standard delivery settings
   let stdSettings = settings;
   if (!stdSettings.standardDelivery) {
-    const rows = await Settings.find({ key: { $in: ['standardDelivery', 'freeDeliveryThreshold'] } }).lean();
+    const rows = await Settings.find({ ...(tenantId ? { tenantId } : {}), key: { $in: ['standardDelivery', 'freeDeliveryThreshold'] } }).lean();
     stdSettings = {};
     rows.forEach(r => { stdSettings[r.key] = r.value; });
   }

@@ -181,6 +181,7 @@ async function publishNow(opts = {}) {
  * Future queue upgrade: replace publishNow() call with enqueue() here.
  */
 async function dispatchForTrigger(trigger, entity, entityType = 'product') {
+  if (process.env.APP_ENV === 'staging' && process.env.SOCIAL_MEDIA_ENABLED !== 'true') return [];
   try {
     const rule = await AutomationRule.findOne({ trigger, enabled: true });
     if (!rule) return;
@@ -237,6 +238,7 @@ async function retryLog(logId, adminUserId) {
  * manualPublish — admin-initiated publish from the UI.
  */
 async function manualPublish({ platform, entityType, entityId, entityName, customMsg, trigger, adminUserId }) {
+  if (process.env.APP_ENV === 'staging' && process.env.SOCIAL_MEDIA_ENABLED !== 'true') return { status: 'failed', errorCode: 'STAGING_DISABLED', errorMessage: 'Social publishing is disabled in staging' };
   return publishNow({
     platform,
     trigger:    trigger || 'manual',

@@ -20,6 +20,7 @@ export default function AdminOrderDetail() {
   // ── Internal notes state ──
   const [newNote, setNewNote]         = useState('');
   const [addingNote, setAddingNote]   = useState(false);
+  const [curfox, setCurfox] = useState({ loading:false, preview:null, cities:[], destinationCity:'', destinationState:'', packageWeight:'', waybillNumber:'', remark:'', manualWaybillsEnabled:false });
 
   useEffect(() => {
     API.get(`/orders/${id}`).then(r => {
@@ -67,6 +68,18 @@ export default function AdminOrderDetail() {
       setOrder(data);
     } catch { toast.error('Failed'); }
   };
+
+  const previewCurfox = async () => {
+    setCurfox(p=>({...p,loading:true}));
+    try { const {data}=await API.get(`/curfox/orders/${id}/preview`); setCurfox(p=>({...p,preview:data,destinationCity:data.destination.city,destinationState:data.destination.state,packageWeight:data.packageWeight,manualWaybillsEnabled:data.manualWaybillsEnabled,loading:false})); }
+    catch(err){const body=err?.response?.data||{};setCurfox(p=>({...p,cities:body.cities||[],loading:false}));if(body.message)toast.error(body.message);}
+  };
+
+  useEffect(()=>{if(order?.deliveryService==='curfox'&&!order?.courier?.submittedAt)previewCurfox();},[order?.deliveryService,order?.courier?.submittedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const sendToCurfox=async()=>{setCurfox(p=>({...p,loading:true}));try{const{data}=await API.post(`/curfox/orders/${id}/submit`,{destinationCity:curfox.destinationCity,destinationState:curfox.destinationState,packageWeight:curfox.packageWeight,waybillNumber:curfox.waybillNumber,remark:curfox.remark});setOrder(data);toast.success(data.courier?.dryRun?'Curfox dry run completed':'Order submitted to Curfox');}catch(err){toast.error(err?.response?.data?.message||'Curfox submission failed');}finally{setCurfox(p=>({...p,loading:false}));}};
+  const refreshCurfox=async()=>{setCurfox(p=>({...p,loading:true}));try{const{data}=await API.post(`/curfox/orders/${id}/refresh`);setOrder(data);toast.success('Curfox tracking refreshed');}catch(err){toast.error(err?.response?.data?.message||'Tracking refresh failed');}finally{setCurfox(p=>({...p,loading:false}));}};
+  const reconcileCurfox=async()=>{if(!curfox.waybillNumber)return toast.error('Enter the verified Royal Express waybill');setCurfox(p=>({...p,loading:true}));try{const{data}=await API.post(`/curfox/orders/${id}/reconcile`,{waybill:curfox.waybillNumber});setOrder(data);toast.success('Curfox shipment reconciled');}catch(err){toast.error(err?.response?.data?.message||'Reconciliation failed');}finally{setCurfox(p=>({...p,loading:false}));}};
 
   if (loading) return <div className="text-center py-20 text-gray-400">Loading order...</div>;
   if (!order) return <div className="text-center py-20">Order not found. <Link to="/admin/orders" className="text-primary hover:underline">Back to orders</Link></div>;
@@ -169,6 +182,29 @@ export default function AdminOrderDetail() {
             </div>
             <button onClick={handleStatusUpdate} disabled={saving} className="btn-primary">{saving ? 'Updating...' : 'Update Status'}</button>
           </div>
+
+          {order.deliveryService === 'curfox' && (
+            <div className="bg-white rounded-2xl border border-blue-100 p-5 space-y-4">
+              <div className="flex items-center justify-between gap-3"><div><h2 className="font-semibold text-gray-900">Royal Express / Curfox</h2><p className="text-xs text-gray-500">Submission is manual. Tracking starts only after Shipped.</p></div>{order.courier?.dryRun&&<span className="px-2.5 py-1 rounded-full bg-yellow-100 text-yellow-800 text-xs font-bold">Dry Run</span>}</div>
+              {order.courier?.submissionState==='reconciliation_required'&&<div className="p-3 bg-red-50 border border-red-200 rounded-xl"><p className="text-xs text-red-800 mb-2">The previous Curfox result is uncertain. Verify Royal Express first; never click Send again.</p><div className="flex gap-2"><input value={curfox.waybillNumber} onChange={e=>setCurfox(p=>({...p,waybillNumber:e.target.value}))} className="form-input font-mono" placeholder="Verified real waybill"/><button onClick={reconcileCurfox} className="btn-outline text-sm">Reconcile</button></div></div>}
+              {!order.courier?.submittedAt ? <>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div><label className="form-label">Destination City</label><input list="curfox-cities" value={curfox.destinationCity} onChange={e=>{const city=e.target.value;const match=curfox.cities.find(c=>c.name===city);setCurfox(p=>({...p,destinationCity:city,destinationState:match?.state?.name||p.destinationState}));}} className="form-input"/><datalist id="curfox-cities">{curfox.cities.map(c=><option key={`${c.id}-${c.state?.id}`} value={c.name}>{c.state?.name}</option>)}</datalist></div>
+                  <div><label className="form-label">Destination State</label><input value={curfox.destinationState} onChange={e=>setCurfox(p=>({...p,destinationState:e.target.value}))} className="form-input" readOnly={Boolean(curfox.preview)}/></div>
+                  <div><label className="form-label">Package Weight</label><input type="number" min="0.01" step="0.01" value={curfox.packageWeight} onChange={e=>setCurfox(p=>({...p,packageWeight:e.target.value}))} className="form-input"/></div>
+                  {curfox.manualWaybillsEnabled&&<div><label className="form-label">Royal Express Waybill (if required)</label><input value={curfox.waybillNumber} onChange={e=>setCurfox(p=>({...p,waybillNumber:e.target.value}))} className="form-input font-mono"/></div>}
+                </div>
+                <div><label className="form-label">Courier Remark</label><input value={curfox.remark} onChange={e=>setCurfox(p=>({...p,remark:e.target.value}))} className="form-input"/></div>
+                <div className="flex gap-2"><button onClick={previewCurfox} disabled={curfox.loading} className="btn-outline text-sm">Resolve City & State</button><button onClick={sendToCurfox} disabled={curfox.loading||!['confirmed','processing'].includes(order.orderStatus)} className="btn-primary text-sm">{curfox.loading?'Working…':'Send Order to Curfox'}</button></div>
+                {!['confirmed','processing'].includes(order.orderStatus)&&<p className="text-xs text-amber-700">The order must be Confirmed or Processing before manual submission.</p>}
+              </> : <>
+                <div className="grid sm:grid-cols-2 gap-2 text-sm"><p><span className="text-gray-500">Waybill:</span> <strong className="font-mono">{order.courier.waybill||order.courier.dryRunReference}</strong></p><p><span className="text-gray-500">Curfox status:</span> <strong>{order.courier.externalStatus||'Awaiting shipment'}</strong></p><p><span className="text-gray-500">Destination:</span> {order.courier.destinationCity}, {order.courier.destinationState}</p><p><span className="text-gray-500">Last sync:</span> {order.courier.lastSynchronizedAt?new Date(order.courier.lastSynchronizedAt).toLocaleString():'Not synchronized'}</p></div>
+                {order.courier.trackingEvents?.length>0&&<div className="space-y-2">{order.courier.trackingEvents.map((event,i)=><div key={i} className="border-l-2 border-blue-300 pl-3 text-xs"><strong>{event.status}</strong><p className="text-gray-500">{event.dateTime?new Date(event.dateTime).toLocaleString():event.dateTimeAgo}</p></div>)}</div>}
+                {['shipped','out_for_delivery'].includes(order.orderStatus)&&!order.courier.dryRun&&<button onClick={refreshCurfox} disabled={curfox.loading} className="btn-outline text-sm">Refresh Curfox Tracking</button>}
+                {order.courier.dryRun&&<p className="text-xs text-yellow-800 bg-yellow-50 p-3 rounded-xl">Dry-run references are not real shipments; tracking remains disabled.</p>}
+              </>}
+            </div>
+          )}
 
           {/* Status History */}
           {order.statusHistory?.length > 0 && (

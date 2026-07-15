@@ -275,6 +275,7 @@ export default function ProductDetail() {
       }
 
       // ── Recently Viewed — track this product in localStorage
+      API.post('/marketing/events',{eventType:'product_view',productId:r.data._id,source:'product_page',device:navigator.userAgent}).catch(()=>{});
       try {
         const key = 'sz_recently_viewed';
         const existing = JSON.parse(localStorage.getItem(key) || '[]');

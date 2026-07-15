@@ -122,6 +122,7 @@ View in admin panel for full details.`;
 }
 
 async function sendOrderWhatsAppNotification(order) {
+  if (process.env.APP_ENV === 'staging' && process.env.WHATSAPP_ENABLED !== 'true') return { skipped: true, reason: 'staging_disabled' };
   try {
     if (!isEnabled()) return;
 

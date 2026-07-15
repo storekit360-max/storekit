@@ -112,6 +112,10 @@ const getSmtpFromAddress = (theme) => (
 // ── sendMail ──────────────────────────────────────────────────────────────────
 const sendMail = async ({ to, subject, html, tenantId, tenant }) => {
   try {
+    if (process.env.APP_ENV === 'staging' && process.env.EMAIL_ENABLED !== 'true') {
+      console.log('[MAIL] Staging delivery disabled');
+      return { skipped: true, reason: 'staging_disabled' };
+    }
     const theme = await getTheme({ tenantId, tenant }).catch(() => ({ storeName: 'StoreKit', primary: '#15803d' }));
 
     if (hasSmtpConfig()) {

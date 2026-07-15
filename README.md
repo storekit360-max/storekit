@@ -778,3 +778,6 @@ Read the first compiler error rather than the final summary. Confirm Node 18+, c
 ---
 
 Before every production release: back up the database, build the frontend, run backend syntax checks, deploy backend first, deploy frontend second, and complete the production smoke test for at least two tenant domains.
+# StoreKit / ShopZen multi-tenant commerce SaaS
+
+For isolated local staging, Curfox dry-run/live acceptance steps, environment safeguards, and the non-destructive tenant backfill process, see [docs/STAGING_AND_CURFOX_TESTING.md](docs/STAGING_AND_CURFOX_TESTING.md).

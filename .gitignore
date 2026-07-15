@@ -25,3 +25,5 @@ npm-debug.log*
 Thumbs.db
 .vercel
 .env*
+!backend/.env.staging.example
+!frontend/.env.staging.example

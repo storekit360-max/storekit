@@ -27,6 +27,9 @@ const compression = require('compression');
 const path       = require('path');
 require('dotenv').config();
 
+const { assertSafeStagingDatabase } = require('./utils/stagingSafety');
+assertSafeStagingDatabase(process.env);
+
 // ─── DIAGNOSTIC PATCH — pinpoints bad route handlers accurately ───────────────
 // Express's own errors ("Route.get() requires a callback function", "Router.use()
 // requires a middleware function") report the line where express-internals calls
@@ -293,6 +296,8 @@ safeMount('/api/upload',        require('./routes/upload'), tenantScope);
 safeMount('/api/scrape',        require('./routes/scrape'), tenantScope);
 safeMount('/api/payments',      require('./routes/payments'), tenantContextOnly);
 safeMount('/api/delivery',      require('./routes/delivery'), tenantScope);
+safeMount('/api/curfox',        require('./routes/curfox'), tenantScope);
+safeMount('/api/marketing',     require('./routes/marketing'), tenantScope);
 safeMount('/api/pages',         require('./routes/pages'), tenantScope);
 safeMount('/api/subscribers',   require('./routes/subscribers'), tenantScope);
 const seoRoutes = require('./routes/seo');
@@ -377,6 +382,9 @@ async function startServer() {
 
     const { startSubscriptionScheduler } = require('./services/subscriptionScheduler');
     startSubscriptionScheduler();
+
+    const { startCurfoxScheduler } = require('./services/curfoxScheduler');
+    startCurfoxScheduler();
 
     const PORT = process.env.PORT || 5001;
     app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

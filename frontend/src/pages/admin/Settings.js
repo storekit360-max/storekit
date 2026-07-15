@@ -161,6 +161,9 @@ export default function AdminSettings() {
   const [pageForm, setPageForm] = useState({ slug:'', title:'', content:'', showInFooter:true, showInNav:false, sortOrder:0 });
   const [editingDelivery, setEditingDelivery] = useState(null);
   const [deliveryForm, setDeliveryForm] = useState({ name:'', code:'', description:'', estimatedDays:'', trackingUrl:'', rates:[{ name:'Standard', price:600, freeAbove:0, estimatedDays:'' }] });
+  const [curfoxConfig, setCurfoxConfig] = useState({ enabled:false,courierTenant:'royalexpress',merchantEmail:'',password:'',merchantBusinessId:'',originCity:'',originState:'',defaultPackageWeight:1,initialStatusKey:'key_1',manualWaybillsEnabled:false,hasCredentials:false });
+  const [curfoxBusinesses, setCurfoxBusinesses] = useState([]);
+  const [curfoxWorking, setCurfoxWorking] = useState(false);
   const [gwConfigs, setGwConfigs] = useState({});
   const [whatsappConfig, setWhatsappConfig] = useState({
     whatsappEnabled: false,
@@ -193,6 +196,7 @@ export default function AdminSettings() {
     }).catch(() => {});
     API.get('/payments/admin/all').then(r => { setGateways(r.data); const cfgs = {}; r.data.forEach(g => { cfgs[g.gateway] = { ...g.config, isEnabled: g.isEnabled, isLive: g.isLive, displayName: g.displayName }; }); setGwConfigs(cfgs); }).catch(() => {});
     API.get('/delivery/admin/all').then(r => setDeliveryServices(r.data)).catch(() => {});
+    API.get('/curfox/settings').then(r => setCurfoxConfig(p=>({...p,...r.data,password:''}))).catch(() => {});
     API.get('/whatsapp/config').then(r => setWhatsappConfig(p => ({ ...p, ...r.data }))).catch(() => {});
     API.get('/pages/admin/all').then(r => setPages(r.data)).catch(() => {});
   }, []);
@@ -293,6 +297,20 @@ export default function AdminSettings() {
       console.error('Toggle delivery COD error:', err);
       toast.error(err?.response?.data?.message || 'Failed to update COD setting');
     }
+  };
+
+  const testCurfox = async () => {
+    setCurfoxWorking(true);
+    try { const {data}=await API.post('/curfox/test-connection',curfoxConfig);const businesses=data.businesses||[];setCurfoxBusinesses(businesses);setCurfoxConfig(p=>({...p,merchantBusinessId:p.merchantBusinessId||(businesses.length===1?String(businesses[0].id):'')}));toast.success('Curfox connected; businesses loaded'); }
+    catch(err){toast.error(err?.response?.data?.message||'Curfox connection failed');}
+    finally{setCurfoxWorking(false);}
+  };
+
+  const saveCurfox = async () => {
+    setCurfoxWorking(true);
+    try { const {data}=await API.put('/curfox/settings',curfoxConfig);setCurfoxConfig(p=>({...p,...data,password:''}));const services=(await API.get('/delivery/admin/all')).data;setDeliveryServices(services);toast.success('Curfox settings saved'); }
+    catch(err){toast.error(err?.response?.data?.message||'Could not save Curfox');}
+    finally{setCurfoxWorking(false);}
   };
 
   const savePage = async () => {
@@ -470,6 +488,23 @@ export default function AdminSettings() {
             {/* ── DELIVERY ── */}
             {tab === 'delivery' && (
               <div>
+                <div className="mb-6 p-5 rounded-2xl border-2 border-blue-100 bg-blue-50/40 space-y-4">
+                  <div className="flex items-center justify-between gap-3"><div><h3 className="font-bold text-gray-900">Royal Express / Curfox</h3><p className="text-xs text-gray-500">Server-side merchant integration. Passwords and bearer tokens never reach the storefront.</p></div><button onClick={()=>setCurfoxConfig(p=>({...p,courierTenant:p.courierTenant||'royalexpress'}))} className="btn-outline text-xs">Connect Curfox preset</button></div>
+                  <Toggle label="Enable Curfox at checkout" desc="Orders are sent only after an admin explicitly clicks Send Order to Curfox." value={curfoxConfig.enabled} onChange={()=>setCurfoxConfig(p=>({...p,enabled:!p.enabled}))}/>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <F label="Courier tenant header *" value={curfoxConfig.courierTenant} onChange={e=>setCurfoxConfig(p=>({...p,courierTenant:e.target.value}))} placeholder="royalexpress"/>
+                    <F label="Merchant email *" type="email" value={curfoxConfig.merchantEmail} onChange={e=>setCurfoxConfig(p=>({...p,merchantEmail:e.target.value}))}/>
+                    <F label="Merchant password *" type="password" value={curfoxConfig.password} onChange={e=>setCurfoxConfig(p=>({...p,password:e.target.value}))} placeholder={curfoxConfig.hasCredentials?'Saved — leave blank to preserve':'Enter password'} hint="Encrypted at rest; never returned by the API."/>
+                    <div><label className="form-label">Merchant business (required to enable)</label><select value={curfoxConfig.merchantBusinessId} onChange={e=>setCurfoxConfig(p=>({...p,merchantBusinessId:e.target.value}))} className="form-input"><option value="">Test connection, then select business</option>{curfoxBusinesses.map(b=><option key={b.id} value={b.id}>{b.name||b.business_name||b.id}</option>)}{curfoxConfig.merchantBusinessId&&!curfoxBusinesses.some(b=>String(b.id)===String(curfoxConfig.merchantBusinessId))&&<option value={curfoxConfig.merchantBusinessId}>Saved business ({curfoxConfig.merchantBusinessId})</option>}</select></div>
+                    <F label="Exact origin city (required to enable)" value={curfoxConfig.originCity} onChange={e=>setCurfoxConfig(p=>({...p,originCity:e.target.value}))}/>
+                    <F label="Exact origin state (required to enable)" value={curfoxConfig.originState} onChange={e=>setCurfoxConfig(p=>({...p,originState:e.target.value}))}/>
+                    <F label="Default package weight *" type="number" value={curfoxConfig.defaultPackageWeight} onChange={e=>setCurfoxConfig(p=>({...p,defaultPackageWeight:Number(e.target.value)}))} hint="Used only when an order item has no product weight."/>
+                    <div><label className="form-label">Initial Curfox status</label><select value={curfoxConfig.initialStatusKey} onChange={e=>setCurfoxConfig(p=>({...p,initialStatusKey:e.target.value}))} className="form-input"><option value="key_1">Draft (key_1)</option><option value="key_2">Confirmed (key_2)</option></select></div>
+                  </div>
+                  <Toggle label="Manual waybills enabled" desc="When disabled, Curfox generates the waybill automatically." value={curfoxConfig.manualWaybillsEnabled} onChange={()=>setCurfoxConfig(p=>({...p,manualWaybillsEnabled:!p.manualWaybillsEnabled}))}/>
+                  <div className="flex gap-2"><button onClick={testCurfox} disabled={curfoxWorking} className="btn-outline text-sm">Test Connection & Load Businesses</button><button onClick={saveCurfox} disabled={curfoxWorking} className="btn-primary text-sm">Save Curfox</button></div>
+                  <p className="text-xs text-blue-700">You can save credentials while disabled. Then test the connection, select a business, enter the exact origin city/state, and enable Curfox. Connection testing never creates a courier order.</p>
+                </div>
                 <div className="flex items-center justify-between mb-5">
                   <div><h3 className="font-semibold text-gray-900">Delivery Services</h3><p className="text-xs text-gray-400">Configure shipping options for customers</p></div>
                   <button onClick={() => { setDeliveryForm({ name:'', code:'', description:'', estimatedDays:'', trackingUrl:'', coverageAreas:'', deliveryNote:'', codAllowed:true, rates:[{ name:'Standard', price:600, freeAbove:0, estimatedDays:'' }], zoneRates:[], shippingRules:[] }); setEditingDelivery('new'); }} className="btn-primary text-sm">+ Add Service</button>

@@ -15,6 +15,7 @@ const Tenant = require('../models/Tenant');
 const { Category } = require('../models/index');
 const { adminAuth } = require('../middleware/auth');
 const { dispatchForTrigger, manualPublish } = require('../services/publisherService');
+const { normalizeProductValue, duplicateKeyError, duplicateKeyLabel } = require('../utils/productDuplicates');
 
 // ─── IMAGE URL NORMALIZATION MIDDLEWARE ─────────────────────────────────────
 const { normalizeImageUrl, normalizeImagesMiddleware } = require('../utils/imageUrlHelper');
@@ -66,6 +67,55 @@ async function assertProductLimit(tenantId, extraCount = 1) {
     err.statusCode = 403;
     throw err;
   }
+}
+
+async function findProductDuplicate(tenantId, name, sku, excludeId = null) {
+  const normalizedName = normalizeProductValue(name);
+  const normalizedSku = normalizeProductValue(sku);
+  const clauses = [];
+  if (normalizedName) clauses.push({ $expr: { $eq: [{ $toLower: { $trim: { input: { $ifNull: ['$name', ''] } } } }, normalizedName] } });
+  if (normalizedSku) clauses.push({ $expr: { $eq: [{ $toLower: { $trim: { input: { $ifNull: ['$sku', ''] } } } }, normalizedSku] } });
+  if (!clauses.length) return null;
+  return Product.findOne({ tenantId, ...(excludeId ? { _id: { $ne: excludeId } } : {}), $or: clauses })
+    .select('name sku').lean();
+}
+
+function duplicateConflict(res, existing, requestedName, requestedSku) {
+  const sameSku = normalizeProductValue(requestedSku) && normalizeProductValue(existing?.sku) === normalizeProductValue(requestedSku);
+  return res.status(409).json({
+    message: `Duplicate product ${sameSku ? 'SKU' : 'name'}. Existing product: ${existing?.name || requestedName}`,
+    code: sameSku ? 'DUPLICATE_PRODUCT_SKU' : 'DUPLICATE_PRODUCT_NAME',
+    existingProduct: existing ? { id: existing._id, name: existing.name, sku: existing.sku || '' } : undefined,
+  });
+}
+
+async function tenantDuplicateMap(tenantId) {
+  const rows = await Product.aggregate([
+    { $match: { tenantId } },
+    { $project: { name: 1, sku: 1,
+      normalizedName: { $toLower: { $trim: { input: { $ifNull: ['$name', ''] } } } },
+      normalizedSku: { $toLower: { $trim: { input: { $ifNull: ['$sku', ''] } } } },
+    } },
+    { $facet: {
+      names: [{ $match: { normalizedName: { $ne: '' } } }, { $group: { _id: '$normalizedName', ids: { $push: '$_id' }, count: { $sum: 1 }, value: { $first: '$name' } } }, { $match: { count: { $gt: 1 } } }],
+      skus: [{ $match: { normalizedSku: { $ne: '' } } }, { $group: { _id: '$normalizedSku', ids: { $push: '$_id' }, count: { $sum: 1 }, value: { $first: '$sku' } } }, { $match: { count: { $gt: 1 } } }],
+    } },
+  ]);
+  const map = new Map();
+  const groups = [];
+  for (const [kind, entries] of Object.entries({ name: rows[0]?.names || [], sku: rows[0]?.skus || [] })) {
+    entries.forEach(entry => {
+      groups.push({ kind, value: entry.value, count: entry.count });
+      entry.ids.forEach(id => {
+        const key = id.toString();
+        const current = map.get(key) || { count: 0, fields: [] };
+        current.count += entry.count - 1;
+        current.fields.push({ kind, value: entry.value, count: entry.count });
+        map.set(key, current);
+      });
+    });
+  }
+  return { map, groups };
 }
 
 
@@ -640,7 +690,16 @@ router.post('/admin/import/excel', adminAuth, bulkUpload.single('file'), async (
           isActive,
           isFeatured,
           isOnSale: !!salePrice,
+          normalizedName: normalizeProductValue(name),
+          normalizedSku: normalizeProductValue(cell(row, colMap.sku)),
+          duplicateIndexEligible: true,
         };
+
+        const duplicate = await findProductDuplicate(tenantId, productData.name, productData.sku);
+        if (duplicate) {
+          const sameSku = normalizeProductValue(productData.sku) && normalizeProductValue(duplicate.sku) === normalizeProductValue(productData.sku);
+          throw new Error(`Duplicate ${sameSku ? 'SKU' : 'name'}; existing product "${duplicate.name}"${duplicate.sku ? ` (${duplicate.sku})` : ''}`);
+        }
 
         productData.slug = await makeUniqueProductSlug(productData.slug || productData.name, tenantId);
         const product = await Product.create(productData);
@@ -654,7 +713,8 @@ router.post('/admin/import/excel', adminAuth, bulkUpload.single('file'), async (
         }
       } catch (err) {
         results.skipped++;
-        results.errors.push({ row: r, name: name || '(blank)', message: err.message });
+        const message = duplicateKeyError(err) ? `Duplicate ${duplicateKeyLabel(err)} in this store` : err.message;
+        results.errors.push({ row: r, name: name || '(blank)', message });
       }
     }
 
@@ -796,6 +856,11 @@ router.get('/admin/all', normalizeImagesMiddleware(), adminAuth, async (req, res
     ];
     if (category) filter.category = category;
     if (brand)    filter.brand    = new RegExp(`^${brand}$`, 'i');
+    let duplicateData = null;
+    if (status === 'duplicates') {
+      duplicateData = await tenantDuplicateMap(tenantId);
+      filter._id = { $in: Array.from(duplicateData.map.keys()) };
+    }
     if (status === 'active')   filter.isActive = true;
     if (status === 'hidden')   filter.isActive = false;
     if (status === 'featured') filter.isFeatured = true;
@@ -807,8 +872,10 @@ router.get('/admin/all', normalizeImagesMiddleware(), adminAuth, async (req, res
       .populate('category', 'name')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
-      .limit(Number(limit));
-    res.json({ products, total, pages: Math.ceil(total / limit) });
+      .limit(Number(limit)).lean();
+    if (!duplicateData) duplicateData = await tenantDuplicateMap(tenantId);
+    const annotated = products.map(product => ({ ...product, duplicateInfo: duplicateData.map.get(product._id.toString()) || null }));
+    res.json({ products: annotated, total, pages: Math.ceil(total / limit), duplicateGroups: duplicateData.groups, duplicateProductCount: duplicateData.map.size });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
@@ -820,10 +887,16 @@ router.post('/', adminAuth, async (req, res) => {
     if (!tenantId) return;
     await assertProductLimit(tenantId);
     const body = { ...req.body, tenantId };
+    const duplicate = await findProductDuplicate(tenantId, body.name, body.sku);
+    if (duplicate) return duplicateConflict(res, duplicate, body.name, body.sku);
+    body.normalizedName = normalizeProductValue(body.name);
+    body.normalizedSku = normalizeProductValue(body.sku);
+    body.duplicateIndexEligible = true;
     body.slug = await makeUniqueProductSlug(body.slug || body.name, tenantId);
     product = await Product.create(body);
     res.status(201).json(product);
   } catch (err) {
+    if (duplicateKeyError(err)) return res.status(409).json({ message: `Duplicate product ${duplicateKeyLabel(err)} in this store`, code: 'DUPLICATE_PRODUCT' });
     return res.status(err.statusCode || 500).json({ message: err.message });
   }
 
@@ -847,12 +920,24 @@ router.put('/:id', adminAuth, async (req, res) => {
     if (!before) return res.status(404).json({ message: 'Product not found' });
     const body = { ...req.body };
     delete body.tenantId;
+    const nextName = body.name === undefined ? before.name : body.name;
+    const nextSku = body.sku === undefined ? before.sku : body.sku;
+    const identityChanged = normalizeProductValue(nextName) !== normalizeProductValue(before.name)
+      || normalizeProductValue(nextSku) !== normalizeProductValue(before.sku);
+    if (identityChanged) {
+      const duplicate = await findProductDuplicate(tenantId, nextName, nextSku, req.params.id);
+      if (duplicate) return duplicateConflict(res, duplicate, nextName, nextSku);
+      body.normalizedName = normalizeProductValue(nextName);
+      body.normalizedSku = normalizeProductValue(nextSku);
+      body.duplicateIndexEligible = true;
+    }
     if (body.slug || body.name) body.slug = await makeUniqueProductSlug(body.slug || body.name, tenantId, req.params.id);
     product = await Product.findOneAndUpdate(
       { _id: req.params.id, tenantId }, { $set: { ...body, updatedAt: new Date() } }, { new: true, runValidators: false }
     );
     res.json(product);
   } catch (err) {
+    if (duplicateKeyError(err)) return res.status(409).json({ message: `Duplicate product ${duplicateKeyLabel(err)} in this store`, code: 'DUPLICATE_PRODUCT' });
     return res.status(500).json({ message: err.message });
   }
 
@@ -869,6 +954,25 @@ router.put('/:id', adminAuth, async (req, res) => {
   } catch (err) {
     console.error('[Automation] product_discount dispatch error:', err.message);
   }
+});
+
+// Admin — unrelated quick flags deliberately bypass duplicate identity checks.
+router.patch('/admin/:id/quick-flags', adminAuth, async (req, res) => {
+  try {
+    const tenantId = requireTenantForAdmin(req, res);
+    if (!tenantId) return;
+    const allowed = {};
+    if (typeof req.body.isFeatured === 'boolean') allowed.isFeatured = req.body.isFeatured;
+    if (typeof req.body.isOnSale === 'boolean') allowed.isOnSale = req.body.isOnSale;
+    if (!Object.keys(allowed).length) return res.status(400).json({ message: 'Provide isFeatured or isOnSale as a boolean' });
+    const product = await Product.findOneAndUpdate(
+      { _id: req.params.id, tenantId },
+      { $set: { ...allowed, updatedAt: new Date() } },
+      { new: true, runValidators: true }
+    ).populate('category', 'name');
+    if (!product) return res.status(404).json({ message: 'Product not found in this store' });
+    res.json(product);
+  } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
 

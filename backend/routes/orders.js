@@ -30,6 +30,8 @@ const {
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { compactStatusHistory } = require('../services/curfoxMapping');
+const { runWithTenant, withoutTenantScope } = require('../middleware/tenantContext');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function absoluteSlipUrl(relPath) {
@@ -118,25 +120,19 @@ if (USE_CLOUDINARY) {
 // ── Auto-cancel decision scheduler ───────────────────────────────────────────
 const runAutoCancelDecisions = async () => {
   try {
-    const rows = await Settings.find({
+    const rows = await withoutTenantScope(() => Settings.find({
+      tenantId: { $ne: null },
       key: { $in: ['autoDecisionEnabled', 'autoDecisionMinutes', 'autoDecisionAction'] },
-    }).lean();
-    const cfg = {};
-    rows.forEach(r => { cfg[r.key] = r.value; });
-
-    if (!cfg.autoDecisionEnabled) return;
-
-    const minutes = Number(cfg.autoDecisionMinutes) || 60;
-    const action  = cfg.autoDecisionAction === 'reject' ? 'rejected' : 'approved';
-    const cutoff  = new Date(Date.now() - minutes * 60 * 1000);
-
-    const pending = await Order.find({
-      'cancelRequest.requested': true,
-      'cancelRequest.status': 'pending',
-      'cancelRequest.requestedAt': { $lte: cutoff },
-    });
-
-    for (const order of pending) {
+    }).lean());
+    const byTenant = new Map();
+    rows.forEach(r => { const key=String(r.tenantId);const cfg=byTenant.get(key)||{};cfg[r.key]=r.value;byTenant.set(key,cfg); });
+    for (const [tenantId, cfg] of byTenant) await runWithTenant(tenantId, async () => {
+      if (!cfg.autoDecisionEnabled) return;
+      const minutes = Number(cfg.autoDecisionMinutes) || 60;
+      const action  = cfg.autoDecisionAction === 'reject' ? 'rejected' : 'approved';
+      const cutoff  = new Date(Date.now() - minutes * 60 * 1000);
+      const pending = await Order.find({ tenantId, 'cancelRequest.requested': true, 'cancelRequest.status': 'pending', 'cancelRequest.requestedAt': { $lte: cutoff } });
+      for (const order of pending) {
       order.cancelRequest.status     = action;
       order.cancelRequest.resolvedAt = new Date();
       order.cancelRequest.resolvedBy = 'system (auto)';
@@ -149,7 +145,7 @@ const runAutoCancelDecisions = async () => {
           updatedBy: 'system',
         });
         for (const item of order.items) {
-          await Product.findByIdAndUpdate(item.product, {
+          await Product.findOneAndUpdate({ _id: item.product, tenantId }, {
             $inc: { stock: item.quantity, soldCount: -item.quantity },
           }).catch(() => {});
         }
@@ -184,7 +180,8 @@ const runAutoCancelDecisions = async () => {
       }
 
       console.log(`[AUTO-CANCEL] Order ${order.orderNumber} → ${action}`);
-    }
+      }
+    });
   } catch (err) {
     console.error('[AUTO-CANCEL] Scheduler error:', err.message);
   }
@@ -196,8 +193,10 @@ setTimeout(runAutoCancelDecisions, 5000);
 // ── Admin — Get all orders ────────────────────────────────────────────────────
 router.get('/admin/all', adminAuth, async (req, res) => {
   try {
+    const tenantId = req.user?.tenantId || req.tenantId;
+    if (!tenantId) return res.status(400).json({ message: 'Tenant context is required' });
     const { status, page = 1, limit = 20, search, pendingPayment } = req.query;
-    const filter = {};
+    const filter = { tenantId };
     if (status && status !== 'all') filter.orderStatus = status;
     if (pendingPayment === 'true') {
       filter.paymentStatus = 'pending';
@@ -225,27 +224,20 @@ router.get('/admin/all', adminAuth, async (req, res) => {
 router.put('/admin/:id/status', adminAuth, async (req, res) => {
   try {
     const { status, note, trackingNumber, deliveryPartner } = req.body;
-    const update = { orderStatus: status, updatedAt: Date.now() };
-    if (trackingNumber) update.trackingNumber = trackingNumber;
-    if (deliveryPartner) update.deliveryPartner = deliveryPartner;
-    if (status === 'delivered') update.deliveredAt = Date.now();
-
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
-      {
-        ...update,
-        $push: {
-          statusHistory: {
-            status,
-            note: note || `Status updated to ${status}`,
-            updatedBy: req.user.email,
-          },
-        },
-      },
-      { new: true }
-    );
-
+    const tenantId = req.user?.tenantId || req.tenantId;
+    if (!tenantId) return res.status(400).json({ message: 'Tenant context is required' });
+    const allowed = ['pending','confirmed','processing','shipped','out_for_delivery','delivered','cancelled','refunded'];
+    if (!allowed.includes(status)) return res.status(400).json({ message: 'Invalid order status' });
+    const order = await Order.findOne({ _id: req.params.id, tenantId });
     if (!order) return res.status(404).json({ message: 'Order not found' });
+    const previousStatus = order.orderStatus;
+    order.orderStatus = status;
+    if (trackingNumber) order.trackingNumber = String(trackingNumber).slice(0, 100);
+    if (deliveryPartner) order.deliveryPartner = String(deliveryPartner).slice(0, 100);
+    if (status === 'delivered' && previousStatus !== 'delivered') order.deliveredAt = new Date();
+    const historyRow = { status, note: note || `Status updated to ${status}`, updatedBy: req.user.email, updatedAt: new Date() };
+    order.statusHistory = compactStatusHistory([...order.statusHistory.map(h => h.toObject()), historyRow]);
+    await order.save();
 
     const statusLabels = {
       confirmed: 'Confirmed ✅', processing: 'Processing 🔄', shipped: 'Shipped 📦',
@@ -258,7 +250,7 @@ router.put('/admin/:id/status', adminAuth, async (req, res) => {
 
     // Email customer
     const notifyStatuses = ['confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'];
-    if (order.billing?.email && notifyStatuses.includes(status)) {
+    if (previousStatus !== status && order.billing?.email && notifyStatuses.includes(status)) {
       if (await isEmailEnabled('order_status_customer')) sendMail({
         to: order.billing.email,
         subject: `Order Update — ${order.orderNumber} | StoreKit`,
@@ -284,7 +276,8 @@ router.put('/admin/:id/payment-status', adminAuth, async (req, res) => {
       return res.status(400).json({ message: 'Invalid payment status' });
     }
 
-    const order = await Order.findById(req.params.id);
+    const tenantId = req.user?.tenantId || req.tenantId;
+    const order = await Order.findOne({ _id: req.params.id, tenantId });
     if (!order) return res.status(404).json({ message: 'Order not found' });
 
     const previousStatus = order.paymentStatus;
@@ -306,7 +299,9 @@ router.put('/admin/:id/payment-status', adminAuth, async (req, res) => {
 // ── Admin — Mark order as read ────────────────────────────────────────────────
 router.put('/admin/:id/read', adminAuth, async (req, res) => {
   try {
-    await Order.findByIdAndUpdate(req.params.id, { isRead: true });
+    const tenantId = req.user?.tenantId || req.tenantId;
+    const order = await Order.findOneAndUpdate({ _id: req.params.id, tenantId }, { isRead: true });
+    if (!order) return res.status(404).json({ message: 'Order not found' });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -316,9 +311,10 @@ router.put('/admin/:id/read', adminAuth, async (req, res) => {
 // ── Admin — Confirm payment (manual gateway) ──────────────────────────────────
 router.put('/admin/:id/confirm-payment', adminAuth, async (req, res) => {
   try {
+    const tenantId = req.user?.tenantId || req.tenantId;
     const { paymentReference } = req.body;
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
+    const order = await Order.findOneAndUpdate(
+      { _id: req.params.id, tenantId },
       {
         paymentStatus: 'paid',
         orderStatus: 'confirmed',
@@ -361,9 +357,10 @@ router.put('/admin/:id/confirm-payment', adminAuth, async (req, res) => {
 // ── Admin — Confirm payment from uploaded slip ────────────────────────────────
 router.put('/admin/:id/confirm-slip', adminAuth, async (req, res) => {
   try {
+    const tenantId = req.user?.tenantId || req.tenantId;
     const { paymentReference } = req.body;
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
+    const order = await Order.findOneAndUpdate(
+      { _id: req.params.id, tenantId },
       {
         paymentStatus: 'paid',
         orderStatus: 'confirmed',
@@ -491,7 +488,7 @@ router.post('/', orderRateLimiter, async (req, res) => {
     // ── 1. Build line items (single effectivePrice call per product) ──────────
     const orderItems = [];
     for (const item of items) {
-      const product = await Product.findById(item.productId);
+      const product = await Product.findOne({ _id: item.productId, tenantId: req.tenantId });
       if (!product || !product.isActive)
         return res.status(400).json({ message: `Product not available: ${item.name}` });
       if (product.stock < item.quantity)
@@ -499,7 +496,7 @@ router.post('/', orderRateLimiter, async (req, res) => {
 
       orderItems.push(DiscountEngine.buildLineItem(product, item.quantity));
 
-      await Product.findByIdAndUpdate(product._id, {
+      await Product.findOneAndUpdate({ _id: product._id, tenantId: req.tenantId }, {
         $inc: { stock: -item.quantity, soldCount: item.quantity },
       });
     }
@@ -512,7 +509,8 @@ router.post('/', orderRateLimiter, async (req, res) => {
         deliveryService || null,
         billing?.city || '',
         subtotal,
-        {}  // will fetch Settings internally
+        {},  // will fetch Settings internally
+        req.tenantId
       );
 
     // ── 3. Resolve best customer benefit (coupon OR gift card) ────────────────
@@ -565,7 +563,7 @@ router.post('/', orderRateLimiter, async (req, res) => {
     if (couponCode && benefit.couponDiscount === 0 && benefit.errorCoupon) {
       // Restore stock we already decremented in step 1
       for (const item of orderItems) {
-        await Product.findByIdAndUpdate(item.product, {
+        await Product.findOneAndUpdate({ _id: item.product, tenantId: req.tenantId }, {
           $inc: { stock: item.quantity, soldCount: -item.quantity },
         });
       }
@@ -663,9 +661,9 @@ router.post('/', orderRateLimiter, async (req, res) => {
       // The coupon/gift card was consumed by a concurrent request between our
       // validation and this point. Roll back the order and restore stock so
       // the customer isn't charged a price based on a benefit they didn't get.
-      await Order.findByIdAndDelete(order._id);
+      await Order.findOneAndDelete({ _id: order._id, tenantId: req.tenantId });
       for (const item of orderItems) {
-        await Product.findByIdAndUpdate(item.product, {
+        await Product.findOneAndUpdate({ _id: item.product, tenantId: req.tenantId }, {
           $inc: { stock: item.quantity, soldCount: -item.quantity },
         });
       }
@@ -744,8 +742,9 @@ router.post('/', orderRateLimiter, async (req, res) => {
 // ── Payment gateway webhook — auto-confirm order after successful payment ──────
 router.post('/payment-success', async (req, res) => {
   try {
+    if (!req.tenantId) return res.status(404).json({ message: 'Store not found' });
     const { orderId, paymentReference, gateway } = req.body;
-    const order = await Order.findById(orderId);
+    const order = await Order.findOne({ _id: orderId, tenantId: req.tenantId });
     if (!order) return res.status(404).json({ message: 'Order not found' });
     order.paymentStatus = 'paid';
     order.orderStatus = 'confirmed';
@@ -792,7 +791,8 @@ const uploadSlipMiddleware = (req, res, next) => {
 
 router.post('/:id/payment-slip', uploadSlipMiddleware, async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
+    if (!req.tenantId) return res.status(404).json({ message: 'Store not found' });
+    const order = await Order.findOne({ _id: req.params.id, tenantId: req.tenantId });
     if (!order) return res.status(404).json({ message: 'Order not found' });
     if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
 
@@ -850,7 +850,8 @@ router.post('/:id/payment-slip', uploadSlipMiddleware, async (req, res) => {
 router.post('/:id/cancel-request', auth, async (req, res) => {
   try {
     const { reason } = req.body;
-    const order = await Order.findOne({ _id: req.params.id, customer: req.user._id });
+    const tenantId = req.user?.tenantId || req.tenantId;
+    const order = await Order.findOne({ _id: req.params.id, customer: req.user._id, tenantId });
     if (!order) return res.status(404).json({ message: 'Order not found' });
 
     const cancellableStatuses = ['pending', 'confirmed'];
@@ -861,7 +862,7 @@ router.post('/:id/cancel-request', auth, async (req, res) => {
       return res.status(400).json({ message: 'Cancellation already requested' });
     }
 
-    const windowSetting  = await Settings.findOne({ key: 'cancelWindowMinutes' });
+    const windowSetting  = await Settings.findOne({ tenantId, key: 'cancelWindowMinutes' });
     const rawWindow      = windowSetting ? windowSetting.value : null;
     const parsedWindow   = (rawWindow !== null && rawWindow !== undefined && String(rawWindow).trim() !== '')
       ? Number(rawWindow) : 60;
@@ -927,7 +928,8 @@ router.post('/:id/cancel-request', auth, async (req, res) => {
 router.put('/admin/:id/cancel-decision', adminAuth, async (req, res) => {
   try {
     const { decision } = req.body; // 'approved' | 'rejected'
-    const order = await Order.findById(req.params.id);
+    const tenantId = req.user?.tenantId || req.tenantId;
+    const order = await Order.findOne({ _id: req.params.id, tenantId });
     if (!order) return res.status(404).json({ message: 'Order not found' });
     if (!order.cancelRequest?.requested)
       return res.status(400).json({ message: 'No cancel request on this order' });
@@ -946,7 +948,7 @@ router.put('/admin/:id/cancel-decision', adminAuth, async (req, res) => {
         updatedBy: req.user.email,
       });
       for (const item of order.items) {
-        await Product.findByIdAndUpdate(item.product, {
+        await Product.findOneAndUpdate({ _id: item.product, tenantId }, {
           $inc: { stock: item.quantity, soldCount: -item.quantity },
         }).catch(() => {});
       }
@@ -996,7 +998,8 @@ router.put('/admin/:id/cancel-decision', adminAuth, async (req, res) => {
 // ── Get single order (public — guest + logged-in) ─────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id)
+    if (!req.tenantId) return res.status(404).json({ message: 'Store not found' });
+    const order = await Order.findOne({ _id: req.params.id, tenantId: req.tenantId })
       .populate('items.product', 'name thumbnail slug')
       .populate('customer', 'firstName lastName email');
     if (!order) return res.status(404).json({ message: 'Order not found' });
@@ -1009,7 +1012,8 @@ router.get('/:id', async (req, res) => {
 // ── Claim a guest order after registration ────────────────────────────────────
 router.patch('/:id/claim', auth, async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
+    const tenantId = req.user?.tenantId || req.tenantId;
+    const order = await Order.findOne({ _id: req.params.id, tenantId });
     if (!order) return res.status(404).json({ message: 'Order not found' });
     if (order.customer) return res.json({ message: 'Already linked' });
     if (

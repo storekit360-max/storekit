@@ -16,6 +16,7 @@ const variantOptionSchema = new mongoose.Schema({
 const productSchema = new mongoose.Schema({
   tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   name: { type: String, required: true },
+  normalizedName: { type: String, default: '', select: false },
   slug: { type: String, required: true },
   description: { type: String, required: true },
   shortDescription: String,
@@ -23,6 +24,12 @@ const productSchema = new mongoose.Schema({
   salePrice: Number,
   costPrice: Number,
   sku: { type: String },
+  normalizedSku: { type: String, default: '', select: false },
+  // Legacy records are deliberately left ineligible until a duplicate audit
+  // confirms they are safe. New/renamed products opt in after an application
+  // level tenant-scoped duplicate check, allowing the indexes below to close
+  // the race window without preventing unrelated edits to legacy duplicates.
+  duplicateIndexEligible: { type: Boolean, default: false, select: false },
   category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
   subCategory: String,
   brand: String,
@@ -57,6 +64,8 @@ const productSchema = new mongoose.Schema({
 });
 
 productSchema.pre('save', function(next) {
+  this.normalizedName = String(this.name || '').trim().toLocaleLowerCase('en');
+  this.normalizedSku = String(this.sku || '').trim().toLocaleLowerCase('en');
   if (!this.slug) {
     let slug = this.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     const MAX_SLUG_LEN = 75;
@@ -72,6 +81,14 @@ productSchema.pre('save', function(next) {
 });
 
 productSchema.index({ tenantId: 1, slug: 1 }, { unique: true, sparse: true });
+productSchema.index(
+  { tenantId: 1, normalizedName: 1 },
+  { unique: true, name: 'tenant_normalized_name_unique', partialFilterExpression: { duplicateIndexEligible: true, normalizedName: { $type: 'string', $gt: '' } } }
+);
+productSchema.index(
+  { tenantId: 1, normalizedSku: 1 },
+  { unique: true, name: 'tenant_normalized_sku_unique', partialFilterExpression: { duplicateIndexEligible: true, normalizedSku: { $type: 'string', $gt: '' } } }
+);
 productSchema.index({ tenantId: 1, isActive: 1, createdAt: -1 });
 productSchema.index({ tenantId: 1, isActive: 1, category: 1, createdAt: -1 });
 productSchema.index({ tenantId: 1, isActive: 1, brand: 1 });

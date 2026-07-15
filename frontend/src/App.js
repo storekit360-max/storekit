@@ -58,6 +58,7 @@ const AIPostCreator      = lazy(() => import('./pages/admin/AIPostCreator'));
 const AutomationRules    = lazy(() => import('./pages/admin/AutomationRules'));
 const BackupCenter       = lazy(() => import('./pages/admin/BackupCenter'));
 const AdminDeals         = lazy(() => import('./pages/admin/Deals'));
+const AdminMarketing     = lazy(() => import('./pages/admin/Marketing'));
 
 const SuperAdminLogin = lazy(() => import('./pages/superadmin/SuperAdminLogin'));
 const SuperAdminDashboard = lazy(() => import('./pages/superadmin/SuperAdminDashboard'));
@@ -250,6 +251,7 @@ export default function App() {
                       <Route path="ai-post-creator"  element={<AIPostCreator/>}/>
                       <Route path="automation"       element={<AutomationRules/>}/>
                       <Route path="deals"            element={<AdminDeals/>}/>
+                      <Route path="marketing"        element={<AdminMarketing/>}/>
                       <Route path="monitoring"       element={<Monitoring/>}/>
                       <Route path="backup"           element={<BackupCenter/>}/>
                     </Route>

@@ -12,12 +12,14 @@ export default function Account() {
   const [profile, setProfile] = useState({ firstName: user?.firstName||'', lastName: user?.lastName||'', phone: '' });
   const [passwords, setPasswords] = useState({ newPassword:'', confirm:'' });
   const [saving, setSaving] = useState(false);
+  const [marketingConsent,setMarketingConsent]=useState(false);
   const primary = 'var(--color-primary)';
 
   useEffect(() => {
     API.get('/auth/me')
       .then(r => setProfile(p => ({ ...p, firstName: r.data.firstName, lastName: r.data.lastName, phone: r.data.phone||'' })))
       .catch(() => {});
+    API.get('/marketing/consent').then(r=>setMarketingConsent(Boolean(r.data.granted))).catch(()=>{});
   }, []);
 
   const saveProfile = async () => {
@@ -40,6 +42,8 @@ export default function Account() {
     } catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
     finally { setSaving(false); }
   };
+
+  const updateMarketingConsent=async(granted)=>{try{await API.put('/marketing/consent',{granted});setMarketingConsent(granted);toast.success(granted?'Marketing preferences enabled':'Marketing preferences disabled');}catch(err){toast.error(err?.response?.data?.message||'Could not update consent');}};
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8" style={{ background: 'var(--body-bg)' }}>
@@ -104,6 +108,7 @@ export default function Account() {
             </div>
             <div><label className="form-label">Phone</label><input type="tel" value={profile.phone} onChange={e => setProfile(p => ({...p, phone: e.target.value}))} className="form-input"/></div>
             <div><label className="form-label">Email</label><input value={user?.email} disabled className="form-input bg-gray-50 text-gray-500"/></div>
+            <label className="flex items-start gap-3 p-4 rounded-xl border border-gray-200 cursor-pointer"><input type="checkbox" checked={marketingConsent} onChange={e=>updateMarketingConsent(e.target.checked)} className="mt-1"/><span><strong className="text-sm text-gray-800">Personalized marketing</strong><span className="block text-xs text-gray-500 mt-1">Allow this store to use your signed-in browsing activity for relevant offers. You can withdraw consent at any time.</span></span></label>
             <button onClick={saveProfile} disabled={saving} className="btn-primary">{saving ? 'Saving...' : 'Save Changes'}</button>
           </div>
         </div>

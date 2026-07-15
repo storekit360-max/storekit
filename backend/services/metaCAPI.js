@@ -222,6 +222,7 @@ async function sendCapiEvent(eventName, payload = {}) {
  * @param {object} options — { clientIp, userAgent, fbp, fbc, eventId, siteUrl }
  */
 async function sendPurchaseEvent(order, options = {}) {
+  if (process.env.APP_ENV === 'staging' && process.env.META_CAPI_ENABLED !== 'true') return { skipped: true, reason: 'staging_disabled' };
   const billing  = order.billing || {};
   const items    = order.items   || [];
   const currency = 'LKR'; // StoreKit sells in LKR

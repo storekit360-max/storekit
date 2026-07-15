@@ -3,15 +3,24 @@ const router = express.Router();
 const { DeliveryService, Settings } = require('../models/index');
 const { adminAuth } = require('../middleware/auth');
 
+function requireTenant(req, res) {
+  const tenantId = req.user?.tenantId || req.tenantId;
+  if (!tenantId) res.status(400).json({ message: 'Tenant context is required' });
+  return tenantId;
+}
+
+const SAFE_FIELDS = 'name code isEnabled codAllowed sortOrder logo description trackingUrl estimatedDays rates zoneRates shippingRules freeShippingThreshold deliveryNote coverageAreas areas';
+
 // Public - Get enabled delivery services (with delivery settings)
 router.get('/', async (req, res) => {
   try {
-    const services = await DeliveryService.find({ isEnabled: true })
-      .select('-apiKey -apiSecret')
+    const tenantId = requireTenant(req, res); if (!tenantId) return;
+    const services = await DeliveryService.find({ tenantId, isEnabled: true })
+      .select(SAFE_FIELDS)
       .sort({ sortOrder: 1, name: 1 });
 
     // Also return global delivery settings
-    const settingDocs = await Settings.find({ key: { $in: [
+    const settingDocs = await Settings.find({ tenantId, key: { $in: [
       'freeDeliveryThreshold','standardDelivery','deliveryETA',
       'deliveryZones','deliveryNote','deliveryEnabled'
     ]}});
@@ -25,10 +34,11 @@ router.get('/', async (req, res) => {
 // Public - Calculate delivery cost (zone-aware)
 router.post('/calculate', async (req, res) => {
   try {
+    const tenantId = requireTenant(req, res); if (!tenantId) return;
     const { serviceCode, orderAmount, city, zone } = req.body;
 
     if (serviceCode) {
-      const service = await DeliveryService.findOne({ code: serviceCode, isEnabled: true });
+      const service = await DeliveryService.findOne({ tenantId, code: serviceCode, isEnabled: true });
       if (!service) return res.status(404).json({ message: 'Service not found' });
 
       // Find zone-specific rate if zone provided
@@ -56,7 +66,7 @@ router.post('/calculate', async (req, res) => {
     }
 
     // Fallback: use global settings
-    const settingDocs = await Settings.find({ key: { $in: ['freeDeliveryThreshold','standardDelivery','deliveryETA'] }});
+    const settingDocs = await Settings.find({ tenantId, key: { $in: ['freeDeliveryThreshold','standardDelivery','deliveryETA'] }});
     const gs = {};
     settingDocs.forEach(s => { gs[s.key] = s.value; });
 
@@ -69,7 +79,8 @@ router.post('/calculate', async (req, res) => {
 // Admin - Get all services
 router.get('/admin/all', adminAuth, async (req, res) => {
   try {
-    const services = await DeliveryService.find().sort({ sortOrder: 1, name: 1 });
+    const tenantId = requireTenant(req, res); if (!tenantId) return;
+    const services = await DeliveryService.find({ tenantId }).select(SAFE_FIELDS).sort({ sortOrder: 1, name: 1 });
     res.json(services);
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -77,9 +88,12 @@ router.get('/admin/all', adminAuth, async (req, res) => {
 // Admin - Create/update service (full update with zones + rules)
 router.put('/admin/:code', adminAuth, async (req, res) => {
   try {
+    const tenantId = requireTenant(req, res); if (!tenantId) return;
+    const body = { ...req.body };
+    delete body.tenantId; delete body.apiKey; delete body.apiSecret;
     const result = await DeliveryService.findOneAndUpdate(
-      { code: req.params.code },
-      { ...req.body, code: req.params.code, updatedAt: new Date() },
+      { tenantId, code: req.params.code },
+      { $set: { ...body, code: req.params.code, updatedAt: new Date() } },
       { upsert: true, new: true, runValidators: true }
     );
     res.json(result);
@@ -89,7 +103,8 @@ router.put('/admin/:code', adminAuth, async (req, res) => {
 // Admin - Toggle service
 router.put('/admin/:code/toggle', adminAuth, async (req, res) => {
   try {
-    const svc = await DeliveryService.findOne({ code: req.params.code });
+    const tenantId = requireTenant(req, res); if (!tenantId) return;
+    const svc = await DeliveryService.findOne({ tenantId, code: req.params.code });
     if (!svc) return res.status(404).json({ message: 'Service not found' });
     svc.isEnabled = !svc.isEnabled;
     await svc.save();
@@ -100,7 +115,8 @@ router.put('/admin/:code/toggle', adminAuth, async (req, res) => {
 // Admin - Delete service
 router.delete('/admin/:code', adminAuth, async (req, res) => {
   try {
-    await DeliveryService.findOneAndDelete({ code: req.params.code });
+    const tenantId = requireTenant(req, res); if (!tenantId) return;
+    await DeliveryService.findOneAndDelete({ tenantId, code: req.params.code });
     res.json({ message: 'Deleted' });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -108,9 +124,10 @@ router.delete('/admin/:code', adminAuth, async (req, res) => {
 // Admin - Reorder services
 router.put('/admin/reorder/batch', adminAuth, async (req, res) => {
   try {
+    const tenantId = requireTenant(req, res); if (!tenantId) return;
     const { order } = req.body; // array of { code, sortOrder }
     for (const item of order) {
-      await DeliveryService.findOneAndUpdate({ code: item.code }, { sortOrder: item.sortOrder });
+      await DeliveryService.findOneAndUpdate({ tenantId, code: item.code }, { sortOrder: item.sortOrder });
     }
     res.json({ success: true });
   } catch (err) { res.status(500).json({ message: err.message }); }

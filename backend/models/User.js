@@ -51,6 +51,11 @@ const userSchema = new mongoose.Schema({
   avatar:    { type: String, default: '' },
   createdAt: { type: Date, default: Date.now },
   lastLogin: { type: Date },
+  marketingConsent: {
+    granted: { type: Boolean, default: false },
+    updatedAt: Date,
+    source: { type: String, default: '' },
+  },
 
   // ─── SECURITY: Account lockout fields ───────────────────────────────────
   // loginAttempts — count of consecutive failed login attempts.

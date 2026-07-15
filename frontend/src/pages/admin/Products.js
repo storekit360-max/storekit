@@ -285,6 +285,8 @@ export default function AdminProducts() {
   const [filterStatus, setFilterStatus]     = useState('');
   const [filterStock, setFilterStock]       = useState('');
   const [brandsList, setBrandsList]         = useState([]);
+  const [duplicateProductCount, setDuplicateProductCount] = useState(0);
+  const [quickUpdating, setQuickUpdating] = useState({});
   const [activeTab, setActiveTab] = useState('basic');
   const [draftSavedAt, setDraftSavedAt] = useState(null);
   const [hasDraft, setHasDraft]   = useState(false);
@@ -493,7 +495,7 @@ export default function AdminProducts() {
       if (filterStatus)   params.set('status',   filterStatus);
       if (filterStock)    params.set('stock',    filterStock);
       const { data } = await API.get(`/products/admin/all?${params.toString()}`);
-      setProducts(data.products); setTotalPages(data.pages);
+      setProducts(data.products); setTotalPages(data.pages); setDuplicateProductCount(data.duplicateProductCount || 0);
     } catch {} finally { setLoading(false); }
   }, [search, page, filterCategory, filterBrand, filterStatus, filterStock]);
 
@@ -745,6 +747,20 @@ export default function AdminProducts() {
       await API.put(`/products/${id}`, { isActive: !current });
       setProducts(p => p.map(x => x._id===id ? {...x,isActive:!current} : x));
     } catch { toast.error('Failed'); }
+  };
+
+  const toggleQuickFlag = async (product, field) => {
+    const key = `${product._id}:${field}`;
+    setQuickUpdating(p => ({...p, [key]: true}));
+    try {
+      const { data } = await API.patch(`/products/admin/${product._id}/quick-flags`, { [field]: !product[field] });
+      setProducts(rows => rows.map(row => row._id === product._id ? { ...row, ...data, duplicateInfo: row.duplicateInfo } : row));
+      toast.success(`${field === 'isFeatured' ? 'Featured' : 'On Sale'} ${data[field] ? 'enabled' : 'disabled'}`);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Could not update product');
+    } finally {
+      setQuickUpdating(p => ({...p, [key]: false}));
+    }
   };
 
   /* ── Bulk Import: Download Template ── */
@@ -1100,6 +1116,7 @@ export default function AdminProducts() {
             <option value="hidden">🙈 Hidden</option>
             <option value="featured">⭐ Featured</option>
             <option value="sale">🏷️ On Sale</option>
+            <option value="duplicates">🚨 Duplicates ({duplicateProductCount})</option>
           </select>
 
           {/* Stock */}
@@ -1131,7 +1148,7 @@ export default function AdminProducts() {
         ) : (
           <div className="overflow-x-auto">
             <table className="data-table">
-              <thead><tr><th>Product</th><th>Price</th><th>Stock</th><th>Status</th><th>Variants</th><th className="text-right">Actions</th></tr></thead>
+              <thead><tr><th>Product</th><th>Price</th><th>Stock</th><th>Status</th><th>Quick actions</th><th>Variants</th><th className="text-right">Actions</th></tr></thead>
               <tbody>
                 {products.map(p => (
                   <tr key={p._id}>
@@ -1141,7 +1158,16 @@ export default function AdminProducts() {
                         <div className="min-w-0">
                           <p className="font-semibold text-sm text-gray-800 truncate max-w-xs">{p.name}</p>
                           <p className="text-xs text-gray-400">{p.category?.name}</p>
+                          {p.duplicateInfo && <span className="inline-flex mt-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold" title={p.duplicateInfo.fields?.map(f=>`${f.kind}: ${f.value}`).join(', ')}>Duplicate · {p.duplicateInfo.count}</span>}
                         </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="flex gap-1.5 flex-wrap min-w-[150px]">
+                        <button disabled={quickUpdating[`${p._id}:isFeatured`]} onClick={()=>toggleQuickFlag(p,'isFeatured')}
+                          className={`px-2 py-1 rounded-lg text-[11px] font-bold border disabled:opacity-50 ${p.isFeatured?'bg-amber-100 border-amber-300 text-amber-800':'bg-white border-gray-200 text-gray-500'}`}>★ Featured</button>
+                        <button disabled={quickUpdating[`${p._id}:isOnSale`]} onClick={()=>toggleQuickFlag(p,'isOnSale')}
+                          className={`px-2 py-1 rounded-lg text-[11px] font-bold border disabled:opacity-50 ${p.isOnSale?'bg-green-100 border-green-300 text-green-800':'bg-white border-gray-200 text-gray-500'}`}>🏷 On Sale</button>
                       </div>
                     </td>
                     <td>

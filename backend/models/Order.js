@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema({
   tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
-  orderNumber: { type: String, unique: true },
+  orderNumber: { type: String, required: true, default: () => 'ORD-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7).toUpperCase() },
   customer: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   guestInfo: {
     firstName: String, lastName: String,
@@ -50,6 +50,26 @@ const orderSchema = new mongoose.Schema({
   trackingNumber: { type: String },
   deliveryPartner: { type: String },
   estimatedDelivery: { type: Date },
+  deliveryService: { type: String, default: 'standard', trim: true },
+  deliveryServiceName: { type: String, default: 'Standard Delivery', trim: true },
+  courier: {
+    provider: { type: String, default: '' },
+    externalId: { type: String, default: '' },
+    waybill: { type: String, default: '' },
+    submittedAt: Date,
+    lastSynchronizedAt: Date,
+    externalStatus: { type: String, default: '' },
+    trackingEvents: [{ status: String, dateTime: Date, dateTimeAgo: String, user: String, _id: false }],
+    dryRun: { type: Boolean, default: false },
+    dryRunReference: { type: String, default: '' },
+    submissionState: { type: String, enum: ['not_submitted','submitting','submitted','failed','reconciliation_required'], default: 'not_submitted' },
+    submissionError: { type: String, default: '' },
+    submissionAttemptId: { type: String, default: '' },
+    destinationCity: { type: String, default: '' },
+    destinationState: { type: String, default: '' },
+    packageWeight: Number,
+    manualWaybill: { type: String, default: '' },
+  },
   deliveredAt: { type: Date },
   isRead: { type: Boolean, default: false },
   giftCard: { type: String },
@@ -85,6 +105,11 @@ const orderSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
+
+orderSchema.index({ tenantId: 1, orderNumber: 1 }, { unique: true });
+orderSchema.index({ tenantId: 1, deliveryService: 1, orderStatus: 1, 'courier.lastSynchronizedAt': 1 });
+orderSchema.index({ tenantId: 1, 'courier.provider': 1, 'courier.submissionState': 1 });
+orderSchema.index({ tenantId: 1, 'courier.waybill': 1 }, { sparse: true });
 
 orderSchema.pre('save', function(next) {
   if (!this.orderNumber) {
