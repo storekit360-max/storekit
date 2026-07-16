@@ -130,6 +130,7 @@ const notificationSchema = new mongoose.Schema({
   data: mongoose.Schema.Types.Mixed,
   createdAt: { type: Date, default: Date.now }
 });
+notificationSchema.index({ tenantId: 1, type: 1, isRead: 1, createdAt: -1 });
 const Notification = mongoose.models.Notification || mongoose.model('Notification', notificationSchema);
 
 // Settings
@@ -235,6 +236,7 @@ const returnRequestSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
+returnRequestSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
 const ReturnRequest = mongoose.models.ReturnRequest || mongoose.model('ReturnRequest', returnRequestSchema);
 
 // OTP

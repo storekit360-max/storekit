@@ -105,12 +105,6 @@ export default function Dashboard() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    API.get(`/admin/analytics?period=${analyticsPeriod}`)
-      .then(() => {})
-      .catch(() => {});
-  }, [analyticsPeriod]);
-
-  useEffect(() => {
     const iv = setInterval(() => {
       setLiveVisitors(v => Math.max(1, v + Math.floor(Math.random() * 7) - 3));
     }, 4000);

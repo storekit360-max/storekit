@@ -253,24 +253,23 @@ export default function AdminLayout() {
 
   useEffect(() => {
     fetchNotifications();
-    API.get('/admin/dashboard')
-      .then(r => setBadges({ orders: r.data.stats.pendingOrders, returns: 0 }))
+    API.get('/admin/nav-summary', { cacheTTL: 10 * 1000 })
+      .then(r => setBadges({ orders: r.data.pendingOrders || 0, returns: r.data.pendingReturns || 0 }))
       .catch(() => {});
     API.get('/billing/status')
-      .then(r => setBillingInfo({ billing: r.data?.billing, plan: r.data?.plan }))
-      .catch(() => setBillingInfo(null));
+      .then(r => {
+        setBillingInfo({ billing: r.data?.billing, plan: r.data?.plan });
+        setPlanFeatures(r.data?.plan?.features || {});
+        setPlanLoaded(true);
+      })
+      .catch(() => {
+        setBillingInfo(null);
+        setPlanFeatures({});
+        setPlanLoaded(true);
+      });
     const id = setInterval(fetchNotifications, 30000);
     return () => clearInterval(id);
   }, [fetchNotifications]);
-
-  // Load the tenant's plan so we can hide sidebar items the current plan
-  // doesn't include (e.g. Theme Builder on a Starter plan).
-  useEffect(() => {
-    API.get('/tenant/my')
-      .then(r => setPlanFeatures(r.data?.plan?.features || {}))
-      .catch(() => setPlanFeatures({}))
-      .finally(() => setPlanLoaded(true));
-  }, []);
 
   const visibleNav = useMemo(() => {
     if (!planLoaded) return NAV.filter(item => item.path === '/admin/settings');

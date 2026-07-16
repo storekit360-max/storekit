@@ -11,33 +11,38 @@ export default function PositionBanner({ position, positions, productSlug = '', 
 
   useEffect(() => {
     let active = true;
-    const load = () => Promise.all(requestedPositions.map(requestedPosition =>
-      API.get(`/banners?position=${encodeURIComponent(requestedPosition)}`, { skipCache: true })
-        .then(response => (response.data || []).map(row => ({ ...row, __position: requestedPosition })))
-    ))
-      .then(rows => { if (active) setBanners(rows.flat()); })
+    const endpoint = `/banners?positions=${encodeURIComponent(requestedPositions.join(','))}`;
+    const load = (force = false) => API.get(endpoint, force ? { skipCache: true } : { cacheTTL: 30 * 1000 })
+      .then(response => { if (active) setBanners(response.data || []); })
       .catch(() => {});
     const resize = () => setIsMobile(window.innerWidth < 640);
+    const refresh = () => load(true);
+    const storage = event => {
+      if (event.key === 'storekit:banners-updated') refresh();
+    };
     load();
     window.addEventListener('resize', resize);
-    window.addEventListener('storekit:banners-updated', load);
-    window.addEventListener('focus', load);
+    window.addEventListener('storekit:banners-updated', refresh);
+    window.addEventListener('storage', storage);
+    window.addEventListener('focus', refresh);
     return () => {
       active = false;
       window.removeEventListener('resize', resize);
-      window.removeEventListener('storekit:banners-updated', load);
-      window.removeEventListener('focus', load);
+      window.removeEventListener('storekit:banners-updated', refresh);
+      window.removeEventListener('storage', storage);
+      window.removeEventListener('focus', refresh);
     };
   }, [positionKey, requestedPositions]);
 
   const eligibleBanners = useMemo(() => banners.filter(row => {
     const bannerPosition = row.__position || row.position || position;
+    if (!requestedPositions.includes(bannerPosition)) return false;
     if (isMobile && row.showOnMobile === false) return false;
     if (!isMobile && row.showOnDesktop === false) return false;
     if (bannerPosition === 'product_page' && row.targetProducts?.length && !row.targetProducts.includes(productSlug)) return false;
     if (bannerPosition === 'category_page' && row.targetCategories?.length && !row.targetCategories.includes(categorySlug)) return false;
     return true;
-  }), [banners, categorySlug, isMobile, position, productSlug]);
+  }), [banners, categorySlug, isMobile, position, productSlug, requestedPositions]);
 
   useEffect(() => {
     setActiveIndex(0);

@@ -372,12 +372,21 @@ export const ThemeProvider = ({ children }) => {
   }, []);
 
   const lastSaveRef = React.useRef(0);
+  const bootstrapRequestRef = React.useRef(
+    typeof window !== 'undefined' ? window.__STOREKIT_SETTINGS_REQUEST__ || null : null
+  );
 
   const loadAndApply = useCallback(async () => {
     // Don't overwrite a theme that was just saved (5s grace period)
     if (Date.now() - lastSaveRef.current < 5000) return;
     try {
-      const { data } = await API.get('/settings', { skipCache: true });
+      let data;
+      if (bootstrapRequestRef.current) {
+        data = await bootstrapRequestRef.current;
+        bootstrapRequestRef.current = null;
+      } else {
+        ({ data } = await API.get('/settings', { skipCache: true }));
+      }
       setStoreStatus({ checked: true, unavailable: false, message: '' });
       if (!data || typeof data !== 'object' || Array.isArray(data)) return;
       if (!('storeName' in data || 'theme' in data)) return;

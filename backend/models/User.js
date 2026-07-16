@@ -70,6 +70,7 @@ const userSchema = new mongoose.Schema({
 
 userSchema.index({ tenantId: 1, email: 1 }, { unique: true });
 userSchema.index({ tenantId: 1, username: 1 }, { unique: true });
+userSchema.index({ tenantId: 1, role: 1, createdAt: -1 });
 
 // ─── Password hashing hook ────────────────────────────────────────────────────
 // UNCHANGED from original.

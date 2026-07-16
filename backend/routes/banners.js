@@ -14,7 +14,7 @@ router.get('/', async (req, res) => {
     res.setHeader('CDN-Cache-Control', 'no-store');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
-    const { position } = req.query;
+    const { position, positions } = req.query;
     const now = new Date();
     const filter = {
       isActive: true,
@@ -23,8 +23,10 @@ router.get('/', async (req, res) => {
         { $or: [{ endDate: null }, { endDate: { $gte: now } }] },
       ]
     };
-    if (position) filter.position = position;
-    const banners = await Banner.find(filter).sort({ sortOrder: 1, createdAt: -1 });
+    const requestedPositions = String(positions || '').split(',').map(value => value.trim()).filter(Boolean);
+    if (requestedPositions.length) filter.position = { $in: requestedPositions.slice(0, 10) };
+    else if (position) filter.position = position;
+    const banners = await Banner.find(filter).sort({ sortOrder: 1, createdAt: -1 }).lean();
     res.json(banners);
   } catch (err) { res.status(500).json({ message: err.message }); }
 });

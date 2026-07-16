@@ -30,13 +30,16 @@ async function getEnabledTypes() {
 router.get('/', adminAuth, async (req, res) => {
   try {
     const enabled = await getEnabledTypes();
-    const notifications = await Notification.find({ type: { $in: enabled } })
-      .sort({ createdAt: -1 })
-      .limit(60);
-    const unreadCount = await Notification.countDocuments({
-      type: { $in: enabled },
-      isRead: false,
-    });
+    const [notifications, unreadCount] = await Promise.all([
+      Notification.find({ type: { $in: enabled } })
+        .sort({ createdAt: -1 })
+        .limit(60)
+        .lean(),
+      Notification.countDocuments({
+        type: { $in: enabled },
+        isRead: false,
+      }),
+    ]);
     res.json({ notifications, unreadCount });
   } catch (err) {
     res.status(500).json({ message: err.message });

@@ -197,12 +197,17 @@
           }else{
             document.documentElement.classList.add('storekit-theme-ready');
           }
+          return data||cached||null;
         })
         .catch(function(){
           if(timeout)clearTimeout(timeout);
           if(cached) applySettings(cached);
           else document.documentElement.classList.add('storekit-theme-ready');
+          return cached||null;
         });
+      // Reuse this exact request inside React instead of immediately sending a
+      // second /settings request during provider startup.
+      window.__STOREKIT_SETTINGS_REQUEST__=settingsRequest;
       // React waits only on a tenant's first uncached visit. Returning visitors
       // can mount immediately from the tenant-scoped cache while this refreshes
       // settings in the background.

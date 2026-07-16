@@ -85,19 +85,36 @@ const speedTune = (config) => (
     : config
 );
 
+const readAnimationConfig = (settings) => {
+  try {
+    return settings?.animationConfig
+      ? speedTune({ ...ANIMATION_DEFAULTS, ...JSON.parse(settings.animationConfig) })
+      : speedTune(ANIMATION_DEFAULTS);
+  } catch {
+    return speedTune(ANIMATION_DEFAULTS);
+  }
+};
+
 export const AnimationProvider = ({ children }) => {
-  const [config, setConfig] = useState(() => speedTune(ANIMATION_DEFAULTS));
-  const [loaded, setLoaded] = useState(false);
+  const bootstrapSettings = typeof window !== 'undefined' ? window.__STOREKIT_BOOTSTRAP_SETTINGS__ : null;
+  const [config, setConfig] = useState(() => readAnimationConfig(bootstrapSettings));
+  const [loaded, setLoaded] = useState(Boolean(bootstrapSettings));
 
   const load = useCallback(async () => {
+    // Theme bootstrap already carries animationConfig. Reusing it avoids a
+    // second /settings request during the critical first render.
+    if (bootstrapSettings) {
+      setLoaded(true);
+      return;
+    }
     try {
       const { data } = await API.get('/settings', { cacheTTL: 5 * 60 * 1000 });
       if (data?.animationConfig) {
-        setConfig(speedTune({ ...ANIMATION_DEFAULTS, ...JSON.parse(data.animationConfig) }));
+        setConfig(readAnimationConfig(data));
       }
     } catch {}
     setLoaded(true);
-  }, []);
+  }, [bootstrapSettings]);
 
   useEffect(() => { load(); }, [load]);
 

@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router  = express.Router();
 const Order   = require('../models/Order');
 const Product = require('../models/Product');
@@ -12,14 +13,19 @@ const { adminAuth } = require('../middleware/auth');
 // We also surface return statistics for the dashboard.
 router.get('/dashboard', adminAuth, async (req, res) => {
   try {
+    const rawTenantId = req.user?.tenantId || req.tenantId;
+    if (!rawTenantId) return res.status(400).json({ message: 'Tenant not resolved' });
+    const tenantId = new mongoose.Types.ObjectId(String(rawTenantId));
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const thisMonth   = new Date(today.getFullYear(), today.getMonth(), 1);
     const lastMonth   = new Date(today.getFullYear(), today.getMonth() - 1, 1);
     const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+    const thirtyDaysAgo = new Date(today);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     // Paid & NOT refunded = real revenue
-    const revenueFilter = { paymentStatus: 'paid', orderStatus: { $ne: 'refunded' } };
+    const revenueFilter = { tenantId, paymentStatus: 'paid', orderStatus: { $ne: 'refunded' } };
 
     const [
       totalOrders, pendingOrders, todayOrders,
@@ -28,6 +34,7 @@ router.get('/dashboard', adminAuth, async (req, res) => {
       totalCustomers, newCustomersMonth, unreadOrders,
       // Return stats
       totalReturns, pendingReturns, totalRefundedAmount,
+      revenueChart, topProducts, ordersByStatus, recentOrders,
     ] = await Promise.all([
       Order.countDocuments(),
       Order.countDocuments({ orderStatus: 'pending' }),
@@ -57,34 +64,29 @@ router.get('/dashboard', adminAuth, async (req, res) => {
       ReturnRequest.countDocuments(),
       ReturnRequest.countDocuments({ status: 'pending' }),
       ReturnRequest.aggregate([
-        { $match: { status: 'refunded' } },
+        { $match: { tenantId, status: 'refunded' } },
         { $group: { _id: null, total: { $sum: '$netRefundAmount' } } }
       ]),
+      Order.aggregate([
+        { $match: { createdAt: { $gte: thirtyDaysAgo }, ...revenueFilter } },
+        { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, revenue: { $sum: '$total' }, orders: { $sum: 1 } } },
+        { $sort: { _id: 1 } }
+      ]),
+      Product.find({ isActive: true })
+        .sort({ soldCount: -1 })
+        .limit(5)
+        .select('name soldCount price thumbnail')
+        .lean(),
+      Order.aggregate([
+        { $match: { tenantId } },
+        { $group: { _id: '$orderStatus', count: { $sum: 1 } } }
+      ]),
+      Order.find()
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .populate('customer', 'firstName lastName')
+        .lean(),
     ]);
-
-    const thirtyDaysAgo = new Date(today);
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    // Revenue chart — exclude refunded orders
-    const revenueChart = await Order.aggregate([
-      { $match: { createdAt: { $gte: thirtyDaysAgo }, ...revenueFilter } },
-      { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, revenue: { $sum: '$total' }, orders: { $sum: 1 } } },
-      { $sort: { _id: 1 } }
-    ]);
-
-    const topProducts = await Product.find({ isActive: true })
-      .sort({ soldCount: -1 })
-      .limit(5)
-      .select('name soldCount price thumbnail');
-
-    const ordersByStatus = await Order.aggregate([
-      { $group: { _id: '$orderStatus', count: { $sum: 1 } } }
-    ]);
-
-    const recentOrders = await Order.find()
-      .sort({ createdAt: -1 })
-      .limit(10)
-      .populate('customer', 'firstName lastName');
 
     res.json({
       stats: {
@@ -101,6 +103,21 @@ router.get('/dashboard', adminAuth, async (req, res) => {
       },
       revenueChart, topProducts, ordersByStatus, recentOrders
     });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Lightweight shell counts for the persistent admin sidebar. The previous
+// implementation ran the complete dashboard aggregation just to show badges.
+router.get('/nav-summary', adminAuth, async (_req, res) => {
+  try {
+    const [pendingOrders, pendingReturns] = await Promise.all([
+      Order.countDocuments({ orderStatus: 'pending' }),
+      ReturnRequest.countDocuments({ status: 'pending' }),
+    ]);
+    res.setHeader('Cache-Control', 'private, max-age=10');
+    res.json({ pendingOrders, pendingReturns });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

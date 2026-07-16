@@ -26,8 +26,13 @@ const getHomeDataCacheKey = () => {
 
 const readHomeDataCache = () => {
   try {
+    const key = getHomeDataCacheKey();
     const cache = window.__STOREKIT_HOME_DATA_CACHE__;
-    const entry = cache?.[getHomeDataCacheKey()];
+    let entry = cache?.[key];
+    if (!entry) {
+      const stored = sessionStorage.getItem(`storekit_home_v1:${key}`);
+      entry = stored ? JSON.parse(stored) : null;
+    }
     if (!entry || Date.now() - entry.savedAt > HOME_DATA_CACHE_TTL) return null;
     return entry.data || null;
   } catch {
@@ -37,8 +42,11 @@ const readHomeDataCache = () => {
 
 const writeHomeDataCache = (data) => {
   try {
+    const key = getHomeDataCacheKey();
+    const entry = { data, savedAt: Date.now() };
     window.__STOREKIT_HOME_DATA_CACHE__ = window.__STOREKIT_HOME_DATA_CACHE__ || {};
-    window.__STOREKIT_HOME_DATA_CACHE__[getHomeDataCacheKey()] = { data, savedAt: Date.now() };
+    window.__STOREKIT_HOME_DATA_CACHE__[key] = entry;
+    sessionStorage.setItem(`storekit_home_v1:${key}`, JSON.stringify(entry));
     window.__STOREKIT_HOME_LOADED_ONCE__ = true;
   } catch {}
 };
@@ -919,7 +927,7 @@ export default function Home() {
     let retryTimer;
     let attempt = 0;
 
-    const loadHome = () => Promise.all([
+    const legacyLoadHome = () => Promise.all([
         API.get(`/products?featured=true&limit=${homepageProductLimit}`),
         API.get(`/products?limit=${homepageProductLimit}`),
         API.get('/products?onSale=true&limit=8'),
@@ -927,9 +935,7 @@ export default function Home() {
         API.get('/products/brands?limit=16'),
         API.get('/banners?position=hero'),
         API.get('/banners?position=promo'),
-      ]).then(([feat,newest,sale,cats,brandRes,hero,promo]) => {
-      if (cancelled) return;
-      const nextHomeData = {
+      ]).then(([feat,newest,sale,cats,brandRes,hero,promo]) => ({
         featured: feat.data.products || [],
         newArrivals: newest.data.products || [],
         onSale: sale.data.products || [],
@@ -937,7 +943,15 @@ export default function Home() {
         brands: brandRes.data.brands || [],
         heroBanners: hero.data || [],
         promoBanners: promo.data || [],
-      };
+      }));
+
+    const loadHome = () => API.get(`/storefront/home?limit=${homepageProductLimit}`, { cacheTTL: 30 * 1000 })
+      .then(response => response.data)
+      // Keep rolling deployments backward-compatible while frontend and backend
+      // instances update at slightly different times.
+      .catch(error => error?.response?.status === 404 ? legacyLoadHome() : Promise.reject(error))
+      .then(nextHomeData => {
+      if (cancelled) return;
       setFeatured(nextHomeData.featured);
       setNewArrivals(nextHomeData.newArrivals);
       setOnSale(nextHomeData.onSale);

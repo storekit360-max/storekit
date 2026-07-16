@@ -228,7 +228,7 @@ app.use('/api', (req, res, next) => {
   res.vary('Origin');
   const publicPath = String(req.originalUrl || '').split('?')[0];
   if (req.method === 'GET' && !req.headers.authorization && [
-    '/api/products', '/api/categories', '/api/banners', '/api/pages',
+    '/api/products', '/api/categories', '/api/banners', '/api/pages', '/api/storefront',
     '/api/deals', '/api/seasonal', '/api/delivery',
   ].some(prefix => publicPath.startsWith(prefix))) {
     res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=300');
@@ -282,6 +282,7 @@ safeMount('/api/superadmin',    require('./routes/superadmin'));
 
 // ─── Public routes ────────────────────────────────────────────────────────────
 safeMount('/api/products',      require('./routes/products'), tenantScope);
+safeMount('/api/storefront',    require('./routes/storefront'), tenantScope);
 safeMount('/api/orders',        require('./routes/orders'), tenantScope);
 safeMount('/api/categories',    require('./routes/categories'), tenantScope);
 safeMount('/api/coupons',       require('./routes/coupons'), tenantScope);

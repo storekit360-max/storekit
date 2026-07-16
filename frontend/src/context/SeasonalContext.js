@@ -7,6 +7,9 @@ export const SeasonalProvider = ({ children }) => {
   const [campaign, setCampaign] = useState(null);
 
   useEffect(() => {
+    // Seasonal storefront effects are not rendered in either administration
+    // application, so do not spend a tenant/database request loading them.
+    if (/^\/(admin|superadmin)(\/|$)/.test(window.location.pathname)) return undefined;
     API.get('/seasonal/active').then(r => {
       const c = r.data;
       setCampaign(c);

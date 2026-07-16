@@ -110,6 +110,9 @@ orderSchema.index({ tenantId: 1, orderNumber: 1 }, { unique: true });
 orderSchema.index({ tenantId: 1, deliveryService: 1, orderStatus: 1, 'courier.lastSynchronizedAt': 1 });
 orderSchema.index({ tenantId: 1, 'courier.provider': 1, 'courier.submissionState': 1 });
 orderSchema.index({ tenantId: 1, 'courier.waybill': 1 }, { sparse: true });
+orderSchema.index({ tenantId: 1, orderStatus: 1, createdAt: -1 });
+orderSchema.index({ tenantId: 1, paymentStatus: 1, orderStatus: 1, createdAt: -1 });
+orderSchema.index({ tenantId: 1, isRead: 1, createdAt: -1 });
 
 orderSchema.pre('save', function(next) {
   if (!this.orderNumber) {
