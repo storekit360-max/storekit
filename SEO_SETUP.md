@@ -177,3 +177,12 @@ useSEO() hook (per page)
 6. Monitor Search Console indexing and Merchant Center **Needs attention** after Google recrawls.
 
 The application can make products crawlable and eligible, but no application can guarantee that Google will index every URL, display a rich result, choose a particular ranking, or do so immediately. Those decisions remain with Google and depend on crawl timing, policy/account approval, content quality, competition, and site reputation.
+
+## Testing SEO with a tenant Vercel domain
+
+1. Ensure the Vercel test hostname is attached to the frontend Vercel project.
+2. In **Super Admin → Domains**, assign the hostname without `https://` to exactly one tenant and keep it active.
+3. Click **Test Sitemap** beside the mapped domain, or open `https://TENANT-DOMAIN/sitemap.xml`.
+4. Also verify `/products-sitemap.xml`, `/categories-sitemap.xml`, `/brands-sitemap.xml`, `/pages-sitemap.xml`, `/robots.txt`, and `/google-shopping-feed.xml`.
+
+Tenant mapping is database-driven, so adding a mapped domain does not require hard-coding a tenant ID. A domain cannot be assigned to two tenants. If the tenant later receives a paid custom domain, make the paid domain primary and retain the Vercel hostname as a system/alias domain; canonical SEO URLs should use the primary domain to avoid duplicate indexing.

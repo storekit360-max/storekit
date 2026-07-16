@@ -37,8 +37,9 @@ test('SEO audit rejects missing price, image, description, category and stock', 
 
 test('SEO audit blocks Merchant listings with unresolved identifiers or invalid sale data', () => {
   const missingIdentifiers = productSeoAudit({ ...goodProduct, gtin: '', mpn: '', identifierExists: undefined }, { siteUrl: 'https://shop.example.com' });
-  assert.equal(missingIdentifiers.eligible, false);
-  assert.ok(missingIdentifiers.errors.some(error => error.includes('GTIN or MPN')));
+  assert.equal(missingIdentifiers.eligible, true);
+  assert.equal(missingIdentifiers.merchantEligible, false);
+  assert.ok(missingIdentifiers.merchantErrors.some(error => error.includes('GTIN or MPN')));
 
   const invalidSale = productSeoAudit({ ...goodProduct, isOnSale: true, salePrice: goodProduct.price }, { siteUrl: 'https://shop.example.com' });
   assert.equal(invalidSale.eligible, false);

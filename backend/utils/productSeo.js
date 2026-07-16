@@ -60,6 +60,7 @@ function merchantCondition(condition) {
 
 function productSeoAudit(product, { siteUrl = '' } = {}) {
   const errors = [];
+  const merchantErrors = [];
   const warnings = [];
   const description = stripHtml(product.shortDescription || product.description);
   const image = absoluteUrl(product.thumbnail || product.images?.[0], siteUrl);
@@ -76,15 +77,19 @@ function productSeoAudit(product, { siteUrl = '' } = {}) {
     errors.push('On Sale is enabled without a valid discounted price');
   }
   if (!String(product.brand || '').trim()) warnings.push('Brand is recommended when the product has a manufacturer');
-  if (product.mpn && !String(product.brand || '').trim()) errors.push('A brand is required when an MPN is supplied');
+  if (product.mpn && !String(product.brand || '').trim()) merchantErrors.push('A brand is required when an MPN is supplied');
   if (!product.gtin && !product.mpn && product.identifierExists !== false) {
-    errors.push('Add GTIN or MPN, or explicitly mark that manufacturer identifiers do not exist');
+    merchantErrors.push('Add GTIN or MPN, or explicitly mark that manufacturer identifiers do not exist');
+    warnings.push('Merchant Center is waiting for a GTIN/MPN decision');
   }
-  if (product.gtin && !isValidGtin(product.gtin)) errors.push('GTIN has an invalid length or check digit');
-  if (product.identifierExists === false && (product.gtin || product.mpn)) errors.push('Identifier-exists cannot be No when a GTIN or MPN is supplied');
+  if (product.gtin && !isValidGtin(product.gtin)) merchantErrors.push('GTIN has an invalid length or check digit');
+  if (product.identifierExists === false && (product.gtin || product.mpn)) merchantErrors.push('Identifier-exists cannot be No when a GTIN or MPN is supplied');
   if ((product.images || []).filter(Boolean).length < 2) warnings.push('Additional product images are recommended');
-  const score = Math.max(0, 100 - errors.length * 25 - warnings.length * 5);
-  return { eligible: product.isActive !== false && errors.length === 0, score, errors, warnings };
+  const active = product.isActive !== false;
+  const eligible = active && errors.length === 0;
+  const merchantEligible = eligible && merchantErrors.length === 0;
+  const score = Math.max(0, 100 - errors.length * 25 - merchantErrors.length * 15 - warnings.length * 5);
+  return { eligible, merchantEligible, score, errors, merchantErrors, warnings };
 }
 
 function buildShippingDetails(settings = {}, currency = 'LKR') {

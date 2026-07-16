@@ -268,10 +268,10 @@ router.get('/products-sitemap.xml', async (req, res) => {
     const today = new Date().toISOString().split('T')[0];
     const products = await Product.find(
       tenantFilter(tenantId, { isActive: true }),
-      'slug updatedAt thumbnail images name brand'
+      'slug updatedAt thumbnail images name brand description shortDescription price salePrice isOnSale stock category'
     ).lean();
 
-    const entries = products.map(p => {
+    const entries = products.filter(product => productSeoAudit(product, { siteUrl }).eligible).map(p => {
       const allImages    = [p.thumbnail, ...(p.images || [])].map(image => absoluteUrl(image, siteUrl)).filter(Boolean);
       const uniqueImages = [...new Set(allImages)].slice(0, 10);
       const imageObjs    = uniqueImages.map((img, i) => ({
@@ -317,7 +317,7 @@ router.get('/google-shopping-feed.xml', async (req, res) => {
       'name slug description shortDescription thumbnail images price salePrice isOnSale stock sku gtin mpn identifierExists condition googleProductCategory brand category updatedAt'
     ).populate('category', 'name slug').sort({ updatedAt: -1 }).lean();
 
-    const items = products.filter(product => productSeoAudit(product, { siteUrl }).eligible).map(product => {
+    const items = products.filter(product => productSeoAudit(product, { siteUrl }).merchantEligible).map(product => {
       const hasSale = product.isOnSale && Number(product.salePrice) > 0 && Number(product.salePrice) < Number(product.price);
       const activePrice = hasSale ? product.salePrice : product.price;
       const description = stripHtml(product.shortDescription || product.description || product.name).slice(0, 5000);
@@ -486,7 +486,7 @@ router.get('/robots.txt', async (req, res) => {
       return res.status(unavailable ? 503 : 404).send('User-agent: *\nDisallow: /\n');
     }
     const customRobots = String(tenant?.settings?.robotsTxt || '').trim();
-    let txt = customRobots || `# StoreKit — ${tenant?.storeName || 'Store'}
+    let txt = customRobots || `# ${tenant?.storeName || 'Store'} crawler rules
 User-agent: Googlebot
 Allow: /
 
@@ -570,7 +570,9 @@ router.get('/admin/product-audit', adminAuth, async (req, res) => {
     }));
     const activeRows = rows.filter(row => row.active);
     const eligible = activeRows.filter(row => row.eligible).length;
+    const merchantEligible = activeRows.filter(row => row.merchantEligible).length;
     const errorCount = activeRows.reduce((sum, row) => sum + row.errors.length, 0);
+    const merchantErrorCount = activeRows.reduce((sum, row) => sum + row.merchantErrors.length, 0);
     const warningCount = activeRows.reduce((sum, row) => sum + row.warnings.length, 0);
     const settings = tenant.settings || {};
     const robotsBlocksAll = /Disallow:\s*\/\s*(?:#.*)?$/im.test(String(settings.robotsTxt || ''));
@@ -584,7 +586,7 @@ router.get('/admin/product-audit', adminAuth, async (req, res) => {
     ];
     return res.json({
       siteUrl,
-      summary: { total: products.length, active: activeRows.length, eligible, errorCount, warningCount, score: activeRows.length ? Math.round(activeRows.reduce((sum, row) => sum + row.score, 0) / activeRows.length) : 0 },
+      summary: { total: products.length, active: activeRows.length, eligible, merchantEligible, errorCount, merchantErrorCount, warningCount, score: activeRows.length ? Math.round(activeRows.reduce((sum, row) => sum + row.score, 0) / activeRows.length) : 0 },
       storeChecks,
       products: rows.filter(row => row.active && (!row.eligible || row.warnings.length)).slice(0, 200),
       urls: siteUrl ? { sitemap: `${siteUrl}/sitemap.xml`, productSitemap: `${siteUrl}/products-sitemap.xml`, merchantFeed: `${siteUrl}/google-shopping-feed.xml`, robots: `${siteUrl}/robots.txt` } : {},

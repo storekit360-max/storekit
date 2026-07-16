@@ -706,7 +706,10 @@ export default function SuperAdminDashboard() {
                           </a>
                           <span className={d.verified ? 'text-emerald-600' : 'text-amber-600'}>{d.verified ? 'Verified' : 'DNS Pending'}</span>
                           <span className="text-slate-500">{d.active ? 'Active' : 'Disabled'}</span>
-                          <button onClick={() => removeDomain(d.domain)} className="justify-self-end h-8 px-3 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-xs font-semibold">Remove</button>
+                          <div className="justify-self-end flex items-center gap-2">
+                            <a href={`${storefrontUrl(d.domain)}/sitemap.xml`} target="_blank" rel="noreferrer" className="h-8 px-3 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-semibold inline-flex items-center">Test Sitemap</a>
+                            <button onClick={() => removeDomain(d.domain)} className="h-8 px-3 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 text-xs font-semibold">Remove</button>
+                          </div>
                         </div>
                       ))}
                       {(!selectedTenant.domains || selectedTenant.domains.length === 0) && (

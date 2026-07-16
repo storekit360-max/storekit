@@ -623,15 +623,30 @@ router.post('/tenants/:id/domains', async (req, res, next) => {
   try {
     const domain = normalizeDomain(req.body.domain);
     if (!domain) return res.status(400).json({ message: 'Domain is required' });
+    const type = ['primary', 'alias', 'system'].includes(req.body.type) ? req.body.type : 'alias';
     const tenant = await Tenant.findById(req.params.id);
     if (!tenant) return res.status(404).json({ message: 'Tenant not found' });
-    if (!tenant.domains.some(d => d.domain === domain)) {
-      tenant.domains.push({ domain, type: req.body.type || 'alias', verified: !!req.body.verified, active: true });
-      if (!tenant.settings?.siteUrl) tenant.settings = { ...(tenant.settings?.toObject ? tenant.settings.toObject() : tenant.settings || {}), siteUrl: `https://${domain}` };
-      await tenant.save();
+    const usedByAnotherTenant = await Tenant.exists({ _id: { $ne: tenant._id }, 'domains.domain': domain });
+    if (usedByAnotherTenant) return res.status(409).json({ message: 'This domain is already assigned to another tenant' });
+
+    if (type === 'primary') {
+      tenant.domains.forEach(item => { if (item.type === 'primary' && item.domain !== domain) item.type = 'alias'; });
     }
+    const existingDomain = tenant.domains.find(item => item.domain === domain);
+    if (existingDomain) {
+      existingDomain.type = type;
+      existingDomain.active = true;
+      if (Object.prototype.hasOwnProperty.call(req.body, 'verified')) existingDomain.verified = !!req.body.verified;
+    } else {
+      tenant.domains.push({ domain, type, verified: !!req.body.verified, active: true });
+    }
+    if (!tenant.settings?.siteUrl) tenant.settings = { ...(tenant.settings?.toObject ? tenant.settings.toObject() : tenant.settings || {}), siteUrl: `https://${domain}` };
+    await tenant.save();
     res.json(await Tenant.findById(req.params.id).populate('plan').populate('owner', 'firstName lastName email username role'));
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ message: 'This domain is already assigned to another tenant' });
+    next(err);
+  }
 });
 
 router.delete('/tenants/:id/domains/:domain', async (req, res, next) => {

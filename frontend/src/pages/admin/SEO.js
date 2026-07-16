@@ -124,12 +124,13 @@ export default function AdminSEO() {
       const { data } = await API.get('/seo/admin/product-audit', { skipCache: true });
       setProductAudit(data);
       const checks = Object.fromEntries((data.storeChecks || []).map(check => [check.key, check]));
-      const eligiblePct = data.summary.active ? Math.round((data.summary.eligible / data.summary.active) * 100) : 0;
+      const merchantEligible = data.summary.merchantEligible ?? data.summary.eligible ?? 0;
+      const eligiblePct = data.summary.active ? Math.round((merchantEligible / data.summary.active) * 100) : 0;
       setVitals({
         lcp:  { code:'PRODUCTS', score: data.summary.score, value: `${data.summary.eligible}/${data.summary.active}`, label: 'Google-ready active products', pass: data.summary.eligible === data.summary.active && data.summary.active > 0, tip: `${data.summary.errorCount} errors · ${data.summary.warningCount} warnings` },
         fid:  { code:'DOMAIN', score: checks.domain?.ok ? 100 : 0, value: checks.domain?.ok ? 'Ready' : 'Missing', label: 'Canonical store domain', pass: !!checks.domain?.ok, tip: checks.domain?.message || '' },
         cls:  { code:'META', score: checks.description?.ok ? 100 : 30, value: checks.description?.ok ? 'Ready' : 'Missing', label: 'Store search description', pass: !!checks.description?.ok, tip: checks.description?.message || '' },
-        fcp:  { code:'FEED', score: eligiblePct, value: `${eligiblePct}%`, label: 'Merchant feed eligibility', pass: eligiblePct === 100, tip: data.urls?.merchantFeed || 'Configure an active domain' },
+        fcp:  { code:'FEED', score: eligiblePct, value: `${merchantEligible}/${data.summary.active}`, label: 'Merchant feed eligibility', pass: eligiblePct === 100, tip: `${data.summary.merchantErrorCount || 0} Merchant data errors · ${data.urls?.merchantFeed || 'Configure an active domain'}` },
         ttfb: { code:'RETURNS', score: checks.returns?.ok ? 100 : 50, value: checks.returns?.ok ? 'Ready' : 'Optional', label: 'Merchant return policy', pass: !!checks.returns?.ok, tip: checks.returns?.message || '' },
         mobile: { score: 100, pass: true, tip: 'Responsive storefront and crawlable links are enabled.' },
         https:  { score: checks.domain?.ok ? 100 : 0, pass: !!checks.domain?.ok, tip: checks.domain?.message || '' },
@@ -275,6 +276,7 @@ ${urls.map(u => `  <url>
                       <div key={row.id} className="rounded-xl border border-gray-100 p-3">
                         <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold text-gray-800 truncate">{row.name}</p><ScoreBadge score={row.score}/></div>
                         {row.errors.map(error => <p key={error} className="text-xs text-red-600 mt-1">● {error}</p>)}
+                        {(row.merchantErrors || []).map(error => <p key={`merchant-${error}`} className="text-xs text-red-600 mt-1">● Merchant Center: {error}</p>)}
                         {row.warnings.map(warning => <p key={warning} className="text-xs text-amber-600 mt-1">● {warning}</p>)}
                       </div>
                     ))}
