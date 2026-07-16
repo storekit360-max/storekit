@@ -43,6 +43,11 @@ export const config = {
     '/campaign/:path*',
     '/sitemap.xml',
     '/sitemap_index.xml',
+    '/products-sitemap.xml',
+    '/categories-sitemap.xml',
+    '/brands-sitemap.xml',
+    '/pages-sitemap.xml',
+    '/google-shopping-feed.xml',
     '/robots.txt',
     '/sitemap/:path*',
   ],
@@ -79,7 +84,8 @@ async function resolveDomain(domain) {
 // SEO / social crawler detection
 const BOT_UA_RE = new RegExp(
   [
-    'Googlebot', 'Google-InspectionTool', 'AdsBot-Google',
+    'Googlebot', 'Googlebot-Image', 'Google-InspectionTool', 'Google-Site-Verification',
+    'AdsBot-Google', 'StoreBot-Google',
     'Bingbot', 'BingPreview',
     'facebookexternalhit', 'Facebot', 'WhatsApp',
     'Twitterbot', 'LinkedInBot',
@@ -103,6 +109,11 @@ function isSitemapOrRobots(pathname) {
   return pathname === '/robots.txt'
     || pathname === '/sitemap.xml'
     || pathname === '/sitemap_index.xml'
+    || pathname === '/products-sitemap.xml'
+    || pathname === '/categories-sitemap.xml'
+    || pathname === '/brands-sitemap.xml'
+    || pathname === '/pages-sitemap.xml'
+    || pathname === '/google-shopping-feed.xml'
     || pathname.startsWith('/sitemap/');
 }
 
@@ -158,7 +169,16 @@ export default async function middleware(request) {
       headers,
     });
   } catch {
-    // If Railway is down, fail open → Vercel serves the static SPA shell
-    return;
+    // A retryable failure is safer than letting a crawler index the generic SPA
+    // shell without tenant-specific canonical tags, product data, or schemas.
+    return new Response('SEO service temporarily unavailable', {
+      status: 503,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'Retry-After': '60',
+        'X-Robots-Tag': 'noindex, nofollow',
+      },
+    });
   }
 }

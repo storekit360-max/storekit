@@ -78,7 +78,10 @@ const { installTenantScope, tenantContextMiddleware } = require('./middleware/te
 installTenantScope(mongoose);
 
 const { optionalTenant, blockUnavailableStore } = require('./middleware/tenant');
-const tenantScope = [optionalTenant, blockUnavailableStore, tenantContextMiddleware];
+// Establish authenticated-admin context before the availability guard. This
+// lets tenant admins safely use shared admin domains without inheriting that
+// domain's storefront tenant.
+const tenantScope = [optionalTenant, tenantContextMiddleware, blockUnavailableStore];
 // Provider webhooks arrive directly at Railway and have no tenant storefront
 // domain. Resolve a tenant when possible but do not reject provider callbacks.
 const tenantContextOnly = [optionalTenant, tenantContextMiddleware];
@@ -231,7 +234,11 @@ app.use('/api', (req, res, next) => {
     '/api/products', '/api/categories', '/api/banners', '/api/pages', '/api/storefront',
     '/api/deals', '/api/seasonal', '/api/delivery',
   ].some(prefix => publicPath.startsWith(prefix))) {
-    res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=300');
+    // Tenant catalogue responses must never enter a shared CDN/proxy cache.
+    // The browser keeps a hostname-scoped in-memory cache where appropriate.
+    res.setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
+    res.setHeader('CDN-Cache-Control', 'no-store');
+    res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
   }
   next();
 });

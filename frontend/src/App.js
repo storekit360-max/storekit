@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useLayoutEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
@@ -32,6 +32,11 @@ const Returns        = lazy(() => import('./pages/customer/Returns'));
 const BusinessPage   = lazy(() => import('./pages/customer/BusinessPage'));
 const CampaignPage   = lazy(() => import('./pages/customer/CampaignPage'));
 const CustomerLayout = lazy(() => import('./pages/customer/CustomerLayout'));
+
+function LegacyShopCategoryRedirect() {
+  const { category } = useParams();
+  return <Navigate to={`/category/${category}`} replace />;
+}
 
 // ─── Lazy-loaded Admin Pages ──────────────────────────────────────────────────
 // Admin bundle is large — lazy-loading keeps it completely out of the customer
@@ -202,7 +207,7 @@ export default function App() {
                     <Route element={<CustomerLayout/>}>
                       <Route path="/"                    element={<Home/>}/>
                       <Route path="/shop"                element={<Shop/>}/>
-                      <Route path="/shop/:category"      element={<Shop/>}/>
+                      <Route path="/shop/:category"      element={<LegacyShopCategoryRedirect/>}/>
                       <Route path="/category/:slug"      element={<CategoryPage/>}/>
                       <Route path="/brand/:slug"         element={<BrandPage/>}/>
                       <Route path="/product/:slug"       element={<ProductDetail/>}/>

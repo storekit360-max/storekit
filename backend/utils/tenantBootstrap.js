@@ -250,6 +250,7 @@ async function seedStarterProducts(tenant, starterKit, categories) {
       duplicateIndexEligible: true,
       category: category._id,
       brand: item.brand,
+      identifierExists: false,
       thumbnail: productImage?.image || '/starter-assets/product-placeholder.svg',
       images: [],
       imageAttribution: productImage?.attribution || {},

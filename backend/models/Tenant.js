@@ -71,6 +71,17 @@ const tenantSchema = new mongoose.Schema({
     loadingText: { type: String, default: 'Preparing your shopping experience' },
     marketingTrackingEnabled: { type: Boolean, default: true },
     enableNewsletter: { type: Boolean, default: true },
+    merchantCountryCode: { type: String, default: 'LK' },
+    // Undefined means “use the checkout default shipping cost”. Zero is an
+    // explicit free-shipping value and must not be confused with a missing one.
+    merchantShippingCost: { type: Number, default: undefined },
+    merchantShippingMinDays: { type: Number, default: 1 },
+    merchantShippingMaxDays: { type: Number, default: 5 },
+    merchantReturnDays: { type: Number, default: 0 },
+    merchantFreeReturns: { type: Boolean, default: false },
+    standardDelivery: { type: Number, default: 600 },
+    freeDeliveryThreshold: { type: Number, default: 5000 },
+    deliveryETA: { type: String, default: '1–5 business days' },
     starterImagesProvider: { type: String, default: '' },
     starterImagesAttributionUrl: { type: String, default: '' },
     homepageProductLimit: { type: Number, default: 8 },

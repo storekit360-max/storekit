@@ -13,6 +13,12 @@ import useSEO, { trackAddToCart, trackViewItem } from '../../hooks/useSEO';
 import { WhatsAppProductInquiry } from '../../components/WhatsAppWidget';
 import PositionBanner from '../../components/PositionBanner';
 
+const effectivePrice = product => product?.isOnSale
+  && Number(product.salePrice) > 0
+  && Number(product.salePrice) < Number(product.price)
+  ? Number(product.salePrice)
+  : Number(product?.price || 0);
+
 gsap.registerPlugin(ScrollTrigger);
 
 // Strip external inline styles and class names from pasted HTML so it
@@ -117,12 +123,12 @@ export default function ProductDetail() {
   const sym = settings?.currencySymbol || 'Rs.';
 
   // ── SEO: dynamic meta for this product ─────────────────────────────────────
-  // Build a rich buying-intent description — pattern matches target page source:
-  // "<snippet>. Rs.<price> (was Rs.<orig>). Fast delivery across Sri Lanka. Shop at StoreKit."
+  // Build a tenant-specific search description from facts visible on this page.
   const seoDescription = React.useMemo(() => {
     if (!product) return undefined;
-    const price     = product.isOnSale && product.salePrice ? product.salePrice : product.price;
-    const origPrice = product.isOnSale && product.price ? product.price : null;
+    const validSale = product.isOnSale && Number(product.salePrice) > 0 && Number(product.salePrice) < Number(product.price);
+    const price     = validSale ? product.salePrice : product.price;
+    const origPrice = validSale ? product.price : null;
     const priceStr  = price ? `Rs.${price.toLocaleString()}` : '';
     const wasStr    = origPrice && origPrice !== price ? ` (was Rs.${origPrice.toLocaleString()})` : '';
     const brand     = product.brand ? `${product.brand} ` : '';
@@ -130,10 +136,11 @@ export default function ProductDetail() {
     const plain     = String(product.shortDescription || product.description || '')
                         .replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
     const snippet   = plain.slice(0, 80) || `${brand}${product.name}`;
+    const storeName = settings?.storeName || window.__STOREKIT_SEO__?.siteName || 'this store';
     return priceStr
-      ? `${snippet}. ${priceStr}${wasStr}. Fast delivery across Sri Lanka. Shop at StoreKit.`.slice(0, 165)
-      : `${snippet}. Shop ${brand}${product.name}${cat} online in Sri Lanka. Fast delivery, best prices at StoreKit.`.slice(0, 165);
-  }, [product]);
+      ? `${snippet}. ${priceStr}${wasStr}. Check live stock and order from ${storeName}.`.slice(0, 165)
+      : `${snippet}. View ${brand}${product.name}${cat}, live stock and ordering details at ${storeName}.`.slice(0, 165);
+  }, [product, settings?.storeName]);
 
   // Build rich keywords — slug-variant pattern matching target page source
   const seoKeywords = React.useMemo(() => {
@@ -351,7 +358,7 @@ export default function ProductDetail() {
     }, 0);
   };
 
-  const basePrice = product?.isOnSale && product?.salePrice ? product.salePrice : product?.price;
+  const basePrice = effectivePrice(product);
   const curPrice  = (basePrice || 0) + getPriceModifier();
 
   const handleAdd = () => {
@@ -455,7 +462,7 @@ export default function ProductDetail() {
   if (!product) return <div className="text-center py-20 text-gray-500">Product not found</div>;
 
   const images = [product.thumbnail, ...(product.images || [])].filter(Boolean);
-  const isOnSale = product.isOnSale && product.salePrice;
+  const isOnSale = product.isOnSale && Number(product.salePrice) > 0 && Number(product.salePrice) < Number(product.price);
   const discount = isOnSale ? Math.round(((product.price - product.salePrice) / product.price) * 100) : 0;
   const inWishlist = wishlist.includes(product._id);
 
@@ -468,7 +475,7 @@ export default function ProductDetail() {
         <Link to="/shop" className="flex-shrink-0 hover:text-primary transition-colors" style={{ color: 'var(--color-primary)' }}>Shop</Link>
         {product.category && <>
           <span className="flex-shrink-0">/</span>
-          <Link to={`/shop/${product.category.slug}`} className="flex-shrink-0 hover:text-primary transition-colors" style={{ color: 'var(--color-primary)' }}>{product.category.name}</Link>
+          <Link to={`/category/${product.category.slug}`} className="flex-shrink-0 hover:text-primary transition-colors" style={{ color: 'var(--color-primary)' }}>{product.category.name}</Link>
         </>}
         <span className="flex-shrink-0">/</span>
         <span className="text-gray-600 font-medium break-words min-w-0 flex-grow">{product.name}</span>
@@ -774,9 +781,9 @@ export default function ProductDetail() {
                       <p className="text-sm font-bold line-clamp-2 hover:opacity-60 transition-opacity" style={{ color: 'var(--color-dark)', fontFamily: 'var(--font-display)' }}>{p.name}</p>
                     </Link>
                     <p className="font-black mt-1.5 text-base" style={{ color: 'var(--color-primary)', fontFamily: 'var(--font-display)' }}>
-                      {sym} {(p.isOnSale && p.salePrice ? p.salePrice : p.price)?.toLocaleString()}
+                      {sym} {effectivePrice(p).toLocaleString()}
                     </p>
-                    {p.isOnSale && p.salePrice && (
+                    {effectivePrice(p) < Number(p.price) && (
                       <p className="text-xs text-gray-400 line-through">{sym} {p.price?.toLocaleString()}</p>
                     )}
                   </div>
@@ -824,9 +831,9 @@ export default function ProductDetail() {
                     <p className="text-sm font-bold line-clamp-2 hover:opacity-60 transition-opacity" style={{ color: 'var(--color-dark)', fontFamily: 'var(--font-display)' }}>{p.name}</p>
                   </Link>
                   <p className="font-black mt-1.5 text-base" style={{ color: 'var(--color-primary)', fontFamily: 'var(--font-display)' }}>
-                    {sym} {(p.salePrice || p.price)?.toLocaleString()}
+                    {sym} {effectivePrice(p).toLocaleString()}
                   </p>
-                  {p.isOnSale && p.salePrice && (
+                  {effectivePrice(p) < Number(p.price) && (
                     <p className="text-xs text-gray-400 line-through">{sym} {p.price?.toLocaleString()}</p>
                   )}
                 </div>
@@ -861,9 +868,9 @@ export default function ProductDetail() {
                     <p className="text-sm font-bold line-clamp-2 hover:opacity-60 transition-opacity" style={{ color: 'var(--color-dark)', fontFamily: 'var(--font-display)' }}>{p.name}</p>
                   </Link>
                   <p className="font-black mt-1.5 text-base" style={{ color: 'var(--color-primary)', fontFamily: 'var(--font-display)' }}>
-                    {sym} {(p.salePrice || p.price)?.toLocaleString()}
+                    {sym} {effectivePrice(p).toLocaleString()}
                   </p>
-                  {p.isOnSale && p.salePrice && (
+                  {effectivePrice(p) < Number(p.price) && (
                     <p className="text-xs text-gray-400 line-through">{sym} {p.price?.toLocaleString()}</p>
                   )}
                 </div>
@@ -929,7 +936,7 @@ export default function ProductDetail() {
                   </Link>
                   {p.brand && <p className="text-xs text-gray-400 mt-0.5 font-semibold">{p.brand}</p>}
                   <p className="font-black mt-1.5 text-base" style={{ color: 'var(--color-primary)', fontFamily: 'var(--font-display)' }}>
-                    {sym} {(p.salePrice || p.price)?.toLocaleString()}
+                    {sym} {effectivePrice(p).toLocaleString()}
                   </p>
                 </div>
               </div>

@@ -96,6 +96,14 @@ export function getPixelCurrency() {
   return 'LKR';
 }
 
+function effectiveProductPrice(product = {}) {
+  return product.isOnSale === true
+    && Number(product.salePrice) > 0
+    && Number(product.salePrice) < Number(product.price)
+    ? Number(product.salePrice)
+    : Number(product.price);
+}
+
 // ─── Advanced Matching for pixel fbq('init') ──────────────────────────────────
 /**
  * Re-initialise the pixel with Advanced Matching data for a known user.
@@ -212,7 +220,7 @@ export function trackPurchase(order, items, opts = {}) {
  * @param {object} [opts]  — { billing, eventId }
  */
 export function trackAddToCart(product, quantity = 1, opts = {}) {
-  const price    = Number(product.salePrice || product.price) || 0;
+  const price    = effectiveProductPrice(product) || 0;
   const value    = price * (typeof quantity === 'number' ? quantity : 1);
   const currency = getPixelCurrency();
   const id       = String(product._id || '');
@@ -250,7 +258,7 @@ export function trackAddToCart(product, quantity = 1, opts = {}) {
  * @param {object} [opts]  — { billing, eventId }
  */
 export function trackViewItem(product, opts = {}) {
-  const price    = Number(product.salePrice || product.price) || 0;
+  const price    = effectiveProductPrice(product) || 0;
   const currency = getPixelCurrency();
   const id       = String(product._id || '');
   const eventId  = opts.eventId || generateEventId('ViewContent', product._id);
@@ -344,11 +352,11 @@ export default function useSEO({
   const location = useLocation();
   const cfg = getSeoConfig();
 
-  const siteName      = cfg.siteName       || 'StoreKit';
+  const siteName      = cfg.siteName       || 'Online Store';
   const siteUrl       = cfg.siteUrl        || window.location.origin;
   const twitterHandle = cfg.twitterHandle  || '';
   const defaultImage  = cfg.defaultOgImage || `${siteUrl}/og-default.png`;
-  const defaultDesc   = cfg.defaultDescription || 'Premium online store — quality products, delivered fast.';
+  const defaultDesc   = cfg.defaultDescription || 'Browse current products, prices, details, and live stock status.';
 
   let finalTitle;
   if (title && type === 'product') {
@@ -367,8 +375,8 @@ export default function useSEO({
   if (description) {
     finalDesc = description;
   } else if (type === 'product' && product) {
-    const price     = product.salePrice || product.price;
-    const origPrice = product.isOnSale && product.price ? product.price : null;
+    const price     = effectiveProductPrice(product);
+    const origPrice = price !== Number(product.price) ? Number(product.price) : null;
     const priceStr  = price ? `Rs.${price.toLocaleString()}` : '';
     const wasStr    = origPrice && origPrice !== price ? ` (was Rs.${origPrice.toLocaleString()})` : '';
     const brand     = product.brand ? `${product.brand} ` : '';
@@ -376,8 +384,8 @@ export default function useSEO({
                         .replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
     const snippet   = plain.slice(0, 80) || `${brand}${product.name}`;
     finalDesc = priceStr
-      ? `${snippet}. ${priceStr}${wasStr}. Fast delivery across Sri Lanka. Shop at StoreKit.`.slice(0, 165)
-      : `${snippet}. Shop ${brand}${product.name} online in Sri Lanka. Fast delivery, best prices at StoreKit.`.slice(0, 165);
+      ? `${snippet}. ${priceStr}${wasStr}. Check live stock and order from ${siteName}.`.slice(0, 165)
+      : `${snippet}. View ${brand}${product.name}, live stock, and ordering details at ${siteName}.`.slice(0, 165);
   } else {
     finalDesc = defaultDesc;
   }
@@ -484,7 +492,10 @@ export default function useSEO({
     }
 
     if (product) {
-      const price = product.isOnSale && product.salePrice ? product.salePrice : product.price;
+      const hasSale = product.isOnSale === true
+        && Number(product.salePrice) > 0
+        && Number(product.salePrice) < Number(product.price);
+      const price = hasSale ? product.salePrice : product.price;
       const availability = product.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
       const imageArr = [...new Set([product.thumbnail, ...(product.images || [])].filter(Boolean))];
       const rawCurrency = String(cfg.currencyCode || 'LKR').trim().toUpperCase();
@@ -498,18 +509,23 @@ export default function useSEO({
                        .replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim() || product.name,
         image: imageArr.length > 0 ? imageArr : undefined,
         sku: product.sku || product._id,
-        mpn: product.sku || undefined,
-        brand: product.brand
-          ? { '@type': 'Brand', name: product.brand }
-          : { '@type': 'Brand', name: siteName },
+        ...([8,12,13,14].includes(String(product.gtin||'').replace(/\D/g,'').length)
+          ? { [`gtin${String(product.gtin).replace(/\D/g,'').length}`]: String(product.gtin).replace(/\D/g,'') }
+          : {}),
+        mpn: product.mpn || undefined,
+        brand: product.brand ? { '@type': 'Brand', name: product.brand } : undefined,
         offers: {
           '@type': 'Offer',
           url: finalUrl,
           priceCurrency,
           price: Number(price),
           availability,
-          itemCondition: 'https://schema.org/NewCondition',
-          ...(product.isOnSale && product.saleEndsAt ? {
+          itemCondition: product.condition === 'used'
+            ? 'https://schema.org/UsedCondition'
+            : product.condition === 'refurbished'
+              ? 'https://schema.org/RefurbishedCondition'
+              : 'https://schema.org/NewCondition',
+          ...(hasSale && product.saleEndsAt && !Number.isNaN(new Date(product.saleEndsAt).getTime()) ? {
             priceValidUntil: new Date(product.saleEndsAt).toISOString().split('T')[0],
           } : {}),
           seller: { '@type': 'Organization', name: siteName },

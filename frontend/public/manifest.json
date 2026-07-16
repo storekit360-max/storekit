@@ -1,6 +1,6 @@
 {
-    "short_name": "StoreKit",
-    "name": "StoreKit — Online Store Sri Lanka",
+    "short_name": "Online Store",
+    "name": "Online Store",
     "icons": [
       {
         "src": "/favicon-32x32.png",
@@ -32,8 +32,8 @@
     "display": "standalone",
     "theme_color": "#15803d",
     "background_color": "#ffffff",
-    "description": "StoreKit — Shop electronics, appliances and more online in Sri Lanka. Fast island-wide delivery.",
+    "description": "Browse current products, prices, details, and live stock status.",
     "lang": "en-LK",
     "dir": "ltr",
-    "categories": ["shopping", "electronics"]
+    "categories": ["shopping"]
   }

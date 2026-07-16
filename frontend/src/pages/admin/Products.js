@@ -18,7 +18,7 @@ const DRAFT_KEY = 'storekit_product_draft';
 
 const emptyProduct = {
   name:'', description:'', shortDescription:'', price:'', salePrice:'',
-  costPrice:'', sku:'', category:'', subCategory:'', brand:'', stock:'5', lowStockThreshold:5,
+  costPrice:'', sku:'', gtin:'', mpn:'', identifierExists:undefined, condition:'new', googleProductCategory:'', category:'', subCategory:'', brand:'', stock:'5', lowStockThreshold:5,
   weight:'', thumbnail:'', images:[],
   tags:'', isFeatured:false, isActive:true, isOnSale:false,
   specifications:[], variants:[]
@@ -2004,6 +2004,19 @@ export default function AdminProducts() {
                 <div><label className="form-label">Sale Price (Rs.)</label><input type="number" min="0" value={form.salePrice} onChange={e=>updateForm(p=>({...p,salePrice:e.target.value}))} className="form-input" placeholder="Leave empty if not on sale"/></div>
                 <div><label className="form-label">Cost Price (Rs.)</label><input type="number" min="0" value={form.costPrice} onChange={e=>updateForm(p=>({...p,costPrice:e.target.value}))} className="form-input"/></div>
                 <div><label className="form-label">SKU</label><input value={form.sku} onChange={e=>updateForm(p=>({...p,sku:e.target.value}))} className="form-input" placeholder="Unique product code"/></div>
+                <div><label className="form-label">GTIN / Barcode</label><input inputMode="numeric" value={form.gtin||''} onChange={e=>updateForm(p=>({...p,gtin:e.target.value.replace(/\D/g,'')}))} className="form-input" placeholder="8, 12, 13 or 14 digits"/></div>
+                <div><label className="form-label">Manufacturer Part Number (MPN)</label><input value={form.mpn||''} onChange={e=>updateForm(p=>({...p,mpn:e.target.value}))} className="form-input" placeholder="Manufacturer-issued identifier"/></div>
+                <div>
+                  <label className="form-label">Product Condition</label>
+                  <select value={form.condition||'new'} onChange={e=>updateForm(p=>({...p,condition:e.target.value}))} className="form-input">
+                    <option value="new">New</option><option value="refurbished">Refurbished</option><option value="used">Used</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2"><label className="form-label">Google Product Category</label><input value={form.googleProductCategory||''} onChange={e=>updateForm(p=>({...p,googleProductCategory:e.target.value}))} className="form-input" placeholder="Optional Google taxonomy ID or category path"/></div>
+                <label className="sm:col-span-2 flex items-start gap-2 rounded-xl border border-gray-200 p-3 cursor-pointer">
+                  <input type="checkbox" checked={form.identifierExists===false} onChange={e=>updateForm(p=>({...p,identifierExists:e.target.checked?false:undefined}))} className="mt-0.5"/>
+                  <span><span className="block text-sm font-semibold text-gray-700">This product has no manufacturer GTIN or MPN</span><span className="block text-xs text-gray-400">Select only for custom, handmade, vintage, or genuinely unbranded products.</span></span>
+                </label>
                 <div>
                   <label className="form-label">Stock Quantity</label>
                   <input type="number" min="0" value={form.stock} onChange={e=>updateForm(p=>({...p,stock:e.target.value}))} className="form-input"/>

@@ -3,6 +3,11 @@ const router = express.Router();
 const { Category } = require('../models/index');
 const Product = require('../models/Product');
 const { adminAuth } = require('../middleware/auth');
+const {
+  tenantFilterForRequest,
+  disableSharedTenantCaching,
+  sendTenantResolutionError,
+} = require('../utils/tenantGuard');
 
 function tenantIdForWrite(req) {
   return req.user?.tenantId || req.tenantId || null;
@@ -38,10 +43,13 @@ function buildCategoryPayload(body = {}) {
 // ── PUBLIC: Get all active parent categories (no parent) ────────────────────
 router.get('/', async (req, res) => {
   try {
-    const cats = await Category.find({ isActive: true, parent: null })
-      .sort({ sortOrder: 1, name: 1 });
+    disableSharedTenantCaching(res);
+    const cats = await Category.find(tenantFilterForRequest(req, { isActive: true, parent: null }))
+      .sort({ sortOrder: 1, name: 1 })
+      .lean();
     res.json(cats);
   } catch (err) {
+    if (sendTenantResolutionError(res, err)) return;
     res.status(500).json({ message: err.message });
   }
 });
@@ -49,10 +57,13 @@ router.get('/', async (req, res) => {
 // ── PUBLIC: Get all categories flat (admin use & coupon selector) ───────────
 router.get('/all', async (req, res) => {
   try {
-    const cats = await Category.find({ isActive: true })
-      .sort({ sortOrder: 1, name: 1 });
+    disableSharedTenantCaching(res);
+    const cats = await Category.find(tenantFilterForRequest(req, { isActive: true }))
+      .sort({ sortOrder: 1, name: 1 })
+      .lean();
     res.json(cats);
   } catch (err) {
+    if (sendTenantResolutionError(res, err)) return;
     res.status(500).json({ message: err.message });
   }
 });
@@ -60,12 +71,14 @@ router.get('/all', async (req, res) => {
 // ── PUBLIC: Get subcategories for a parent category ─────────────────────────
 router.get('/sub/:parentId', async (req, res) => {
   try {
-    const subs = await Category.find({
+    disableSharedTenantCaching(res);
+    const subs = await Category.find(tenantFilterForRequest(req, {
       isActive: true,
       parent: req.params.parentId,
-    }).sort({ sortOrder: 1, name: 1 });
+    })).sort({ sortOrder: 1, name: 1 }).lean();
     res.json(subs);
   } catch (err) {
+    if (sendTenantResolutionError(res, err)) return;
     res.status(500).json({ message: err.message });
   }
 });
@@ -178,10 +191,14 @@ router.delete('/:id', adminAuth, async (req, res) => {
 // ── PUBLIC: Get sibling categories (same parent) ─────────────────────────────
 router.get('/siblings/:categoryId', async (req, res) => {
   try {
-    const current = await Category.findById(req.params.categoryId).lean();
+    disableSharedTenantCaching(res);
+    const tenantFilter = tenantFilterForRequest(req);
+    const tenantId = tenantFilter.tenantId;
+    const current = await Category.findOne({ _id: req.params.categoryId, tenantId }).lean();
     if (!current) return res.json([]);
 
     const siblings = await Category.find({
+      tenantId,
       isActive: true,
       parent: current.parent || null,
       _id: { $ne: current._id },
@@ -191,7 +208,7 @@ router.get('/siblings/:categoryId', async (req, res) => {
       .lean();
 
     if (current.parent) {
-      const parent = await Category.findById(current.parent).lean();
+      const parent = await Category.findOne({ _id: current.parent, tenantId }).lean();
       siblings.forEach(s => {
         s.parent = current.parent;
         s.parentName = parent?.name || '';
@@ -200,6 +217,7 @@ router.get('/siblings/:categoryId', async (req, res) => {
 
     res.json(siblings);
   } catch (err) {
+    if (sendTenantResolutionError(res, err)) return;
     res.status(500).json({ message: err.message });
   }
 });

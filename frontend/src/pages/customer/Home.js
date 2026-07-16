@@ -30,7 +30,7 @@ const readHomeDataCache = () => {
     const cache = window.__STOREKIT_HOME_DATA_CACHE__;
     let entry = cache?.[key];
     if (!entry) {
-      const stored = sessionStorage.getItem(`storekit_home_v1:${key}`);
+      const stored = sessionStorage.getItem(`storekit_home_v2:${key}`);
       entry = stored ? JSON.parse(stored) : null;
     }
     if (!entry || Date.now() - entry.savedAt > HOME_DATA_CACHE_TTL) return null;
@@ -46,7 +46,7 @@ const writeHomeDataCache = (data) => {
     const entry = { data, savedAt: Date.now() };
     window.__STOREKIT_HOME_DATA_CACHE__ = window.__STOREKIT_HOME_DATA_CACHE__ || {};
     window.__STOREKIT_HOME_DATA_CACHE__[key] = entry;
-    sessionStorage.setItem(`storekit_home_v1:${key}`, JSON.stringify(entry));
+    sessionStorage.setItem(`storekit_home_v2:${key}`, JSON.stringify(entry));
     window.__STOREKIT_HOME_LOADED_ONCE__ = true;
   } catch {}
 };
@@ -495,7 +495,7 @@ const CategoryCard = ({ cat }) => {
     return()=>{card.removeEventListener('mouseenter',enter);card.removeEventListener('mouseleave',leave);};
   },[]);
   return (
-    <Link ref={ref} to={`/shop/${cat.slug}`}
+    <Link ref={ref} to={`/category/${cat.slug}`}
       className="category-card flex flex-col items-center gap-2.5 p-3 sm:p-5 rounded-2xl border cursor-pointer"
       style={{ background:'var(--card-bg)', borderColor:'var(--card-border)', transformStyle:'preserve-3d', willChange:'transform', transition:'border-color 0.3s,box-shadow 0.3s' }}
       onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--color-primary)';e.currentTarget.style.boxShadow='0 20px 60px rgba(0,0,0,0.1),0 0 0 2px var(--color-primary)';}}

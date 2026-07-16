@@ -24,6 +24,11 @@ const productSchema = new mongoose.Schema({
   salePrice: Number,
   costPrice: Number,
   sku: { type: String },
+  gtin: { type: String, trim: true, default: '' },
+  mpn: { type: String, trim: true, default: '' },
+  identifierExists: { type: Boolean, default: undefined },
+  condition: { type: String, enum: ['new', 'refurbished', 'used'], default: 'new' },
+  googleProductCategory: { type: String, trim: true, default: '' },
   normalizedSku: { type: String, default: '', select: false },
   // Legacy records are deliberately left ineligible until a duplicate audit
   // confirms they are safe. New/renamed products opt in after an application
@@ -104,5 +109,6 @@ productSchema.index({ tenantId: 1, isActive: 1, brand: 1 });
 productSchema.index({ tenantId: 1, isActive: 1, isFeatured: 1 });
 productSchema.index({ tenantId: 1, isActive: 1, isOnSale: 1 });
 productSchema.index({ tenantId: 1, isActive: 1, soldCount: -1 });
+productSchema.index({ tenantId: 1, isActive: 1, updatedAt: -1 });
 
 module.exports = mongoose.models.Product || mongoose.model('Product', productSchema);

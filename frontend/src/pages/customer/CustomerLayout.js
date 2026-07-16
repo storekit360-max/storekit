@@ -348,7 +348,7 @@ const SearchOverlay = ({ onClose, categories }) => {
   };
 
   const goToProduct = (slug) => { navigate(`/product/${slug}`); onClose(); };
-  const goToCategory = (slug) => { navigate(`/shop/${slug}`); onClose(); };
+  const goToCategory = (slug) => { navigate(`/category/${slug}`); onClose(); };
 
   return (
     /* FIX: use sz-search-overlay class for responsive top padding */
@@ -591,9 +591,9 @@ const Header = ({ settings, campaign }) => {
               {categories.slice(0,4).map(cat => (
                 <NavLink3D
                   key={cat._id}
-                  to={`/shop/${cat.slug}`}
+                  to={`/category/${cat.slug}`}
                   label={cat.name}
-                  isActive={location.pathname===`/shop/${cat.slug}`}
+                  isActive={location.pathname===`/category/${cat.slug}`}
                 />
               ))}
               {settings?.enableGiftCards !== false && (
@@ -756,7 +756,7 @@ const Header = ({ settings, campaign }) => {
             {[['/', '🏠 Home'],['/shop','🛍️ Shop'],['/gift-cards','🎁 Gift Cards'],['/wishlist','❤️ Wishlist'],['/returns','↩️ Returns'],['/account','👤 My Account']].map(([to,label])=>(
               <Link key={to} to={to} className="sz-mobile-menu-link px-3 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 rounded-xl transition-colors">{label}</Link>
             ))}
-            {categories.map(cat => <Link key={cat._id} to={`/shop/${cat.slug}`} className="sz-mobile-menu-link px-3 py-2.5 text-sm text-gray-500 hover:bg-gray-50 rounded-xl">{cat.name}</Link>)}
+            {categories.map(cat => <Link key={cat._id} to={`/category/${cat.slug}`} className="sz-mobile-menu-link px-3 py-2.5 text-sm text-gray-500 hover:bg-gray-50 rounded-xl">{cat.name}</Link>)}
             {!user && <div className="flex gap-2 px-3 pt-2 pb-1"><Link to="/login" className="btn-primary flex-1 text-center text-sm py-2.5">Sign In</Link><Link to="/register" className="btn-outline flex-1 text-center text-sm py-2.5">Register</Link></div>}
           </div>
         )}
@@ -956,13 +956,15 @@ export default function CustomerLayout() {
 
   React.useEffect(() => {
     if (settings?.googleSearchConsole) {
+      const raw = String(settings.googleSearchConsole).trim();
+      const token = raw.match(/content\s*=\s*["']([^"']+)["']/i)?.[1] || raw.replace(/^['"]|['"]$/g, '');
       let el = document.querySelector('meta[name="google-site-verification"]');
       if (!el) {
         el = document.createElement('meta');
         el.name = 'google-site-verification';
         document.head.appendChild(el);
       }
-      el.content = settings.googleSearchConsole;
+      el.content = token;
     }
   }, [settings?.googleSearchConsole]);
 

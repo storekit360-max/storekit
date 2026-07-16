@@ -20,39 +20,15 @@ import useSEO from '../../hooks/useSEO';
 import PositionBanner from '../../components/PositionBanner';
 
 // ── FAQ content per category ──────────────────────────────────────────────────
-const CATEGORY_FAQS = {
-  audio: [
-    { q: 'What audio brands are available in Sri Lanka at StoreKit?', a: 'StoreKit stocks top audio brands including Sony, JBL, Bose, Philips, and more — all available online in Sri Lanka with island-wide delivery.' },
-    { q: 'Can I buy wireless headphones online in Sri Lanka?', a: 'Yes! StoreKit offers a wide range of wireless Bluetooth headphones and earbuds online in Sri Lanka. Browse our audio category for the latest models with fast delivery.' },
-    { q: 'What is the return policy for audio products at StoreKit?', a: 'All audio products at StoreKit come with a 14-day hassle-free return policy. Returns are free and processed promptly.' },
-    { q: 'Are audio products sold at StoreKit covered by warranty?', a: "Yes, all audio equipment at StoreKit is sourced from authorised channels and covered by the manufacturer's warranty." },
-  ],
-  electronics: [
-    { q: 'What electronics are available online in Sri Lanka at StoreKit?', a: 'StoreKit offers smartphones, laptops, tablets, smart home devices, accessories, and more from leading global brands — all available online in Sri Lanka with fast delivery.' },
-    { q: 'Can I buy genuine electronics online in Sri Lanka?', a: 'Yes. All electronics at StoreKit are 100% genuine, sourced from authorised distributors, and covered by manufacturer warranty.' },
-    { q: 'How fast is delivery for electronics in Sri Lanka?', a: 'StoreKit delivers electronics island-wide within 1–5 business days. Express delivery is available to Colombo and major cities.' },
-    { q: 'What payment methods are accepted for electronics at StoreKit?', a: 'StoreKit accepts credit/debit cards, bank transfers, and cash on delivery for electronics purchases in Sri Lanka.' },
-  ],
-  appliances: [
-    { q: 'What home appliances can I buy online in Sri Lanka at StoreKit?', a: 'StoreKit stocks a full range of home appliances including air fryers, washing machines, refrigerators, ACs, blenders, and more from Philips, Samsung, Panasonic, and other top brands.' },
-    { q: 'Are home appliances at StoreKit covered by warranty?', a: "Yes, all home appliances at StoreKit come with the manufacturer's warranty. We also offer a 14-day return policy for peace of mind." },
-    { q: 'How are large appliances delivered in Sri Lanka?', a: 'StoreKit delivers large appliances with careful packaging island-wide. Installation support is available for select products such as air conditioners and washing machines.' },
-    { q: 'Which are the best appliance brands available in Sri Lanka?', a: 'StoreKit stocks appliances from Philips, Samsung, Panasonic, LG, Tefal, Bajaj, Midea, and more — all available online in Sri Lanka.' },
-  ],
-};
-
-function getCategoryFAQs(slug, catName) {
-  const faqs = CATEGORY_FAQS[slug] || [
-    { q: `Where can I buy ${catName} online in Sri Lanka?`, a: `StoreKit is Sri Lanka's trusted online store for ${catName}. Browse our full range, compare prices, and enjoy fast island-wide delivery.` },
-    { q: `What is the delivery time for ${catName} in Sri Lanka?`, a: `StoreKit delivers ${catName} across Sri Lanka within 1–5 business days. Same-day dispatch available for orders placed before noon.` },
-    { q: `Are ${catName} products at StoreKit genuine?`, a: `Yes, all ${catName} at StoreKit are 100% authentic, sourced from authorised channels, and covered by manufacturer warranty.` },
-    { q: `What is the return policy for ${catName} at StoreKit?`, a: `StoreKit offers a 14-day hassle-free return policy on all ${catName}. Returns are free and processed promptly.` },
+function getCategoryFAQs(catName, storeName) {
+  return [
+    { q: `What ${catName} products are available at ${storeName}?`, a: `This page lists the active ${catName} products currently available from ${storeName}, together with their latest prices and stock status.` },
+    { q: `How can I check the latest price and stock for ${catName}?`, a: `Open a product from this collection to see its current price, available quantity, product details, and ordering options.` },
   ];
-  return faqs;
 }
 
 // Inject FAQ + ItemList JSON-LD schemas into document head
-function injectCategorySchemas(faqs, products, catName, canonicalUrl, aggregateRating) {
+function injectCategorySchemas(faqs, products, catName, canonicalUrl, storeName) {
   // Remove old schemas injected by this function
   ['cat-faq-schema', 'cat-itemlist-schema'].forEach(id => {
     const el = document.getElementById(id);
@@ -79,17 +55,8 @@ function injectCategorySchemas(faqs, products, catName, canonicalUrl, aggregateR
     const itemListSchema = {
       '@context': 'https://schema.org',
       '@type': 'CollectionPage',
-      name: `${catName} — Buy Online in Sri Lanka | StoreKit`,
+      name: `${catName} | ${storeName}`,
       url: canonicalUrl,
-      ...(aggregateRating ? {
-        aggregateRating: {
-          '@type': 'AggregateRating',
-          ratingValue: aggregateRating.average,
-          reviewCount: aggregateRating.count,
-          bestRating: '5',
-          worstRating: '1',
-        },
-      } : {}),
       mainEntity: {
         '@type': 'ItemList',
         name: catName,
@@ -97,28 +64,9 @@ function injectCategorySchemas(faqs, products, catName, canonicalUrl, aggregateR
         itemListElement: products.slice(0, 20).map((p, i) => ({
           '@type': 'ListItem',
           position: i + 1,
-          item: {
-            '@type': 'Product',
-            name: p.name,
-            url: `${window.__STOREKIT_SEO__?.siteUrl || window.location.origin}/product/${p.slug}`,
-            image: p.thumbnail || p.images?.[0] || undefined,
-            ...(p.brand ? { brand: { '@type': 'Brand', name: p.brand } } : {}),
-            offers: {
-              '@type': 'Offer',
-              priceCurrency: 'LKR',
-              price: String(p.salePrice || p.price || 0),
-              availability: (p.stock > 0) ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-            },
-            ...(p.ratings?.count > 0 ? {
-              aggregateRating: {
-                '@type': 'AggregateRating',
-                ratingValue: Number(p.ratings.average).toFixed(1),
-                reviewCount: p.ratings.count,
-                bestRating: '5',
-                worstRating: '1',
-              },
-            } : {}),
-          },
+          name: p.name,
+          url: `${window.__STOREKIT_SEO__?.siteUrl || window.location.origin}/product/${p.slug}`,
+          image: p.thumbnail || p.images?.[0] || undefined,
         })),
       },
     };
@@ -130,49 +78,8 @@ function injectCategorySchemas(faqs, products, catName, canonicalUrl, aggregateR
   }
 }
 
-// ── Category SEO content library ─────────────────────────────────────────────
-// 200-500 word descriptions keyed by category slug for Google ranking signals.
-const CATEGORY_DESCRIPTIONS = {
-  audio: `Discover our premium audio collection at StoreKit — your one-stop destination for high-quality sound equipment in Sri Lanka. Whether you're a music enthusiast, a professional audiophile, or simply looking for a reliable pair of headphones for daily commuting, we have exactly what you need.
-
-Our audio range includes wireless Bluetooth headphones, noise-cancelling earbuds, portable Bluetooth speakers, home theatre systems, soundbars, and professional studio monitors. Every product is sourced from trusted global brands including Sony, JBL, Bose, Philips, and more — all backed by manufacturer warranties and our 14-day return policy.
-
-Wireless audio technology has transformed how we experience music and entertainment. Our Bluetooth headphones deliver crystal-clear sound with deep bass and precise highs, while long battery life ensures your music never stops. For commuters and fitness enthusiasts, our true wireless earbuds offer a secure, tangle-free fit with active noise cancellation that blocks out the world.
-
-Home audio is equally important — our range of soundbars and speaker systems transform any living room into a cinema-like experience. With Dolby Atmos support and multi-room connectivity, you can fill every corner of your home with rich, immersive sound.
-
-Shop with confidence at StoreKit: fast delivery across Sri Lanka, secure payment options, and a dedicated customer support team ready to help you find the perfect audio product. Compare prices, read verified reviews, and enjoy the best deals on audio equipment available online in Sri Lanka today.`,
-
-  electronics: `StoreKit brings you Sri Lanka's widest selection of electronics — from the latest smartphones and laptops to smart home devices and essential accessories. Whether you need cutting-edge technology for work, entertainment, or everyday life, our electronics collection has you covered.
-
-Explore flagship smartphones from Samsung, Apple, and other leading brands, all available at competitive prices with fast delivery to your doorstep. Our laptop range covers everything from lightweight ultrabooks for professionals to powerful gaming laptops for enthusiasts.
-
-Smart home technology is reshaping how we live, and StoreKit is at the forefront. Browse smart bulbs, robot vacuums, security cameras, and Wi-Fi routers that make your home more connected and convenient. Our accessories category includes screen protectors, cases, chargers, power banks, and cables to keep your devices running and protected.
-
-All electronics at StoreKit come with official warranty coverage. Our product pages include detailed specifications, real customer reviews, and high-resolution images so you can make a fully informed purchase. We offer flexible payment options and easy returns, making online electronics shopping in Sri Lanka safe and straightforward.
-
-Whether you're upgrading your setup or searching for the perfect gift, StoreKit is the trusted choice for electronics in Sri Lanka. Fast delivery, best prices, and authentic products — every time.`,
-
-  appliances: `Transform your home with StoreKit's comprehensive range of home appliances — the best selection available online in Sri Lanka. From kitchen essentials to large household appliances, we stock everything you need to make daily life easier, more efficient, and more enjoyable.
-
-Our kitchen appliance range includes air fryers, microwave ovens, blenders, food processors, electric kettles, rice cookers, and coffee machines from globally trusted brands like Philips, Panasonic, Bajaj, and Tefal. Every appliance is designed to save you time in the kitchen without sacrificing the quality of your cooking.
-
-For the laundry room, choose from front-load and top-load washing machines, dryers, and ironing systems that handle even the heaviest loads with ease. Our refrigerators and freezers come in a range of capacities, finishes, and energy ratings to suit every household size and budget.
-
-StoreKit's air conditioner collection covers split ACs, portable ACs, and inverter models that keep your home cool efficiently — perfect for Sri Lanka's tropical climate. All major brands including Carrier, Midea, and LG are available with installation support.
-
-Shop appliances online at StoreKit with total confidence: browse detailed specifications, compare models side-by-side, read verified buyer reviews, and complete your purchase securely. We deliver across Sri Lanka with careful packaging to ensure your appliance arrives in perfect condition. Enjoy the convenience of the best home appliances at the best prices — only at StoreKit.`,
-};
-
-// Generate a default description for any category not in the library
-function getDefaultDescription(catName) {
-  return `Explore StoreKit's complete ${catName} collection — the best selection of ${catName} products available online in Sri Lanka. We bring you top brands, competitive prices, and fast island-wide delivery.
-
-Every ${catName} product in our range is carefully selected for quality and value. Browse detailed specifications, compare models, and read verified customer reviews to make a confident buying decision.
-
-At StoreKit, we believe great shopping starts with great choice. Our ${catName} range is regularly updated with the latest models and best deals, so you'll always find what you're looking for at a price that works for you.
-
-Shop ${catName} online at StoreKit with fast delivery across Sri Lanka, secure checkout, and our 14-day hassle-free return policy. Our customer support team is always on hand to help you find the perfect product.`;
+function getDefaultDescription(catName, storeName, total) {
+  return `Explore ${catName} at ${storeName}. This collection currently contains ${total} active product${total === 1 ? '' : 's'}. Open any product to compare its description, current price, images, variants, and live stock status before ordering.`;
 }
 
 const Stars = ({ rating = 0 }) => (
@@ -191,9 +98,11 @@ export default function CategoryPage() {
   const { settings } = useTheme();
   const { addItem } = useCart();
   const sym = settings?.currencySymbol || 'Rs.';
+  const storeName = settings?.storeName || window.__STOREKIT_SEO__?.siteName || 'Online Store';
   const gridRef = useRef(null);
 
   const [category,   setCategory]   = useState(null);
+  const [allCategories, setAllCategories] = useState([]);
   const [products,   setProducts]   = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [catLoading, setCatLoading] = useState(true);
@@ -209,6 +118,7 @@ export default function CategoryPage() {
     API.get('/categories/all')
       .then(r => {
         const cats = r.data || [];
+        setAllCategories(cats);
         const found = cats.find(c => c.slug === slug);
         setCategory(found || null);
       })
@@ -245,30 +155,19 @@ export default function CategoryPage() {
   const canonicalUrl = `${siteUrl}/category/${slug}`;
 
   const seoTitle = category
-    ? `${category.name} — Buy Online in Sri Lanka | StoreKit`
-    : `${catName} | StoreKit Sri Lanka`;
+    ? `${category.name} — Buy Online | ${storeName}`
+    : `${catName} | ${storeName}`;
 
   const seoDesc = category?.description
     ? category.description.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 160)
-    : `Shop the best ${catName} online in Sri Lanka. Top brands, best prices, fast delivery. Browse our full ${catName} range at StoreKit.`;
+    : `Browse ${catName} at ${storeName}. See current prices, product details and live stock status.`;
 
-  // Build aggregate rating across all loaded products for CollectionPage schema
-  const categoryAggregateRating = React.useMemo(() => {
-    const rated = products.filter(p => p.ratings?.count > 0);
-    if (!rated.length) return null;
-    const totalRatings = rated.reduce((sum, p) => sum + p.ratings.count, 0);
-    const weightedSum  = rated.reduce((sum, p) => sum + p.ratings.average * p.ratings.count, 0);
-    return {
-      count: totalRatings,
-      average: (weightedSum / totalRatings).toFixed(1),
-    };
-  }, [products]);
+  const categoryFaqs = React.useMemo(() => getCategoryFAQs(catName, storeName), [catName, storeName]);
 
-  // Inject FAQ + ItemList schemas when products/category loads
+  // Inject only schemas that match content visibly rendered on this page.
   useEffect(() => {
     if (!category || products.length === 0) return;
-    const faqs = getCategoryFAQs(slug, catName);
-    injectCategorySchemas(faqs, products, catName, canonicalUrl, categoryAggregateRating);
+    injectCategorySchemas(categoryFaqs, products, catName, canonicalUrl, storeName);
     return () => {
       ['cat-faq-schema', 'cat-itemlist-schema'].forEach(id => {
         const el = document.getElementById(id);
@@ -276,7 +175,7 @@ export default function CategoryPage() {
       });
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [products, category, categoryAggregateRating]);
+  }, [products, category, catName, canonicalUrl, categoryFaqs, storeName]);
 
   useEffect(() => { setPage(1); }, [sortBy, slug]);
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
@@ -302,14 +201,15 @@ export default function CategoryPage() {
     title: seoTitle,
     description: seoDesc,
     url: canonicalUrl,
-    keywords: `${catName}, buy ${catName} online sri lanka, ${catName} price in sri lanka, best ${catName.toLowerCase()} brands, ${catName.toLowerCase()} delivery colombo, ${catName.toLowerCase()} online shopping, storekit sri lanka`,
+    keywords: `${catName}, buy ${catName} online, ${catName} price, ${storeName}`,
     breadcrumbs: [
       { name: 'Shop', url: '/shop' },
       { name: catName, url: `/category/${slug}` },
     ],
   });
 
-  const displayDescription = CATEGORY_DESCRIPTIONS[slug] || getDefaultDescription(catName);
+  const categoryPlainDescription = String(category?.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const displayDescription = categoryPlainDescription || getDefaultDescription(catName, storeName, total);
 
   if (catLoading) {
     return (
@@ -379,8 +279,8 @@ export default function CategoryPage() {
         ) : (
           <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {products.map(product => {
-              const price = product.salePrice || product.price;
-              const hasDiscount = product.salePrice && product.salePrice < product.price;
+              const hasDiscount = product.isOnSale && product.salePrice && product.salePrice < product.price;
+              const price = hasDiscount ? product.salePrice : product.price;
               const discount = hasDiscount
                 ? Math.round((1 - product.salePrice / product.price) * 100)
                 : 0;
@@ -482,6 +382,16 @@ export default function CategoryPage() {
           </div>
         </div>
 
+        <div className="mt-6 rounded-2xl p-6 sm:p-8"
+          style={{ background: 'var(--card-bg)', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
+          <h2 className="text-xl font-bold text-gray-800 mb-4" style={{ fontFamily: 'var(--font-display)' }}>
+            {catName} shopping information
+          </h2>
+          <div className="space-y-4">
+            {categoryFaqs.map(faq => <div key={faq.q}><h3 className="text-sm font-semibold text-gray-800">{faq.q}</h3><p className="text-sm text-gray-600 mt-1">{faq.a}</p></div>)}
+          </div>
+        </div>
+
         {/* Internal linking — related categories and brands for SEO + UX */}
         <div className="mt-8 rounded-2xl p-5"
           style={{ background: 'var(--card-bg)', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
@@ -501,22 +411,23 @@ export default function CategoryPage() {
               style={{ color: 'var(--color-primary)', borderColor: 'var(--color-primary)', background: 'transparent' }}>
               Featured
             </Link>
-            {slug !== 'audio'       && <Link to="/category/audio"       className="text-xs px-3 py-1.5 rounded-full font-medium border transition-colors" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-primary)', background: 'transparent' }}>Audio</Link>}
-            {slug !== 'electronics' && <Link to="/category/electronics" className="text-xs px-3 py-1.5 rounded-full font-medium border transition-colors" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-primary)', background: 'transparent' }}>Electronics</Link>}
-            {slug !== 'appliances'  && <Link to="/category/appliances"  className="text-xs px-3 py-1.5 rounded-full font-medium border transition-colors" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-primary)', background: 'transparent' }}>Appliances</Link>}
+            {allCategories.filter(item => item.isActive !== false && item.slug && item.slug !== slug).slice(0, 8).map(item => (
+              <Link key={item._id || item.slug} to={`/category/${item.slug}`} className="text-xs px-3 py-1.5 rounded-full font-medium border transition-colors" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-primary)', background: 'transparent' }}>{item.name}</Link>
+            ))}
           </div>
           {/* Popular brand links — boosts brand page crawling & internal link equity */}
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mt-4 mb-3">
             Shop by brand
           </p>
           <div className="flex flex-wrap gap-2">
-            {['sony', 'philips', 'samsung', 'jbl'].map(brand => (
-              <Link key={brand} to={`/brand/${brand}`}
+            {[...new Set(products.map(product => product.brand).filter(Boolean))].slice(0, 8).map(brand => {
+              const brandSlug = brand.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+              return <Link key={brand} to={`/brand/${brandSlug}`}
                 className="text-xs px-3 py-1.5 rounded-full font-medium border transition-colors capitalize"
                 style={{ color: 'var(--color-primary)', borderColor: 'var(--color-primary)', background: 'transparent' }}>
-                {brand.charAt(0).toUpperCase() + brand.slice(1)}
-              </Link>
-            ))}
+                {brand}
+              </Link>;
+            })}
           </div>
         </div>
       </div>

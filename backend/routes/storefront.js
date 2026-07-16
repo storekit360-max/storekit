@@ -4,6 +4,7 @@ const express = require('express');
 const Product = require('../models/Product');
 const { Category, Banner } = require('../models/index');
 const { normalizeProductImages, normalizeEntityImages } = require('../utils/imageUrlHelper');
+const { requiredTenantId, disableSharedTenantCaching, sendTenantResolutionError } = require('../utils/tenantGuard');
 
 const router = express.Router();
 
@@ -48,8 +49,8 @@ function buildBrands(products, limit) {
 // One tenant-scoped response replaces the seven-request homepage waterfall.
 router.get('/home', async (req, res, next) => {
   try {
-    const tenantId = req.tenantId;
-    if (!tenantId) return res.status(404).json({ message: 'Store not found for this domain' });
+    disableSharedTenantCaching(res);
+    const tenantId = requiredTenantId(req);
 
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 8, 1), 12);
     const now = new Date();
@@ -67,7 +68,6 @@ router.get('/home', async (req, res, next) => {
 
     const normalizedProducts = rows => rows.map(normalizeProductImages);
     const normalizedBanners = banners.map(normalizeEntityImages);
-    res.setHeader('Cache-Control', 'public, max-age=15, s-maxage=30, stale-while-revalidate=120');
     return res.json({
       featured: normalizedProducts(featured),
       newArrivals: normalizedProducts(newArrivals),
@@ -78,6 +78,7 @@ router.get('/home', async (req, res, next) => {
       promoBanners: normalizedBanners.filter(banner => banner.position === 'promo'),
     });
   } catch (err) {
+    if (sendTenantResolutionError(res, err)) return undefined;
     return next(err);
   }
 });

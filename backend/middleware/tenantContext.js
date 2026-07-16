@@ -21,6 +21,13 @@ function runWithTenant(tenantId, fn) {
   return tenantStorage.run({ tenantId: tenantId ? String(tenantId) : null, bypassTenantScope: false }, fn);
 }
 
+function chooseRequestTenantId(domainTenantId, authenticatedUser) {
+  if (authenticatedUser?.role === 'admin' && authenticatedUser.tenantId) {
+    return authenticatedUser.tenantId;
+  }
+  return domainTenantId || null;
+}
+
 function withoutTenantScope(fn) {
   const store = tenantStorage.getStore() || {};
   return tenantStorage.run({ ...store, bypassTenantScope: true }, fn);
@@ -29,18 +36,24 @@ function withoutTenantScope(fn) {
 async function tenantContextMiddleware(req, _res, next) {
   let tenantId = req.tenantId || req.tenant?._id || null;
 
-  if (!tenantId) {
-    try {
-      const token = req.header('Authorization')?.replace('Bearer ', '');
-      if (token) {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const User = require('../models/User');
-        const user = await User.findById(decoded.id).select('tenantId role').lean();
-        if (user?.role === 'admin' && user.tenantId) tenantId = user.tenantId;
+  try {
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    if (token) {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const User = require('../models/User');
+      const user = await User.findById(decoded.id).select('tenantId role').lean();
+      tenantId = chooseRequestTenantId(tenantId, user);
+      // Admins commonly use the shared application domain. Make explicit route
+      // filters use the authenticated admin's tenant, never that shared domain.
+      if (user?.role === 'admin' && user.tenantId) {
+        req.tenantId = user.tenantId;
+        // Availability for the shared host belongs to that host's tenant, not
+        // to the authenticated admin's tenant (adminAuth validates the latter).
+        delete req.storeUnavailable;
       }
-    } catch (_) {
-      // Auth middleware downstream owns invalid-token responses.
     }
+  } catch (_) {
+    // Auth middleware downstream owns invalid-token responses.
   }
 
   runWithTenant(tenantId, next);
@@ -111,6 +124,7 @@ module.exports = {
   currentTenantId,
   installTenantScope,
   runWithTenant,
+  chooseRequestTenantId,
   tenantContextMiddleware,
   withoutTenantScope,
 };

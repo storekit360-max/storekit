@@ -16,6 +16,7 @@ const { Category } = require('../models/index');
 const { adminAuth } = require('../middleware/auth');
 const { dispatchForTrigger, manualPublish } = require('../services/publisherService');
 const { normalizeProductValue, duplicateKeyError, duplicateKeyLabel } = require('../utils/productDuplicates');
+const { isValidGtin } = require('../utils/productSeo');
 
 // ─── IMAGE URL NORMALIZATION MIDDLEWARE ─────────────────────────────────────
 const { normalizeImageUrl, normalizeImagesMiddleware } = require('../utils/imageUrlHelper');
@@ -43,6 +44,57 @@ function slugify(value = '') {
     .replace(/&/g, ' and ')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '') || 'product';
+}
+
+function normalizeMerchantFields(body = {}) {
+  const next = body;
+  if (Object.prototype.hasOwnProperty.call(next, 'gtin')) {
+    next.gtin = String(next.gtin || '').replace(/\D/g, '');
+    if (next.gtin && !isValidGtin(next.gtin)) {
+      const error = new Error('GTIN must be a valid 8, 12, 13, or 14 digit code with the correct check digit');
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(next, 'mpn')) next.mpn = String(next.mpn || '').trim();
+  if (Object.prototype.hasOwnProperty.call(next, 'googleProductCategory')) next.googleProductCategory = String(next.googleProductCategory || '').trim();
+  if (next.condition && !['new', 'refurbished', 'used'].includes(next.condition)) {
+    const error = new Error('Product condition must be new, refurbished, or used');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (next.identifierExists === false && (next.gtin || next.mpn)) {
+    const error = new Error('Remove the GTIN/MPN before selecting “no manufacturer identifiers”');
+    error.statusCode = 400;
+    throw error;
+  }
+  return next;
+}
+
+function validateActiveProduct(product = {}) {
+  if (product.isActive === false) return;
+  const error = message => {
+    const validationError = new Error(message);
+    validationError.statusCode = 400;
+    throw validationError;
+  };
+  if (!String(product.name || '').trim()) error('Active products require a name');
+  if (!String(product.description || '').replace(/<[^>]*>/g, ' ').trim()) error('Active products require a description for Google');
+  if (!(Number(product.price) > 0)) error('Active products require a price greater than zero');
+  if (!Number.isFinite(Number(product.stock)) || Number(product.stock) < 0) error('Stock must be zero or greater');
+  if (!product.category) error('Active products require a category');
+  const image = String(product.thumbnail || product.images?.[0] || '').trim();
+  if (!image) error('Active products require a product image before they can be shown to Google');
+  if (!/^https:\/\//i.test(image) && !image.startsWith('/')) error('The main product image must use HTTPS or a store-relative URL');
+  if (/\.svg(?:$|[?#])/i.test(image)) error('Use a JPG, PNG, WebP, GIF, BMP, or TIFF product image; Google Merchant does not accept SVG product images');
+  if (!product.gtin && !product.mpn && product.identifierExists !== false) {
+    error('Add a GTIN or MPN, or confirm that this product has no manufacturer identifiers');
+  }
+  if (product.mpn && !String(product.brand || '').trim()) error('Add the manufacturer brand when supplying an MPN');
+  const salePrice = Number(product.salePrice);
+  if (product.isOnSale && (!(salePrice > 0) || salePrice >= Number(product.price))) {
+    error('On Sale products require a sale price greater than zero and lower than the regular price');
+  }
 }
 
 async function makeUniqueProductSlug(nameOrSlug, tenantId, excludeId = null) {
@@ -397,6 +449,11 @@ router.get('/admin/import-template/excel', adminAuth, async (req, res) => {
       { header: 'Sub-Category',      key: 'subCategory',       width: 20 },
       { header: 'Brand',             key: 'brand',            width: 18 },
       { header: 'SKU',               key: 'sku',              width: 18 },
+      { header: 'GTIN / Barcode',    key: 'gtin',             width: 18 },
+      { header: 'MPN',               key: 'mpn',              width: 20 },
+      { header: 'Condition (New/Refurbished/Used)', key: 'condition', width: 22 },
+      { header: 'Google Product Category', key: 'googleProductCategory', width: 32 },
+      { header: 'No Manufacturer Identifiers (Yes/No)', key: 'noIdentifiers', width: 24 },
       { header: 'Price *',           key: 'price',            width: 12 },
       { header: 'Sale Price',        key: 'salePrice',        width: 12 },
       { header: 'Cost Price',        key: 'costPrice',        width: 12 },
@@ -433,6 +490,11 @@ router.get('/admin/import-template/excel', adminAuth, async (req, res) => {
       subCategory: '',
       brand: 'StoreKit Basics',
       sku: 'SZ-TSHIRT-001',
+      gtin: '',
+      mpn: 'TSHIRT-001',
+      condition: 'New',
+      googleProductCategory: 'Apparel & Accessories > Clothing > Shirts & Tops',
+      noIdentifiers: 'No',
       price: 2500,
       salePrice: 1999,
       costPrice: 1200,
@@ -552,6 +614,11 @@ router.post('/admin/import/excel', adminAuth, bulkUpload.single('file'), async (
       subCategory:       findCol('sub-category', 'sub category', 'subcategory'),
       brand:             findCol('brand'),
       sku:               findCol('sku'),
+      gtin:              findCol('gtin', 'barcode'),
+      mpn:               findCol('mpn'),
+      condition:         findCol('condition'),
+      googleProductCategory: findCol('google product category'),
+      noIdentifiers:     findCol('no manufacturer identifiers', 'no identifiers'),
       price:             findCol('price *', 'price'),
       salePrice:         findCol('sale price'),
       costPrice:         findCol('cost price'),
@@ -667,8 +734,11 @@ router.post('/admin/import/excel', adminAuth, bulkUpload.single('file'), async (
         const isFeatured  = featuredRaw === 'yes' || featuredRaw === 'true';
 
         const salePrice = num(row, colMap.salePrice);
+        const conditionRaw = cell(row, colMap.condition).toLowerCase();
+        const condition = ['used', 'refurbished'].includes(conditionRaw) ? conditionRaw : 'new';
+        const noIdentifiersRaw = cell(row, colMap.noIdentifiers).toLowerCase();
 
-        const productData = {
+        const productData = normalizeMerchantFields({
           tenantId,
           name,
           description,
@@ -677,6 +747,11 @@ router.post('/admin/import/excel', adminAuth, bulkUpload.single('file'), async (
           subCategory: subCatName || undefined,
           brand:       cell(row, colMap.brand) || undefined,
           sku:         cell(row, colMap.sku) || undefined,
+          gtin:        cell(row, colMap.gtin) || '',
+          mpn:         cell(row, colMap.mpn) || '',
+          condition,
+          googleProductCategory: cell(row, colMap.googleProductCategory) || '',
+          identifierExists: ['yes', 'true'].includes(noIdentifiersRaw) ? false : undefined,
           price:       priceVal,
           salePrice:   salePrice,
           costPrice:   num(row, colMap.costPrice),
@@ -693,7 +768,8 @@ router.post('/admin/import/excel', adminAuth, bulkUpload.single('file'), async (
           normalizedName: normalizeProductValue(name),
           normalizedSku: normalizeProductValue(cell(row, colMap.sku)),
           duplicateIndexEligible: true,
-        };
+        });
+        validateActiveProduct(productData);
 
         const duplicate = await findProductDuplicate(tenantId, productData.name, productData.sku);
         if (duplicate) {
@@ -886,7 +962,8 @@ router.post('/', adminAuth, async (req, res) => {
     const tenantId = requireTenantForAdmin(req, res);
     if (!tenantId) return;
     await assertProductLimit(tenantId);
-    const body = { ...req.body, tenantId };
+    const body = normalizeMerchantFields({ ...req.body, tenantId });
+    validateActiveProduct(body);
     const duplicate = await findProductDuplicate(tenantId, body.name, body.sku);
     if (duplicate) return duplicateConflict(res, duplicate, body.name, body.sku);
     body.normalizedName = normalizeProductValue(body.name);
@@ -918,10 +995,11 @@ router.put('/:id', adminAuth, async (req, res) => {
     if (!tenantId) return;
     before  = await Product.findOne({ _id: req.params.id, tenantId }).lean();
     if (!before) return res.status(404).json({ message: 'Product not found' });
-    const body = { ...req.body };
+    const body = normalizeMerchantFields({ ...req.body });
     delete body.tenantId;
     const nextName = body.name === undefined ? before.name : body.name;
     const nextSku = body.sku === undefined ? before.sku : body.sku;
+    validateActiveProduct({ ...before, ...body, tenantId });
     const identityChanged = normalizeProductValue(nextName) !== normalizeProductValue(before.name)
       || normalizeProductValue(nextSku) !== normalizeProductValue(before.sku);
     if (identityChanged) {
@@ -945,7 +1023,7 @@ router.put('/:id', adminAuth, async (req, res) => {
     res.json(product);
   } catch (err) {
     if (duplicateKeyError(err)) return res.status(409).json({ message: `Duplicate product ${duplicateKeyLabel(err)} in this store`, code: 'DUPLICATE_PRODUCT' });
-    return res.status(500).json({ message: err.message });
+    return res.status(err.statusCode || 500).json({ message: err.message });
   }
 
   // Fire discount trigger when salePrice is newly set or changed
@@ -972,6 +1050,13 @@ router.patch('/admin/:id/quick-flags', adminAuth, async (req, res) => {
     if (typeof req.body.isFeatured === 'boolean') allowed.isFeatured = req.body.isFeatured;
     if (typeof req.body.isOnSale === 'boolean') allowed.isOnSale = req.body.isOnSale;
     if (!Object.keys(allowed).length) return res.status(400).json({ message: 'Provide isFeatured or isOnSale as a boolean' });
+    if (allowed.isOnSale === true) {
+      const current = await Product.findOne({ _id: req.params.id, tenantId }).select('price salePrice').lean();
+      if (!current) return res.status(404).json({ message: 'Product not found in this store' });
+      if (!(Number(current.salePrice) > 0) || Number(current.salePrice) >= Number(current.price)) {
+        return res.status(400).json({ message: 'Add a sale price lower than the regular price before enabling On Sale' });
+      }
+    }
     const product = await Product.findOneAndUpdate(
       { _id: req.params.id, tenantId },
       { $set: { ...allowed, updatedAt: new Date() } },

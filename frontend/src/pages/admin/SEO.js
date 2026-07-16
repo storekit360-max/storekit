@@ -50,6 +50,7 @@ export default function AdminSEO() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [generatingSitemap, setGeneratingSitemap] = useState(false);
+  const [productAudit, setProductAudit] = useState(null);
 
   useEffect(() => {
     API.get('/settings', { cacheTTL: 5 * 60 * 1000 }).then(r => {
@@ -67,7 +68,7 @@ export default function AdminSEO() {
 
   useEffect(() => {
     const base = settings.siteUrl || window.location.origin;
-    const fallback = `User-agent: *\nAllow: /\nDisallow: /admin/\nDisallow: /superadmin/\nDisallow: /api/\nDisallow: /checkout\nDisallow: /cart\nDisallow: /account\nDisallow: /my-orders\nDisallow: /returns\n\nSitemap: ${base}/sitemap.xml`;
+    const fallback = `User-agent: Googlebot\nAllow: /\n\nUser-agent: Googlebot-Image\nAllow: /\n\nUser-agent: StoreBot-Google\nAllow: /\n\nUser-agent: *\nAllow: /\nDisallow: /admin/\nDisallow: /superadmin/\nDisallow: /api/\nDisallow: /checkout\nDisallow: /cart\nDisallow: /account\nDisallow: /my-orders\nDisallow: /returns\n\nSitemap: ${base}/sitemap.xml`;
     setRobotsTxt(settings.robotsTxt || fallback);
   }, [settings.siteUrl, settings.robotsTxt]);
 
@@ -111,7 +112,7 @@ export default function AdminSEO() {
       window.__STOREKIT_SEO__ = seo_config;
       window.dispatchEvent(new CustomEvent('storekit:seo-ready'));
       toast.success('SEO settings saved!');
-    } catch { toast.error('Failed to save'); }
+    } catch (error) { toast.error(error?.response?.data?.message || 'Failed to save'); }
     finally { setSaving(false); }
   };
 
@@ -119,27 +120,31 @@ export default function AdminSEO() {
   const runVitalsCheck = async () => {
     setCheckingVitals(true);
     setVitals(null);
-    // Simulate checking various performance metrics
-    await new Promise(r => setTimeout(r, 2200));
-    const hasAnalytics = !!settings.googleAnalytics;
-    const hasMeta      = !!settings.metaTitle && !!settings.metaDescription;
-    const hasSearch    = !!settings.googleSearchConsole;
-
-    setVitals({
-      lcp:  { score: 82, value: '2.1s',  label: 'Largest Contentful Paint', pass: true,  tip: 'Good! Keep images optimized.' },
-      fid:  { score: 95, value: '45ms',  label: 'First Input Delay',        pass: true,  tip: 'Excellent interactivity.' },
-      cls:  { score: 78, value: '0.08',  label: 'Cumulative Layout Shift',  pass: true,  tip: 'Good stability. Reserve space for images.' },
-      fcp:  { score: 88, value: '1.4s',  label: 'First Contentful Paint',   pass: true,  tip: 'Fast initial render.' },
-      ttfb: { score: 72, value: '380ms', label: 'Time to First Byte',       pass: true,  tip: 'Consider server-side caching.' },
-      mobile: { score: 91, pass: true,  tip: 'Mobile-first design detected.' },
-      https:  { score: 100, pass: true, tip: 'Secure connection.' },
-      meta:   { score: hasMeta ? 100 : 40, pass: hasMeta, tip: hasMeta ? 'Meta tags configured.' : 'Add meta title & description in SEO settings.' },
-      analytics: { score: hasAnalytics ? 100 : 0, pass: hasAnalytics, tip: hasAnalytics ? 'Google Analytics connected.' : 'Add GA4 Measurement ID to track visitors.' },
-      searchConsole: { score: hasSearch ? 100 : 0, pass: hasSearch, tip: hasSearch ? 'Search Console connected.' : 'Add Google Search Console verification code.' },
-      structured: { score: 70, pass: true, tip: 'Products have names, prices, images — good for rich snippets.' },
-      sitemap: { score: sitemapXml ? 100 : 50, pass: !!sitemapXml, tip: sitemapXml ? 'Sitemap generated.' : 'Generate and submit sitemap below.' },
-    });
-    setCheckingVitals(false);
+    try {
+      const { data } = await API.get('/seo/admin/product-audit', { skipCache: true });
+      setProductAudit(data);
+      const checks = Object.fromEntries((data.storeChecks || []).map(check => [check.key, check]));
+      const eligiblePct = data.summary.active ? Math.round((data.summary.eligible / data.summary.active) * 100) : 0;
+      setVitals({
+        lcp:  { code:'PRODUCTS', score: data.summary.score, value: `${data.summary.eligible}/${data.summary.active}`, label: 'Google-ready active products', pass: data.summary.eligible === data.summary.active && data.summary.active > 0, tip: `${data.summary.errorCount} errors · ${data.summary.warningCount} warnings` },
+        fid:  { code:'DOMAIN', score: checks.domain?.ok ? 100 : 0, value: checks.domain?.ok ? 'Ready' : 'Missing', label: 'Canonical store domain', pass: !!checks.domain?.ok, tip: checks.domain?.message || '' },
+        cls:  { code:'META', score: checks.description?.ok ? 100 : 30, value: checks.description?.ok ? 'Ready' : 'Missing', label: 'Store search description', pass: !!checks.description?.ok, tip: checks.description?.message || '' },
+        fcp:  { code:'FEED', score: eligiblePct, value: `${eligiblePct}%`, label: 'Merchant feed eligibility', pass: eligiblePct === 100, tip: data.urls?.merchantFeed || 'Configure an active domain' },
+        ttfb: { code:'RETURNS', score: checks.returns?.ok ? 100 : 50, value: checks.returns?.ok ? 'Ready' : 'Optional', label: 'Merchant return policy', pass: !!checks.returns?.ok, tip: checks.returns?.message || '' },
+        mobile: { score: 100, pass: true, tip: 'Responsive storefront and crawlable links are enabled.' },
+        https:  { score: checks.domain?.ok ? 100 : 0, pass: !!checks.domain?.ok, tip: checks.domain?.message || '' },
+        meta:   { score: checks.description?.ok ? 100 : 40, pass: !!checks.description?.ok, tip: checks.description?.message || '' },
+        analytics: { score: settings.googleAnalytics || settings.googleTagManager ? 100 : 0, pass: !!(settings.googleAnalytics || settings.googleTagManager), tip: settings.googleAnalytics || settings.googleTagManager ? 'Analytics configured.' : 'Add GA4 or GTM to measure Google sales.' },
+        searchConsole: { score: checks.searchConsole?.ok ? 100 : 0, pass: !!checks.searchConsole?.ok, tip: checks.searchConsole?.message || '' },
+        structured: { score: data.summary.score, pass: data.summary.errorCount === 0, tip: `${data.summary.eligible} active products pass required structured-data checks.` },
+        sitemap: { score: data.urls?.sitemap ? 100 : 0, pass: !!data.urls?.sitemap, tip: data.urls?.sitemap || 'Add an active domain.' },
+        robots: { score: checks.robots?.ok ? 100 : 0, pass: !!checks.robots?.ok, tip: checks.robots?.message || '' },
+      });
+    } catch (error) {
+      toast.error(error?.response?.data?.message || 'SEO analysis failed');
+    } finally {
+      setCheckingVitals(false);
+    }
   };
 
   // ── Sitemap Generator ────────────────────────────────────────────────────────
@@ -234,7 +239,7 @@ ${urls.map(u => `  <url>
             <>
               {/* Core Web Vitals */}
               <div className="bg-white rounded-2xl border border-gray-100 p-6">
-                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">⚡ Core Web Vitals</h3>
+                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">🔎 Live Google Product Checks</h3>
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {['lcp','fid','cls','fcp','ttfb'].map(key => {
                     const v = vitals[key];
@@ -243,7 +248,7 @@ ${urls.map(u => `  <url>
                       <div key={key} className="border border-gray-100 rounded-xl p-4">
                         <div className="flex items-start justify-between mb-2">
                           <div>
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{key.toUpperCase()}</p>
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{v.code || key.toUpperCase()}</p>
                             <p className="text-sm font-semibold text-gray-700 mt-0.5">{v.label}</p>
                           </div>
                           <ScoreBadge score={v.score}/>
@@ -259,6 +264,24 @@ ${urls.map(u => `  <url>
                 </div>
               </div>
 
+              {productAudit?.products?.length > 0 && (
+                <div className="bg-white rounded-2xl border border-gray-100 p-6">
+                  <div className="flex items-center justify-between gap-3 mb-4">
+                    <div><h3 className="font-bold text-gray-900">Products needing SEO attention</h3><p className="text-xs text-gray-400">Fix errors first; warnings improve Merchant Center quality.</p></div>
+                    <a href="/admin/products" className="text-xs font-bold text-blue-600">Open Products →</a>
+                  </div>
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {productAudit.products.map(row => (
+                      <div key={row.id} className="rounded-xl border border-gray-100 p-3">
+                        <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold text-gray-800 truncate">{row.name}</p><ScoreBadge score={row.score}/></div>
+                        {row.errors.map(error => <p key={error} className="text-xs text-red-600 mt-1">● {error}</p>)}
+                        {row.warnings.map(warning => <p key={warning} className="text-xs text-amber-600 mt-1">● {warning}</p>)}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Checklist */}
               <div className="bg-white rounded-2xl border border-gray-100 p-6">
                 <h3 className="font-bold text-gray-900 mb-4">SEO Checklist</h3>
@@ -271,6 +294,7 @@ ${urls.map(u => `  <url>
                     { key: 'searchConsole', icon: '🔍', label: 'Search Console' },
                     { key: 'structured', icon: '📋', label: 'Structured Data' },
                     { key: 'sitemap',    icon: '🗺️', label: 'Sitemap.xml' },
+                    { key: 'robots',     icon: '🤖', label: 'Crawler Access' },
                   ].map(item => {
                     const v = vitals[item.key];
                     return (
@@ -283,7 +307,7 @@ ${urls.map(u => `  <url>
                           </div>
                           <p className="text-xs mt-0.5 text-gray-500">{v.tip}</p>
                           {!v.pass && (
-                            <button onClick={() => setTab(item.key === 'analytics' || item.key === 'searchConsole' ? 'tools' : item.key === 'sitemap' ? 'files' : 'technical')}
+                            <button onClick={() => setTab(item.key === 'analytics' || item.key === 'searchConsole' ? 'tools' : item.key === 'sitemap' || item.key === 'robots' ? 'files' : 'technical')}
                               className="text-xs font-semibold mt-1" style={{ color: 'var(--color-primary)' }}>
                               Fix this →
                             </button>
@@ -355,6 +379,19 @@ ${urls.map(u => `  <url>
             <div className="grid sm:grid-cols-2 gap-4">
               <Field label="Site URL (Production)" value={settings.siteUrl} onChange={e => setSettings(p => ({ ...p, siteUrl: e.target.value }))} placeholder="https://yourstore.com" hint="Used for sitemap and canonical URLs"/>
               <Field label="Language" value={settings.siteLanguage || 'en'} onChange={e => setSettings(p => ({ ...p, siteLanguage: e.target.value }))} placeholder="en" hint="ISO language code"/>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-100 p-6">
+            <h3 className="font-bold text-gray-900 mb-1 flex items-center gap-2">🛍️ Google Merchant Information</h3>
+            <p className="text-sm text-gray-400 mb-4">Used in Product structured data for shipping and return information. Values must match checkout and store policy pages.</p>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <Field label="Country Code" value={settings.merchantCountryCode || 'LK'} onChange={e=>setSettings(p=>({...p,merchantCountryCode:e.target.value.toUpperCase().slice(0,2)}))} placeholder="LK" hint="ISO two-letter country code"/>
+              <Field label="Shipping Cost" type="number" value={settings.merchantShippingCost ?? settings.standardDelivery ?? 0} onChange={e=>setSettings(p=>({...p,merchantShippingCost:Number(e.target.value)}))} placeholder="0"/>
+              <Field label="Return Window (days)" type="number" value={settings.merchantReturnDays || ''} onChange={e=>setSettings(p=>({...p,merchantReturnDays:Number(e.target.value)}))} placeholder="7" hint="Leave 0 only when no standard return window exists"/>
+              <Field label="Minimum Delivery Days" type="number" value={settings.merchantShippingMinDays ?? 1} onChange={e=>setSettings(p=>({...p,merchantShippingMinDays:Number(e.target.value)}))} placeholder="1"/>
+              <Field label="Maximum Delivery Days" type="number" value={settings.merchantShippingMaxDays ?? 5} onChange={e=>setSettings(p=>({...p,merchantShippingMaxDays:Number(e.target.value)}))} placeholder="5"/>
+              <label className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 mt-5"><input type="checkbox" checked={settings.merchantFreeReturns===true} onChange={e=>setSettings(p=>({...p,merchantFreeReturns:e.target.checked}))}/><span className="text-sm font-semibold text-gray-700">Free returns</span></label>
             </div>
           </div>
 
@@ -734,7 +771,8 @@ ${urls.map(u => `  <url>
                 </code>
                 <CopyBtn text={`${settings.siteUrl || 'https://yourstore.com'}/sitemap.xml`}/>
               </div>
-              <p className="text-xs text-green-600 mt-2">It auto-updates whenever products or categories change. Cached for 1 hour.</p>
+              <p className="text-xs text-green-600 mt-2">It is generated live from this tenant’s active products and categories.</p>
+              {productAudit?.urls?.merchantFeed && <p className="text-xs text-green-700 mt-2 break-all"><strong>Merchant Center feed:</strong> {productAudit.urls.merchantFeed}</p>}
             </div>
             {sitemapXml ? (
               <>

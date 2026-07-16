@@ -40,6 +40,22 @@ function normalizeTheme(theme = {}) {
   return t;
 }
 
+function validateMerchantSeoSettings(settings = {}) {
+  const country = String(settings.merchantCountryCode || 'LK').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(country)) throw Object.assign(new Error('Merchant country code must be a two-letter ISO code such as LK'), { statusCode: 400 });
+  settings.merchantCountryCode = country;
+  const numericKeys = ['merchantShippingCost', 'merchantShippingMinDays', 'merchantShippingMaxDays', 'merchantReturnDays'];
+  numericKeys.forEach(key => {
+    if (settings[key] === '' || settings[key] === undefined || settings[key] === null) return;
+    const value = Number(settings[key]);
+    if (!Number.isFinite(value) || value < 0) throw Object.assign(new Error(`${key} must be zero or greater`), { statusCode: 400 });
+    settings[key] = value;
+  });
+  if (Number(settings.merchantShippingMaxDays) < Number(settings.merchantShippingMinDays)) {
+    throw Object.assign(new Error('Maximum delivery days cannot be lower than minimum delivery days'), { statusCode: 400 });
+  }
+}
+
 function isLocalDomain(domain) {
   return ['localhost', '127.0.0.1'].includes(normalizeDomain(domain));
 }
@@ -238,6 +254,8 @@ router.put('/', adminAuth, async (req, res) => {
         }
       }
 
+      validateMerchantSeoSettings(nextSettings);
+
       tenant.settings = nextSettings;
       tenant.theme = normalizeTheme(nextTheme);
       await tenant.save();
@@ -259,7 +277,7 @@ router.put('/', adminAuth, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('Settings save error:', err);
-    res.status(500).json({ message: err.message || 'Failed to save settings' });
+    res.status(err.statusCode || 500).json({ message: err.message || 'Failed to save settings' });
   }
 });
 
