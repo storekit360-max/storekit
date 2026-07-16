@@ -475,7 +475,7 @@ export default function ProductDetail() {
       </nav>
 
       <div className="mb-6">
-        <PositionBanner position="product_page" productSlug={product.slug} />
+        <PositionBanner position="product_page" productSlug={product.slug} compact />
       </div>
 
       <div ref={heroRef} className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-14">

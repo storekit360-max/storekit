@@ -831,6 +831,7 @@ const Footer = ({ settings }) => {
   const dark  = settings?.darkBgColor || '#0f172a';
   const storeName = settings?.storeName || 'StoreKit';
   const contactPhone = settings?.storePhone || settings?.phone || settings?.contactNumber || '';
+  const contactEmail = settings?.storeEmail || settings?.contactEmail || settings?.email || '';
   const telephoneHref = String(contactPhone).replace(/[^+\d]/g, '');
   const [footerPages, setFooterPages] = React.useState([]);
   const [socialAccounts, setSocialAccounts] = React.useState([]);
@@ -909,7 +910,8 @@ const Footer = ({ settings }) => {
             <div className="space-y-2">
               {settings?.storeAddress && <p className="text-sm">📍 {settings.storeAddress}</p>}
               {contactPhone && <a href={`tel:${telephoneHref}`} className="block text-sm hover:text-white transition-colors">📞 {contactPhone}</a>}
-              {settings?.storeEmail   && <a href={`mailto:${settings.storeEmail}`} className="block text-sm hover:text-white transition-colors">✉️ {settings.storeEmail}</a>}
+              {contactEmail && <a href={`mailto:${contactEmail}`} className="block text-sm hover:text-white transition-colors break-all">✉️ {contactEmail}</a>}
+              {!settings?.storeAddress && !contactPhone && !contactEmail && <p className="text-sm" style={{color:'#64748b'}}>Contact details can be added in Store Settings.</p>}
             </div>
           </div>
         </div>
@@ -994,9 +996,8 @@ export default function CustomerLayout() {
       {campaign?.theme?.confettiEffect && <ConfettiEffect/>}
       <RunningBanner />
       <FlashSaleBanner />
-      {!campaign?.isFlashSale && <PositionBanner position="flash_sale" compact />}
       <Header settings={settings} campaign={campaign}/>
-      <PositionBanner position="global" compact />
+      <PositionBanner positions={campaign?.isFlashSale ? ['global'] : ['flash_sale', 'global']} compact />
       <CartDrawer settings={settings}/>
       <main className="flex-1 has-mobile-nav" style={{minWidth:0, overflowX:'hidden'}}><Outlet/></main>
       <Footer settings={settings}/>

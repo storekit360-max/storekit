@@ -80,7 +80,7 @@ const emptyPlan = {
 const emptyTenant = {
   storeName: '', slug: '', domain: '', plan: '', adminEmail: '', adminPassword: 'Admin@123456',
   adminFirstName: 'Store', adminLastName: 'Admin',
-  settings: { currency: 'LKR', country: 'Sri Lanka', timezone: 'Asia/Colombo', whatsapp: '', phone: '', storeEmail: '', metaTitle: '', metaDescription: '' },
+  settings: { currency: 'LKR', country: 'Sri Lanka', timezone: 'Asia/Colombo', whatsapp: '', storePhone: '', phone: '', storeEmail: '', metaTitle: '', metaDescription: '' },
   theme: { primaryColor: '#6366f1', accentColor: '#22d3ee', darkColor: '#0f172a', fontFamily: 'Inter' },
   onboarding: {
     initializeStore: true,
@@ -565,6 +565,8 @@ export default function SuperAdminDashboard() {
                   </label>
                   <Input label="Admin Email" value={tenantForm.adminEmail} onChange={v => updateTenant('adminEmail', v)} required />
                   <Input label="Admin Password" type="password" value={tenantForm.adminPassword} onChange={v => updateTenant('adminPassword', v)} required />
+                  <Input label="Public Store Email" type="email" placeholder="support@store.com" value={tenantForm.settings.storeEmail} onChange={v => updateTenant('settings.storeEmail', v)} />
+                  <Input label="Public Contact Number" placeholder="+94 77 123 4567" value={tenantForm.settings.storePhone} onChange={v => updateTenant('settings.storePhone', v)} />
                   <Input label="WhatsApp" value={tenantForm.settings.whatsapp} onChange={v => updateTenant('settings.whatsapp', v)} />
                   <Input label="Primary Color" type="color" value={tenantForm.theme.primaryColor} onChange={v => updateTenant('theme.primaryColor', v)} />
 

@@ -343,7 +343,7 @@ export default function CategoryPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-6">
-        <PositionBanner position="category_page" categorySlug={slug} />
+        <PositionBanner position="category_page" categorySlug={slug} compact />
       </div>
 
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6">

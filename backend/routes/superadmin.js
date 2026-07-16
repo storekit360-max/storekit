@@ -412,9 +412,14 @@ router.post('/tenants', async (req, res, next) => {
       return res.status(400).json({ message: 'Enter a valid WhatsApp number including the country code' });
     }
     const configuredWhatsapp = normalizedWhatsapp ? `+${normalizedWhatsapp}` : '';
+    const configuredPhone = String(settings?.storePhone || settings?.phone || '').trim();
+    const configuredStoreEmail = String(settings?.storeEmail || adminEmail || '').trim().toLowerCase();
     const tenantSettings = {
       ...(starterKit?.settings || {}),
       ...(settings || {}),
+      storeEmail: configuredStoreEmail,
+      storePhone: configuredPhone,
+      phone: configuredPhone,
       whatsapp: configuredWhatsapp,
       whatsappNumber: configuredWhatsapp,
       ...(primaryDomain && !(settings || {}).siteUrl ? { siteUrl: `https://${primaryDomain}` } : {}),

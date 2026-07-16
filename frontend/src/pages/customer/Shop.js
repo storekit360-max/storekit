@@ -192,7 +192,7 @@ export default function Shop() {
       </div>
 
       <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-4 sm:pt-6">
-        <PositionBanner position="category_page" categorySlug={currentCat?.slug || routeCategory || ''} />
+        <PositionBanner position="category_page" categorySlug={currentCat?.slug || routeCategory || ''} compact />
       </div>
 
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
