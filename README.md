@@ -431,6 +431,21 @@ images, saves photographer/source attribution on each sample product, and adds
 a Pexels attribution link to the storefront. If the provider is unavailable,
 creation continues with the bundled product placeholder and reports a warning.
 
+### Permanently delete a tenant
+
+Only a signed-in Super Admin can permanently delete a tenant. In **Super Admin
+→ Tenants → Administrative Table**, select **Delete Tenant**. StoreKit first
+shows the verified number of products, orders, users, settings, marketing data,
+billing records, and integrations owned by that tenant. To unlock the final
+button, type the exact tenant-specific phrase shown in the dialog, for example
+`DELETE example-store`.
+
+Deletion suspends the storefront, rejects concurrent deletion attempts, clears
+the tenant's Curfox token cache, removes only records scoped by that tenant ID,
+and deletes the Tenant document last. Global plans, platform backup settings,
+subscription coupons, and Super Admin accounts are preserved. This action is
+irreversible; take any required business or compliance export before confirming.
+
 ### Connect the domain to Vercel
 
 1. Add the domain in Vercel Project Settings → Domains.

@@ -158,6 +158,7 @@ export default function SuperAdminDashboard() {
   const [starterKitPreview, setStarterKitPreview] = useState(null);
   const [starterKitWarnings, setStarterKitWarnings] = useState([]);
   const [lastCreatedStore, setLastCreatedStore] = useState(null);
+  const [tenantDeletion, setTenantDeletion] = useState(null);
 
   const selectedTenant = useMemo(() => tenants.find(t => t._id === selectedTenantId), [tenants, selectedTenantId]);
 
@@ -348,8 +349,46 @@ export default function SuperAdminDashboard() {
     } catch (err) { notify('error', err.response?.data?.message || err.message || 'Could not reset password'); }
   }
 
+  async function openTenantDeletion(tenant) {
+    setTenantDeletion({ tenant, preview: null, confirmationText: '', loading: true, deleting: false });
+    try {
+      const { data } = await API.get(`/superadmin/tenants/${tenant._id}/deletion-preview`);
+      setTenantDeletion(current => current?.tenant?._id === tenant._id
+        ? { ...current, preview: data, loading: false }
+        : current);
+    } catch (err) {
+      setTenantDeletion(null);
+      notify('error', err.response?.data?.message || err.message || 'Could not verify tenant deletion');
+    }
+  }
+
+  async function permanentlyDeleteTenant() {
+    if (!tenantDeletion?.tenant?._id || !tenantDeletion?.preview) return;
+    setTenantDeletion(current => ({ ...current, deleting: true }));
+    try {
+      const { data } = await API.delete(`/superadmin/tenants/${tenantDeletion.tenant._id}`, {
+        data: { confirmationText: tenantDeletion.confirmationText },
+      });
+      if (selectedTenantId === tenantDeletion.tenant._id) setSelectedTenantId('');
+      setTenantDeletion(null);
+      notify('success', `${data.message}. ${data.total || 0} tenant-owned records removed.`);
+      await loadAll();
+    } catch (err) {
+      setTenantDeletion(current => current ? { ...current, deleting: false } : current);
+      notify('error', err.response?.data?.message || err.message || 'Could not delete tenant');
+    }
+  }
+
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden">
+      {tenantDeletion && (
+        <TenantDeletionDialog
+          state={tenantDeletion}
+          onConfirmationChange={confirmationText => setTenantDeletion(current => ({ ...current, confirmationText }))}
+          onClose={() => { if (!tenantDeletion.deleting) setTenantDeletion(null); }}
+          onDelete={permanentlyDeleteTenant}
+        />
+      )}
       {/* ── Mobile overlay ── */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/40 z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />
@@ -629,7 +668,7 @@ export default function SuperAdminDashboard() {
                 <TenantMonitorGrid rows={monitoring?.tenants || []} onUpdate={updateTenantRecord} onResetPassword={resetAdminPassword} />
                 <div className="mt-6 pt-6 border-t border-slate-100">
                   <h3 className="text-sm font-bold text-slate-800 mb-3">Administrative Table</h3>
-                  <TenantTable tenants={tenants} plans={plans} onUpdate={updateTenantRecord} onResetPassword={resetAdminPassword} getStorefrontUrl={tenantStorefrontUrl} />
+                  <TenantTable tenants={tenants} plans={plans} onUpdate={updateTenantRecord} onResetPassword={resetAdminPassword} onDelete={openTenantDeletion} getStorefrontUrl={tenantStorefrontUrl} />
                 </div>
                 {tenants.length === 0 && <p className="text-sm text-slate-400 py-6 text-center">No tenants yet.</p>}
               </div>
@@ -1223,7 +1262,83 @@ function PlanCard({ plan, onSave }) {
   );
 }
 
-function TenantTable({ tenants, plans, onUpdate, onResetPassword, getStorefrontUrl }) {
+function TenantDeletionDialog({ state, onConfirmationChange, onClose, onDelete }) {
+  const expected = state.preview?.confirmationText || `DELETE ${state.tenant?.slug || ''}`;
+  const counts = state.preview?.counts || {};
+  const verified = state.confirmationText.trim() === expected;
+  const importantCounts = [
+    ['Products', counts.products],
+    ['Orders', counts.orders],
+    ['Users', counts.users],
+    ['Categories', counts.categories],
+    ['Payments', (counts.tenantPayments || 0) + (counts.subscriptionPayments || 0)],
+    ['Marketing events', counts.behaviorEvents],
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm p-4 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="delete-tenant-title">
+      <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl border border-red-200 overflow-hidden">
+        <div className="px-6 py-5 bg-red-50 border-b border-red-200">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-red-100 text-red-700 flex items-center justify-center flex-shrink-0 font-black">!</div>
+            <div>
+              <h2 id="delete-tenant-title" className="text-lg font-extrabold text-red-900">Permanently delete tenant</h2>
+              <p className="mt-1 text-sm text-red-700">This action cannot be undone and will remove the storefront, customer accounts, orders, products, settings and integrations belonging to this tenant.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <p className="font-bold text-slate-900">{state.tenant?.storeName}</p>
+            <p className="text-xs text-slate-500 mt-0.5">Tenant slug: {state.tenant?.slug}</p>
+          </div>
+
+          {state.loading ? (
+            <p className="py-8 text-center text-sm text-slate-500">Verifying tenant-owned data…</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4">
+                {importantCounts.map(([label, value]) => (
+                  <div key={label} className="rounded-lg border border-slate-200 px-3 py-2">
+                    <p className="text-[11px] font-semibold text-slate-500">{label}</p>
+                    <p className="text-lg font-extrabold text-slate-900">{value || 0}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 text-xs text-slate-500">Verified scope: {state.preview?.total || 0} tenant-owned database records. Global plans, platform settings and Super Admin accounts are not included.</p>
+
+              <label className="grid gap-2 mt-5 text-sm font-semibold text-slate-700">
+                Type <code className="rounded bg-red-50 px-1.5 py-0.5 text-red-700 select-all">{expected}</code> to verify
+                <input
+                  autoFocus
+                  value={state.confirmationText}
+                  onChange={event => onConfirmationChange(event.target.value)}
+                  disabled={state.deleting}
+                  autoComplete="off"
+                  spellCheck="false"
+                  className="h-11 rounded-lg border border-slate-300 px-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500 disabled:bg-slate-100"
+                  placeholder={expected}
+                />
+              </label>
+            </>
+          )}
+
+          <div className="mt-6 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+            <button type="button" onClick={onClose} disabled={state.deleting} className="h-10 px-4 rounded-lg border border-slate-300 text-slate-700 text-sm font-bold hover:bg-slate-50 disabled:opacity-50">
+              Cancel
+            </button>
+            <button type="button" onClick={onDelete} disabled={state.loading || state.deleting || !verified} className="h-10 px-4 rounded-lg bg-red-600 text-white text-sm font-bold hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed">
+              {state.deleting ? 'Deleting tenant data…' : 'Verify & Permanently Delete'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TenantTable({ tenants, plans, onUpdate, onResetPassword, onDelete, getStorefrontUrl }) {
   if (!tenants || tenants.length === 0) return null;
   return (
     <div className="overflow-x-auto">
@@ -1278,6 +1393,9 @@ function TenantTable({ tenants, plans, onUpdate, onResetPassword, getStorefrontU
                       Open Store
                     </a>
                   ) : null}
+                  <button onClick={() => onDelete(t)} className="h-8 px-2.5 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 text-xs font-semibold whitespace-nowrap">
+                    Delete Tenant
+                  </button>
                 </div>
               </td>
             </tr>

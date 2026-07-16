@@ -8,10 +8,15 @@ const User = require('../models/User');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const TenantPayment = require('../models/TenantPayment');
-const { Category, Banner, Settings, PaymentGateway, DeliveryService, BusinessPage } = require('../models/index');
 const { auth } = require('../middleware/auth');
 const { normalizeDomain } = require('../middleware/tenant');
 const subscriptionService = require('../services/subscriptionService');
+const {
+  deleteTenantData,
+  expectedDeletionConfirmation,
+  getTenantDataCounts,
+  validateTenantDeletionConfirmation,
+} = require('../services/tenantDeletionService');
 const { bootstrapTenantStore } = require('../utils/tenantBootstrap');
 const { generateStarterKit, normalizeStarterKit, sanitizeBrief } = require('../services/tenantStarterKit');
 
@@ -57,17 +62,12 @@ router.post('/tenant-starter-kit/preview', async (req, res, next) => {
 
 async function cleanupFailedTenantCreation(tenantId) {
   if (!tenantId) return;
-  await Promise.allSettled([
-    Product.deleteMany({ tenantId }),
-    Category.deleteMany({ tenantId }),
-    Banner.deleteMany({ tenantId }),
-    Settings.deleteMany({ tenantId }),
-    PaymentGateway.deleteMany({ tenantId }),
-    DeliveryService.deleteMany({ tenantId }),
-    BusinessPage.deleteMany({ tenantId }),
-    User.deleteMany({ tenantId }),
-  ]);
-  await Tenant.deleteOne({ _id: tenantId }).catch(() => {});
+  try {
+    await deleteTenantData(tenantId);
+    await Tenant.deleteOne({ _id: tenantId });
+  } catch (error) {
+    console.error('[TENANT_CREATE_CLEANUP_FAILED]', { tenantId: String(tenantId), error: error.message });
+  }
 }
 
 router.get('/stats', async (_req, res, next) => {
@@ -281,6 +281,88 @@ router.get('/tenants', async (_req, res, next) => {
   } catch (err) { next(err); }
 });
 
+router.get('/tenants/:id/deletion-preview', async (req, res, next) => {
+  try {
+    const tenant = await Tenant.findById(req.params.id).select('storeName slug status deletion').lean();
+    if (!tenant) return res.status(404).json({ message: 'Tenant not found' });
+    if (tenant.deletion?.state === 'deleting') {
+      return res.status(409).json({ message: 'Tenant deletion is already in progress' });
+    }
+    const data = await getTenantDataCounts(tenant._id);
+    res.json({
+      tenant: { _id: tenant._id, storeName: tenant.storeName, slug: tenant.slug, status: tenant.status },
+      ...data,
+      confirmationText: expectedDeletionConfirmation(tenant.slug),
+    });
+  } catch (err) { next(err); }
+});
+
+router.delete('/tenants/:id', async (req, res, next) => {
+  let claimedTenant = null;
+  try {
+    const tenant = await Tenant.findById(req.params.id).select('storeName slug status deletion');
+    if (!tenant) return res.status(404).json({ message: 'Tenant not found' });
+    validateTenantDeletionConfirmation(tenant, req.body?.confirmationText);
+
+    const staleBefore = new Date(Date.now() - 30 * 60 * 1000);
+    claimedTenant = await Tenant.findOneAndUpdate(
+      {
+        _id: tenant._id,
+        $or: [
+          { 'deletion.state': { $ne: 'deleting' } },
+          { 'deletion.requestedAt': { $lt: staleBefore } },
+        ],
+      },
+      {
+        $set: {
+          status: 'suspended',
+          'deletion.state': 'deleting',
+          'deletion.requestedAt': new Date(),
+          'deletion.requestedBy': req.user._id,
+        },
+      },
+      { new: true, runValidators: true }
+    );
+    if (!claimedTenant) return res.status(409).json({ message: 'Tenant deletion is already in progress' });
+
+    const result = await deleteTenantData(tenant._id);
+    // A final sweep catches any request that was already in flight immediately
+    // before the tenant was suspended and the deletion lock was acquired.
+    const finalSweep = await deleteTenantData(tenant._id);
+    const tenantResult = await Tenant.deleteOne({ _id: tenant._id, 'deletion.state': 'deleting' });
+    if (tenantResult.deletedCount !== 1) throw new Error('Tenant record could not be finalized after data cleanup');
+
+    const deleted = { ...result.deleted };
+    for (const [key, value] of Object.entries(finalSweep.deleted)) deleted[key] = (deleted[key] || 0) + value;
+    const total = Object.values(deleted).reduce((sum, value) => sum + Number(value || 0), 0);
+    console.warn('[TENANT_DELETED]', {
+      tenantId: String(tenant._id),
+      deletedBy: String(req.user._id),
+      records: total,
+    });
+    res.json({ message: `${tenant.storeName} was permanently deleted`, deleted, total });
+  } catch (err) {
+    if (claimedTenant?._id) {
+      await Tenant.updateOne(
+        { _id: claimedTenant._id, 'deletion.state': 'deleting' },
+        {
+          $set: {
+            // If cleanup was interrupted after deleting any child records, do
+            // not expose a partially deleted storefront. A verified retry can
+            // safely finish the idempotent cleanup.
+            status: 'suspended',
+            'deletion.state': 'idle',
+            'deletion.requestedAt': null,
+            'deletion.requestedBy': null,
+          },
+        }
+      ).catch(() => {});
+    }
+    if (err.statusCode) return res.status(err.statusCode).json({ message: err.message });
+    next(err);
+  }
+});
+
 router.post('/tenants', async (req, res, next) => {
   let createdTenantId = null;
   try {
@@ -418,13 +500,20 @@ router.put('/tenants/:id', async (req, res, next) => {
 
     const existing = await Tenant.findById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Tenant not found' });
+    if (existing.deletion?.state === 'deleting') {
+      return res.status(409).json({ message: 'Tenant deletion is in progress' });
+    }
 
     // Detect plan/status transitions BEFORE saving so we know what changed.
     const planChanged = patch.plan && String(patch.plan) !== String(existing.plan);
     const statusChanged = patch.status && patch.status !== existing.status;
 
-    let tenant = await Tenant.findByIdAndUpdate(req.params.id, { $set: patch }, { new: true, runValidators: true }).populate('plan').populate('owner', 'firstName lastName email username role');
-    if (!tenant) return res.status(404).json({ message: 'Tenant not found' });
+    let tenant = await Tenant.findOneAndUpdate(
+      { _id: req.params.id, 'deletion.state': { $ne: 'deleting' } },
+      { $set: patch },
+      { new: true, runValidators: true }
+    ).populate('plan').populate('owner', 'firstName lastName email username role');
+    if (!tenant) return res.status(409).json({ message: 'Tenant deletion is in progress' });
 
     // Re-assigning a plan re-prices (or restarts) the tenant's billing cycle
     // automatically — no separate "configure billing" step needed.

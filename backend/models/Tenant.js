@@ -110,6 +110,14 @@ const tenantSchema = new mongoose.Schema({
     lastDeactivatedBy: { type: String, default: '' },
   },
 
+  // Used only to serialize an explicitly verified Super Admin deletion. The
+  // timestamp also lets a later request recover from a process interruption.
+  deletion: {
+    state: { type: String, enum: ['idle', 'deleting'], default: 'idle' },
+    requestedAt: { type: Date, default: null },
+    requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  },
+
   theme: {
     theme: { type: String, default: 'default' },
     primaryColor: { type: String, default: '#15803d' },
