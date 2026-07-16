@@ -426,9 +426,10 @@ Admin → Layout Builder; saving the newsletter section also synchronizes the
 storewide newsletter setting.
 
 For the strongest first impression, configure `PEXELS_API_KEY` in Railway. The
-backend searches Pexels once during tenant creation, hotlinks the returned CDN
-images, saves photographer/source attribution on each sample product, and adds
-a Pexels attribution link to the storefront. If the provider is unavailable,
+backend performs an item-specific Pexels search for each starter product during
+tenant creation, hotlinks the returned CDN images, saves photographer/source attribution on each sample product, and adds
+photo attribution only with the relevant sample product—not in the global
+store footer. If the provider is unavailable,
 creation continues with the bundled product placeholder and reports a warning.
 
 ### Permanently delete a tenant

@@ -18,6 +18,7 @@ const {
   validateTenantDeletionConfirmation,
 } = require('../services/tenantDeletionService');
 const { bootstrapTenantStore } = require('../utils/tenantBootstrap');
+const { normalizeWhatsappNumber } = require('../utils/whatsappConfig');
 const { generateStarterKit, normalizeStarterKit, sanitizeBrief } = require('../services/tenantStarterKit');
 
 const router = express.Router();
@@ -405,9 +406,17 @@ router.post('/tenants', async (req, res, next) => {
     const starterLogoUrl = primaryDomain && !['localhost', '127.0.0.1'].includes(primaryDomain)
       ? `https://${primaryDomain}/api/settings/starter-logo.svg`
       : '/api/settings/starter-logo.svg';
+    const requestedWhatsapp = String(settings?.whatsappNumber || settings?.whatsapp || '').trim();
+    const normalizedWhatsapp = normalizeWhatsappNumber(requestedWhatsapp, settings?.country || 'Sri Lanka');
+    if (requestedWhatsapp && !normalizedWhatsapp) {
+      return res.status(400).json({ message: 'Enter a valid WhatsApp number including the country code' });
+    }
+    const configuredWhatsapp = normalizedWhatsapp ? `+${normalizedWhatsapp}` : '';
     const tenantSettings = {
       ...(starterKit?.settings || {}),
       ...(settings || {}),
+      whatsapp: configuredWhatsapp,
+      whatsappNumber: configuredWhatsapp,
       ...(primaryDomain && !(settings || {}).siteUrl ? { siteUrl: `https://${primaryDomain}` } : {}),
       heroStats: typeof settings?.heroStats === 'string'
         ? settings.heroStats

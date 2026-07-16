@@ -14,6 +14,17 @@ function buildSearchQuery(brief = {}, products = []) {
   return [...new Set([business, ...focusTerms, 'product photography'])].join(' ').slice(0, 240);
 }
 
+function buildProductSearchQuery(brief = {}, product = {}) {
+  const name = clean(product.name, 90);
+  const category = clean(product.categorySlug || product.category, 45).replace(/-/g, ' ');
+  const description = clean(product.shortDescription, 80);
+  const business = clean(brief.businessType, 45);
+  return [name, category, description, business, 'isolated product commercial photography']
+    .filter(Boolean)
+    .join(' ')
+    .slice(0, 240);
+}
+
 function safePexelsUrl(value, type = 'image') {
   try {
     const url = new URL(String(value || ''));
@@ -30,6 +41,8 @@ function normalizePexelsPhotos(payload = {}) {
     const image = safePexelsUrl(photo?.src?.large || photo?.src?.medium, 'image');
     if (!image) return null;
     return {
+      id: photo?.id || null,
+      alt: clean(photo?.alt, 180),
       image,
       attribution: {
         provider: 'Pexels',
@@ -39,6 +52,27 @@ function normalizePexelsPhotos(payload = {}) {
       },
     };
   }).filter(Boolean);
+}
+
+async function searchPexels(apiKey, query) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const params = new URLSearchParams({
+      query,
+      per_page: '6',
+      orientation: 'square',
+      size: 'medium',
+    });
+    const response = await fetch(`${PEXELS_API_URL}?${params}`, {
+      headers: { Authorization: apiKey },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`Pexels request failed (${response.status})`);
+    return normalizePexelsPhotos(await response.json());
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function fetchPexelsPhotos(brief, products, count = 12) {
@@ -51,26 +85,40 @@ async function fetchPexelsPhotos(brief, products, count = 12) {
     };
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 12000);
+  const selectedProducts = (Array.isArray(products) ? products : []).slice(0, count);
+  const images = new Array(selectedProducts.length).fill(null);
+  const usedSources = new Set();
+  let cursor = 0;
   try {
-    const params = new URLSearchParams({
-      query: buildSearchQuery(brief, products),
-      per_page: String(Math.max(1, Math.min(40, count))),
-      orientation: 'square',
-      size: 'medium',
-    });
-    const response = await fetch(`${PEXELS_API_URL}?${params}`, {
-      headers: { Authorization: apiKey },
-      signal: controller.signal,
-    });
-    if (!response.ok) throw new Error(`Pexels request failed (${response.status})`);
-    const images = normalizePexelsPhotos(await response.json()).slice(0, count);
+    // Search each item independently. A broad catalogue query can return a
+    // beautiful set but associate the wrong object with individual products.
+    const worker = async () => {
+      while (cursor < selectedProducts.length) {
+        const index = cursor;
+        cursor += 1;
+        const query = buildProductSearchQuery(brief, selectedProducts[index]);
+        let candidates = [];
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          candidates = await searchPexels(apiKey, query);
+        } catch (_) {
+          // One unavailable search should not discard accurate images already
+          // resolved for the other products.
+        }
+        const chosen = candidates.find(candidate => !usedSources.has(candidate.attribution?.sourceUrl)) || candidates[0] || null;
+        if (chosen) {
+          images[index] = chosen;
+          usedSources.add(chosen.attribution?.sourceUrl);
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(3, selectedProducts.length || 1) }, () => worker()));
+    const matched = images.filter(Boolean).length;
     return {
       images,
-      provider: images.length ? 'Pexels' : '',
-      warning: images.length < count
-        ? `Pexels returned ${images.length} suitable photos for ${count} starter products; remaining products use the local placeholder.`
+      provider: matched ? 'Pexels' : '',
+      warning: matched < selectedProducts.length
+        ? `Pexels returned ${matched} item-specific photos for ${selectedProducts.length} starter products; remaining products use the local placeholder.`
         : '',
     };
   } catch (_) {
@@ -79,9 +127,7 @@ async function fetchPexelsPhotos(brief, products, count = 12) {
       provider: '',
       warning: 'Pexels image search was temporarily unavailable, so starter products use the local placeholder image. Tenant creation continued safely.',
     };
-  } finally {
-    clearTimeout(timer);
   }
 }
 
-module.exports = { buildSearchQuery, fetchPexelsPhotos, normalizePexelsPhotos, safePexelsUrl };
+module.exports = { buildProductSearchQuery, buildSearchQuery, fetchPexelsPhotos, normalizePexelsPhotos, safePexelsUrl };

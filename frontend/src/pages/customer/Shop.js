@@ -5,6 +5,7 @@ import API from '../../utils/api';
 import { useCart } from '../../context/CartContext';
 import { useTheme } from '../../context/ThemeContext';
 import useSEO, { getSeoConfig } from '../../hooks/useSEO';
+import PositionBanner from '../../components/PositionBanner';
 
 const Stars = ({ rating=0 }) => (
   <div className="flex gap-0.5">
@@ -188,6 +189,10 @@ export default function Shop() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-4 sm:pt-6">
+        <PositionBanner position="category_page" categorySlug={currentCat?.slug || routeCategory || ''} />
       </div>
 
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">

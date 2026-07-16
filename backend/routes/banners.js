@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const { Banner } = require('../models/index');
+const Tenant = require('../models/Tenant');
 const { adminAuth } = require('../middleware/auth');
+const { REQUIRED_BANNER_POSITIONS, seedDefaultBanner } = require('../utils/tenantBootstrap');
 
 // Public - Get active banners (with optional position filter)
 router.get('/', async (req, res) => {
@@ -67,6 +69,16 @@ router.get('/admin/stats', adminAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
+// Admin - Fill only missing banner types with tenant-branded defaults.
+router.post('/admin/ensure-defaults', adminAuth, async (req, res) => {
+  try {
+    const tenant = await Tenant.findById(req.user.tenantId);
+    if (!tenant) return res.status(404).json({ message: 'Tenant not found' });
+    const inserted = await seedDefaultBanner(tenant);
+    res.json({ inserted, message: inserted ? `${inserted} missing banner types were created` : 'All banner types already exist' });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
 // Admin - Create banner
 router.post('/', adminAuth, async (req, res) => {
   try {
@@ -96,7 +108,15 @@ router.put('/admin/reorder', adminAuth, async (req, res) => {
 // Admin - Delete banner
 router.delete('/:id', adminAuth, async (req, res) => {
   try {
-    await Banner.findByIdAndDelete(req.params.id);
+    const banner = await Banner.findById(req.params.id);
+    if (!banner) return res.status(404).json({ message: 'Banner not found' });
+    if (REQUIRED_BANNER_POSITIONS.includes(banner.position)) {
+      const remaining = await Banner.countDocuments({ position: banner.position });
+      if (remaining <= 1) {
+        return res.status(409).json({ message: 'Every banner type must keep at least one record. Hide this banner instead of deleting it.' });
+      }
+    }
+    await Banner.deleteOne({ _id: banner._id });
     res.json({ message: 'Deleted' });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });

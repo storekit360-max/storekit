@@ -12,6 +12,7 @@ import PopupBanner from '../../components/PopupBanner';
 import FlashSaleBanner from '../../components/FlashSaleBanner';
 import CouponBanner from '../../components/CouponBanner';
 import StoreLoader from '../../components/StoreLoader';
+import PositionBanner from '../../components/PositionBanner';
 
 /* ─────────────────────────────────────────────────────────────────
    RESPONSIVE LAYOUT FIXES — v2
@@ -861,17 +862,6 @@ const Footer = ({ settings }) => {
               }
             </div>
             <p className="text-sm leading-relaxed mb-4" style={{color:'#64748b'}}>{settings?.storeTagline||'Premium products, delivered.'}</p>
-            {settings?.starterImagesProvider && settings?.starterImagesAttributionUrl && (
-              <a
-                href={settings.starterImagesAttributionUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex text-[11px] mb-4 hover:underline"
-                style={{color:'#94a3b8'}}
-              >
-                Starter photos provided by {settings.starterImagesProvider}
-              </a>
-            )}
             {/* Real social media accounts from the Social Media module */}
             {socialAccounts.length > 0 && (
               <div className="flex gap-2 flex-wrap">
@@ -1004,7 +994,9 @@ export default function CustomerLayout() {
       {campaign?.theme?.confettiEffect && <ConfettiEffect/>}
       <RunningBanner />
       <FlashSaleBanner />
+      {!campaign?.isFlashSale && <PositionBanner position="flash_sale" compact />}
       <Header settings={settings} campaign={campaign}/>
+      <PositionBanner position="global" compact />
       <CartDrawer settings={settings}/>
       <main className="flex-1 has-mobile-nav" style={{minWidth:0, overflowX:'hidden'}}><Outlet/></main>
       <Footer settings={settings}/>

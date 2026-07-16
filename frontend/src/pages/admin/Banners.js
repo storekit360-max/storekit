@@ -287,8 +287,13 @@ export function AdminBanners() {
   const fetchBanners = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await API.get('/banners/admin/all');
-      setBanners(data);
+      let { data } = await API.get('/banners/admin/all');
+      const existingTypes = new Set((data || []).map(banner => banner.position));
+      if (TABS.some(tab => !existingTypes.has(tab.id))) {
+        await API.post('/banners/admin/ensure-defaults');
+        ({ data } = await API.get('/banners/admin/all', { skipCache: true }));
+      }
+      setBanners(data || []);
     } catch {
       toast.error('Failed to load banners');
     } finally { setLoading(false); }
@@ -340,9 +345,13 @@ export function AdminBanners() {
 
   const del = async (id) => {
     if (!window.confirm('Delete this banner?')) return;
-    await API.delete(`/banners/${id}`);
-    toast.success('Deleted');
-    fetchBanners();
+    try {
+      await API.delete(`/banners/${id}`);
+      toast.success('Deleted');
+      fetchBanners();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Could not delete banner');
+    }
   };
 
   const toggle = async (b) => {

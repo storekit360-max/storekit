@@ -8,7 +8,8 @@ const {
   normalizeStarterKit,
   sanitizeBrief,
 } = require('../services/tenantStarterKit');
-const { buildSearchQuery, normalizePexelsPhotos } = require('../services/starterProductImages');
+const { buildProductSearchQuery, buildSearchQuery, normalizePexelsPhotos } = require('../services/starterProductImages');
+const { defaultWhatsappConfig, normalizeWhatsappNumber } = require('../utils/whatsappConfig');
 const Tenant = require('../models/Tenant');
 
 test('business brief is sanitized and item examples are bounded', () => {
@@ -36,6 +37,8 @@ test('business-aware fallback creates a useful fashion storefront', () => {
   assert.ok(kit.banners.some(row => row.position === 'hero'));
   assert.ok(kit.banners.some(row => row.position === 'running_top'));
   assert.equal(new Set(kit.banners.map(row => row.position)).size, 9);
+  ['running_top', 'hero', 'popup', 'flash_sale', 'promo', 'product_page', 'category_page', 'global']
+    .forEach(position => assert.ok(kit.banners.some(row => row.position === position), `${position} banner is required`));
   assert.equal(kit.settings.enableNewsletter, false);
   assert.equal(kit.settings.homepageProductLimit, 6);
   assert.equal(kit.settings.layout_builder.homepage.find(row => row.id === 'categories').enabled, false);
@@ -120,4 +123,25 @@ test('product image search query uses only bounded business catalogue terms', ()
   assert.match(query, /Fashion Dresses Shoes product photography/i);
   assert.doesNotMatch(query, /[<>]/);
   assert.ok(query.length <= 240);
+});
+
+test('each starter product gets an item-specific image query', () => {
+  const query = buildProductSearchQuery(
+    { businessType: 'Fashion boutique' },
+    { name: 'Brown Leather Handbag', categorySlug: 'bags-accessories', shortDescription: 'Structured tote with shoulder strap' }
+  );
+  assert.match(query, /^Brown Leather Handbag bags accessories Structured tote/i);
+  assert.match(query, /isolated product commercial photography$/i);
+  assert.ok(query.length <= 240);
+});
+
+test('Super Admin WhatsApp numbers normalize and enable the storefront widget', () => {
+  assert.equal(normalizeWhatsappNumber('+94 77 123 4567'), '94771234567');
+  assert.equal(normalizeWhatsappNumber('0771234567'), '94771234567');
+  assert.equal(normalizeWhatsappNumber('0094771234567'), '94771234567');
+  assert.equal(normalizeWhatsappNumber('not-a-phone'), '');
+  const config = defaultWhatsappConfig('0771234567', 'North Star');
+  assert.equal(config.whatsappEnabled, true);
+  assert.equal(config.whatsappNumber, '+94771234567');
+  assert.match(config.whatsappAgentName, /North Star/);
 });

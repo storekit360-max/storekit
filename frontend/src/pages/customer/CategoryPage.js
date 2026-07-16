@@ -17,6 +17,7 @@ import API from '../../utils/api';
 import { useCart } from '../../context/CartContext';
 import { useTheme } from '../../context/ThemeContext';
 import useSEO from '../../hooks/useSEO';
+import PositionBanner from '../../components/PositionBanner';
 
 // ── FAQ content per category ──────────────────────────────────────────────────
 const CATEGORY_FAQS = {
@@ -339,6 +340,10 @@ export default function CategoryPage() {
           </h1>
           <p className="text-sm text-gray-400">{total} product{total !== 1 ? 's' : ''} found</p>
         </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-6">
+        <PositionBanner position="category_page" categorySlug={slug} />
       </div>
 
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6">

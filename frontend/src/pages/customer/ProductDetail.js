@@ -11,6 +11,7 @@ import { use3DTilt, MagneticButton, Card3D } from '../../components/Cinematic';
 import toast from 'react-hot-toast';
 import useSEO, { trackAddToCart, trackViewItem } from '../../hooks/useSEO';
 import { WhatsAppProductInquiry } from '../../components/WhatsAppWidget';
+import PositionBanner from '../../components/PositionBanner';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -275,7 +276,11 @@ export default function ProductDetail() {
       }
 
       // ── Recently Viewed — track this product in localStorage
-      API.post('/marketing/events',{eventType:'product_view',productId:r.data._id,source:'product_page',device:navigator.userAgent}).catch(()=>{});
+      API.post(
+        '/marketing/events',
+        {eventType:'product_view',productId:r.data._id,source:'product_page',device:navigator.userAgent},
+        {suppressAuthRedirect:true}
+      ).catch(()=>{});
       try {
         const key = 'sz_recently_viewed';
         const existing = JSON.parse(localStorage.getItem(key) || '[]');
@@ -468,6 +473,10 @@ export default function ProductDetail() {
         <span className="flex-shrink-0">/</span>
         <span className="text-gray-600 font-medium break-words min-w-0 flex-grow">{product.name}</span>
       </nav>
+
+      <div className="mb-6">
+        <PositionBanner position="product_page" productSlug={product.slug} />
+      </div>
 
       <div ref={heroRef} className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-14">
         {/* ── Image Gallery ── */}

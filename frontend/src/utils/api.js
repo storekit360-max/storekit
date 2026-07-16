@@ -126,7 +126,7 @@ API.interceptors.response.use(
     return res;
   },
   err => {
-    if (err.response?.status === 401) {
+    if (err.response?.status === 401 && !err.config?.suppressAuthRedirect) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       const path = window.location.pathname || '';

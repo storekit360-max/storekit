@@ -3,6 +3,13 @@
 const { Category, Banner, Settings, PaymentGateway, DeliveryService, BusinessPage } = require('../models/index');
 const Product = require('../models/Product');
 const { fetchPexelsPhotos } = require('../services/starterProductImages');
+const { buildFallbackStarterKit } = require('../services/tenantStarterKit');
+const { defaultWhatsappConfig } = require('./whatsappConfig');
+
+const REQUIRED_BANNER_POSITIONS = Object.freeze([
+  'running_top', 'hero', 'popup', 'flash_sale', 'promo',
+  'product_page', 'category_page', 'global',
+]);
 
 function slugify(value = '') {
   return String(value)
@@ -99,11 +106,28 @@ async function seedDefaultCategories(tenant, starterKit = null) {
 
 async function seedDefaultBanner(tenant, starterKit = null) {
   const tenantId = tenant._id;
-  const existing = await Banner.countDocuments({ tenantId });
-  if (existing > 0) return 0;
-  const banners = Array.isArray(starterKit?.banners) && starterKit.banners.length
-    ? starterKit.banners
-    : [defaultBannerFor(tenant)];
+  const fallbackKit = buildFallbackStarterKit({
+    storeName: tenant.storeName,
+    businessType: tenant?.onboarding?.businessType || 'General retail',
+    businessDescription: tenant?.onboarding?.businessDescription || '',
+    itemExamples: tenant?.onboarding?.itemExamples || '',
+    targetCustomers: tenant?.onboarding?.targetCustomers || '',
+    brandTone: tenant?.onboarding?.brandTone || '',
+    currency: tenant?.settings?.currency || 'LKR',
+  });
+  const requested = Array.isArray(starterKit?.banners) ? starterKit.banners : [];
+  const requestedByPosition = new Map(requested.map(banner => [banner.position, banner]));
+  const fallbackByPosition = new Map((fallbackKit.banners || []).map(banner => [banner.position, banner]));
+  const existingPositions = new Set(await Banner.distinct('position', { tenantId }));
+  const banners = REQUIRED_BANNER_POSITIONS
+    .filter(position => !existingPositions.has(position))
+    .map(position => requestedByPosition.get(position) || fallbackByPosition.get(position))
+    .filter(Boolean);
+  if (!existingPositions.has('sidebar')) {
+    const sidebar = requestedByPosition.get('sidebar') || fallbackByPosition.get('sidebar') || defaultBannerFor(tenant);
+    if (sidebar) banners.push({ ...sidebar, position: 'sidebar' });
+  }
+  if (!banners.length) return 0;
   await Banner.insertMany(banners.map((banner, index) => ({
     tenantId,
     ...banner,
@@ -122,7 +146,8 @@ async function seedDefaultBanner(tenant, starterKit = null) {
 async function seedDefaultSettings(tenant) {
   const tenantId = tenant._id;
   const storeEmail = tenant?.settings?.storeEmail || '';
-  const whatsapp = tenant?.settings?.whatsapp || tenant?.settings?.phone || '';
+  const whatsapp = tenant?.settings?.whatsappNumber || tenant?.settings?.whatsapp || tenant?.settings?.phone || '';
+  const whatsappConfig = defaultWhatsappConfig(whatsapp, tenant.storeName, tenant?.settings?.country);
   const defaults = [
     ['store_name', tenant.storeName || 'Store', 'general'],
     ['currency', tenant?.settings?.currency || 'LKR', 'general'],
@@ -130,6 +155,7 @@ async function seedDefaultSettings(tenant) {
     ['timezone', tenant?.settings?.timezone || 'Asia/Colombo', 'general'],
     ['store_email', storeEmail, 'contact'],
     ['whatsapp_number', whatsapp, 'contact'],
+    ...Object.entries(whatsappConfig).map(([key, value]) => [key, value, 'whatsapp']),
   ];
   for (const [key, value, group] of defaults) {
     await Settings.updateOne(
@@ -268,4 +294,4 @@ async function bootstrapTenantStore(tenant, options = {}) {
   };
 }
 
-module.exports = { bootstrapTenantStore, slugify };
+module.exports = { REQUIRED_BANNER_POSITIONS, bootstrapTenantStore, seedDefaultBanner, slugify };
