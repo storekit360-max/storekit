@@ -71,6 +71,9 @@ function productSeoAudit(product, { siteUrl = '' } = {}) {
   else if (description.length < 50) warnings.push('Description should be at least 50 characters');
   if (!image || !/^https:\/\//i.test(image)) errors.push('Missing crawlable HTTPS product image');
   else if (/\.svg(?:$|[?#])/i.test(image)) errors.push('SVG placeholder images are not supported by Google Merchant listings');
+  if (image && !/\.(?:jpe?g|webp|png|gif|bmp|tiff?)(?:$|[?#])/i.test(image)) {
+    merchantErrors.push('Main Merchant image must be JPEG, WebP, PNG, GIF, BMP, or TIFF');
+  }
   if (!product.category) errors.push('Missing category');
   if (!Number.isFinite(Number(product.stock)) || Number(product.stock) < 0) errors.push('Invalid stock quantity');
   if (product.isOnSale && (!(Number(product.salePrice) > 0) || Number(product.salePrice) >= Number(product.price))) {

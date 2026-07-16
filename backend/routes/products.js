@@ -87,6 +87,7 @@ function validateActiveProduct(product = {}) {
   if (!image) error('Active products require a product image before they can be shown to Google');
   if (!/^https:\/\//i.test(image) && !image.startsWith('/')) error('The main product image must use HTTPS or a store-relative URL');
   if (/\.svg(?:$|[?#])/i.test(image)) error('Use a JPG, PNG, WebP, GIF, BMP, or TIFF product image; Google Merchant does not accept SVG product images');
+  if (!/\.(?:jpe?g|webp|png|gif|bmp|tiff?)(?:$|[?#])/i.test(image)) error('The main Merchant image must be JPG, PNG, WebP, GIF, BMP, or TIFF; AVIF is not supported');
   if (!product.gtin && !product.mpn && product.identifierExists !== false) {
     error('Add a GTIN or MPN, or confirm that this product has no manufacturer identifiers');
   }

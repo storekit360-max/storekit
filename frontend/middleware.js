@@ -42,6 +42,8 @@ export const config = {
     '/page/:path*',
     '/campaign/:path*',
     '/sitemap.xml',
+    '/sitmap.xml',
+    '/site-map.xml',
     '/sitemap_index.xml',
     '/products-sitemap.xml',
     '/categories-sitemap.xml',
@@ -132,6 +134,10 @@ export default async function middleware(request) {
   const { pathname, search } = url;
   const ua       = request.headers.get('user-agent') || '';
   const hostname = url.hostname; // the domain the request arrived on, e.g. computers.lk
+
+  if (pathname === '/sitmap.xml' || pathname === '/site-map.xml') {
+    return Response.redirect(new URL('/sitemap.xml', request.url), 308);
+  }
 
   const isBot          = isSeoBot(ua);
   const isSitemapRoute = isSitemapOrRobots(pathname);

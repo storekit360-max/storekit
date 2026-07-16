@@ -61,9 +61,7 @@ function urlEntry(loc, lastmod, changefreq = 'weekly', priority = '0.7', images 
     .filter(Boolean)
     .map(img => {
       const src = typeof img === 'string' ? { loc: img } : img;
-      const titleXml   = src.title   ? `\n      <image:title>${xe(src.title)}</image:title>`     : '';
-      const captionXml = src.caption ? `\n      <image:caption>${xe(src.caption)}</image:caption>` : '';
-      return `\n    <image:image>\n      <image:loc>${xe(src.loc)}</image:loc>${titleXml}${captionXml}\n    </image:image>`;
+      return `\n    <image:image>\n      <image:loc>${xe(src.loc)}</image:loc>\n    </image:image>`;
     })
     .join('');
   return `  <url>
@@ -262,7 +260,7 @@ router.get('/sitemap.xml', async (req, res) => {
 // ── GET /api/seo/products-sitemap.xml — Per-tenant products ──────────────────
 router.get('/products-sitemap.xml', async (req, res) => {
   try {
-    const { siteUrl, tenantId, storeName, unavailable, notFound } = await resolveTenantForSEO(req);
+    const { siteUrl, tenantId, unavailable, notFound } = await resolveTenantForSEO(req);
     if (unavailable) return noIndexXml(res, 503, 'Store unavailable');
     if (notFound) return noIndexXml(res, 404, 'Store not found');
     const today = new Date().toISOString().split('T')[0];
@@ -274,17 +272,10 @@ router.get('/products-sitemap.xml', async (req, res) => {
     const entries = products.filter(product => productSeoAudit(product, { siteUrl }).eligible).map(p => {
       const allImages    = [p.thumbnail, ...(p.images || [])].map(image => absoluteUrl(image, siteUrl)).filter(Boolean);
       const uniqueImages = [...new Set(allImages)].slice(0, 10);
-      const imageObjs    = uniqueImages.map((img, i) => ({
-        loc: img,
-        title: p.brand ? `${p.brand} ${p.name}` : p.name,
-        caption: i === 0
-          ? `${p.name} — buy online at ${storeName}`
-          : `${p.name} — additional view ${i + 1}`,
-      }));
       return urlEntry(
         `${siteUrl}/product/${p.slug}`,
         p.updatedAt ? new Date(p.updatedAt).toISOString().split('T')[0] : today,
-        'weekly', '0.9', imageObjs
+        'weekly', '0.9', uniqueImages
       );
     });
 
@@ -322,7 +313,8 @@ router.get('/google-shopping-feed.xml', async (req, res) => {
       const activePrice = hasSale ? product.salePrice : product.price;
       const description = stripHtml(product.shortDescription || product.description || product.name).slice(0, 5000);
       const images = [...new Set([product.thumbnail, ...(product.images || [])]
-        .map(image => absoluteUrl(image, siteUrl)).filter(Boolean))];
+        .map(image => absoluteUrl(image, siteUrl))
+        .filter(image => image && /\.(?:jpe?g|webp|png|gif|bmp|tiff?)(?:$|[?#])/i.test(image)))];
       const image = images[0] || '';
       const additionalImages = images.slice(1, 11).map(url => `<g:additional_image_link>${xe(url)}</g:additional_image_link>`).join('\n    ');
       const country = String(storeSettings.merchantCountryCode || storeSettings.countryCode || 'LK').trim().toUpperCase();
