@@ -218,7 +218,7 @@ function publicSlug(value = '') {
 
 // ── Backend URL (for sitemap index sub-sitemap locs) ──────────────────────────
 function getBackendUrl() {
-  const raw = process.env.BACKEND_URL || 'https://storekit-production.up.railway.app';
+  const raw = process.env.BACKEND_URL || 'https://storekit1-production.up.railway.app';
   return (raw.startsWith('http') ? raw : `https://${raw}`).replace(/\/$/, '');
 }
 

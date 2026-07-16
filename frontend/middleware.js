@@ -53,7 +53,17 @@ export const config = {
   ],
 };
 
-const RAILWAY_ORIGIN = process.env.RAILWAY_BACKEND_URL || 'https://storekit-production.up.railway.app';
+const ACTIVE_RAILWAY_ORIGIN = 'https://storekit1-production.up.railway.app';
+const configuredRailwayValue = String(process.env.RAILWAY_BACKEND_URL || '').trim().replace(/\/$/, '');
+const configuredRailwayOrigin = configuredRailwayValue && !/^https?:\/\//i.test(configuredRailwayValue)
+  ? `https://${configuredRailwayValue}`
+  : configuredRailwayValue;
+// This hostname belonged to the previous unprovisioned Railway service. Ignore
+// it even if it remains in an older Vercel environment-variable deployment.
+const RAILWAY_ORIGIN = !configuredRailwayOrigin
+  || configuredRailwayOrigin === 'https://storekit-production.up.railway.app'
+  ? ACTIVE_RAILWAY_ORIGIN
+  : configuredRailwayOrigin;
 const INTERNAL_SECRET = process.env.INTERNAL_SECRET || '';
 
 // In-memory domain resolution cache (resets on cold start, which is fine)
