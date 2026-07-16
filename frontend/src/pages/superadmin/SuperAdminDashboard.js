@@ -481,6 +481,7 @@ export default function SuperAdminDashboard() {
               onTab={setActiveTab}
               onUpdate={updateTenantRecord}
               onResetPassword={resetAdminPassword}
+              onDelete={openTenantDeletion}
             />
           )}
 
@@ -665,7 +666,7 @@ export default function SuperAdminDashboard() {
 
               <div className="bg-white rounded-2xl border border-slate-200 p-6">
                 <h2 className="text-base font-bold text-slate-900 mb-4">Tenants</h2>
-                <TenantMonitorGrid rows={monitoring?.tenants || []} onUpdate={updateTenantRecord} onResetPassword={resetAdminPassword} />
+                <TenantMonitorGrid rows={monitoring?.tenants || []} onUpdate={updateTenantRecord} onResetPassword={resetAdminPassword} onDelete={openTenantDeletion} />
                 <div className="mt-6 pt-6 border-t border-slate-100">
                   <h3 className="text-sm font-bold text-slate-800 mb-3">Administrative Table</h3>
                   <TenantTable tenants={tenants} plans={plans} onUpdate={updateTenantRecord} onResetPassword={resetAdminPassword} onDelete={openTenantDeletion} getStorefrontUrl={tenantStorefrontUrl} />
@@ -742,7 +743,7 @@ function Stat({ label, value, icon, accent = 'text-indigo-600' }) {
   );
 }
 
-function AdvancedOverview({ stats, plans, tenants, monitoring, onTab, onUpdate, onResetPassword }) {
+function AdvancedOverview({ stats, plans, tenants, monitoring, onTab, onUpdate, onResetPassword, onDelete }) {
   const totals = monitoring?.totals || {};
   const rows = monitoring?.tenants || [];
   const riskRows = rows.filter(t => t.alerts?.suspended || t.alerts?.pastDue || t.alerts?.paymentDueSoon || t.alerts?.hasNoDomain || t.alerts?.domainPending);
@@ -815,7 +816,7 @@ function AdvancedOverview({ stats, plans, tenants, monitoring, onTab, onUpdate, 
       </div>
 
       <Panel title="Tenant Health Monitor" action={<button onClick={() => onTab('tenants')} className="text-xs font-bold text-indigo-600">Manage all</button>}>
-        <TenantMonitorGrid rows={rows.slice(0, 6)} onUpdate={onUpdate} onResetPassword={onResetPassword} />
+        <TenantMonitorGrid rows={rows.slice(0, 6)} onUpdate={onUpdate} onResetPassword={onResetPassword} onDelete={onDelete} />
         {tenants.length === 0 && <p className="text-sm text-slate-400 py-6 text-center">No tenants yet — create one from the Tenants tab.</p>}
       </Panel>
     </div>
@@ -924,7 +925,7 @@ function UsageBar({ label, value, limit }) {
   );
 }
 
-function TenantMonitorGrid({ rows, onUpdate, onResetPassword }) {
+function TenantMonitorGrid({ rows, onUpdate, onResetPassword, onDelete }) {
   if (!rows || rows.length === 0) return <p className="text-sm text-slate-400 py-6 text-center">No monitoring data available yet.</p>;
   return (
     <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -975,6 +976,12 @@ function TenantMonitorGrid({ rows, onUpdate, onResetPassword }) {
                 className={`h-8 px-3 rounded-lg text-xs font-bold ${t.status === 'active' ? 'bg-red-50 text-red-700 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}
               >
                 {t.status === 'active' ? 'Deactivate' : 'Activate'}
+              </button>
+              <button
+                onClick={() => onDelete(t)}
+                className="h-8 px-3 rounded-lg border border-red-200 bg-white text-red-700 hover:bg-red-50 text-xs font-bold"
+              >
+                Delete Tenant
               </button>
             </div>
           </div>
