@@ -893,6 +893,7 @@ export default function Home() {
   // settingsReady: true once we have settings from cache or API.
   // Prevents newsletter / payment sections from flashing on first render.
   const settingsReady = settings !== null;
+  const homepageProductLimit = Math.max(1, Math.min(12, Number(settings?.homepageProductLimit || 8)));
 
   // Sync sectionOrder from ThemeContext settings (no extra API call needed)
   useEffect(() => {
@@ -919,8 +920,8 @@ export default function Home() {
     let attempt = 0;
 
     const loadHome = () => Promise.all([
-        API.get('/products?featured=true&limit=8'),
-        API.get('/products?limit=8'),
+        API.get(`/products?featured=true&limit=${homepageProductLimit}`),
+        API.get(`/products?limit=${homepageProductLimit}`),
         API.get('/products?onSale=true&limit=8'),
         API.get('/categories?limit=12'),
         API.get('/products/brands?limit=16'),
@@ -960,7 +961,7 @@ export default function Home() {
       cancelled = true;
       if (retryTimer) window.clearTimeout(retryTimer);
     };
-  },[]);
+  },[homepageProductLimit]);
 
   // Kill stale ScrollTriggers from previous page so GSAP recalculates from top.
   // NOTE: do NOT call window.scrollTo here — ScrollToTop in App.js already

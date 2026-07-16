@@ -52,7 +52,9 @@ async function findTenantByDomain(req, { includeInactive = false } = {}) {
   };
   if (!includeInactive) filter.status = 'active';
 
-  return Tenant.findOne(filter).populate('plan');
+  // The onboarding brief is operational context for the tenant/super-admin;
+  // it must not be included in the public tenant-resolution response.
+  return Tenant.findOne(filter).select('-onboarding').populate('plan');
 }
 
 async function resolveTenant(req, res, next) {

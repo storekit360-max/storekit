@@ -82,6 +82,14 @@ const emptyTenant = {
   adminFirstName: 'Store', adminLastName: 'Admin',
   settings: { currency: 'LKR', country: 'Sri Lanka', timezone: 'Asia/Colombo', whatsapp: '', phone: '', storeEmail: '', metaTitle: '', metaDescription: '' },
   theme: { primaryColor: '#6366f1', accentColor: '#22d3ee', darkColor: '#0f172a', fontFamily: 'Inter' },
+  onboarding: {
+    initializeStore: true,
+    businessType: 'General retail',
+    businessDescription: '',
+    itemExamples: '',
+    targetCustomers: '',
+    brandTone: 'Friendly and trustworthy',
+  },
 };
 
 const TABS = [
@@ -146,6 +154,10 @@ export default function SuperAdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [savingPlan, setSavingPlan] = useState(false);
   const [savingTenant, setSavingTenant] = useState(false);
+  const [generatingStarterKit, setGeneratingStarterKit] = useState(false);
+  const [starterKitPreview, setStarterKitPreview] = useState(null);
+  const [starterKitWarnings, setStarterKitWarnings] = useState([]);
+  const [lastCreatedStore, setLastCreatedStore] = useState(null);
 
   const selectedTenant = useMemo(() => tenants.find(t => t._id === selectedTenantId), [tenants, selectedTenantId]);
 
@@ -179,7 +191,71 @@ export default function SuperAdminDashboard() {
   useEffect(() => { loadAll(); }, [loadAll]);
 
   function updatePlan(path, value) { setPlanForm(prev => setDeep(prev, path, value)); }
-  function updateTenant(path, value) { setTenantForm(prev => setDeep(prev, path, value)); }
+  function updateTenant(path, value) {
+    setTenantForm(prev => setDeep(prev, path, value));
+    if (path === 'storeName' || path.startsWith('onboarding.')) {
+      setStarterKitPreview(null);
+      setStarterKitWarnings([]);
+    }
+  }
+
+  function updateStoreName(value) {
+    setTenantForm(prev => {
+      const makeSlug = text => text.toLowerCase().trim().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const previousAutoSlug = makeSlug(prev.storeName);
+      return {
+        ...prev,
+        storeName: value,
+        slug: !prev.slug || prev.slug === previousAutoSlug ? makeSlug(value) : prev.slug,
+      };
+    });
+    setStarterKitPreview(null);
+    setStarterKitWarnings([]);
+  }
+
+  async function requestStarterKitPreview() {
+    if (!tenantForm.storeName.trim()) throw new Error('Enter the store name first');
+    const { data } = await API.post('/superadmin/tenant-starter-kit/preview', {
+      storeName: tenantForm.storeName,
+      ...tenantForm.onboarding,
+      currency: tenantForm.settings.currency,
+    });
+    setStarterKitPreview(data.starterKit);
+    setStarterKitWarnings(data.warnings || []);
+    setTenantForm(prev => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        metaTitle: data.starterKit.settings?.metaTitle || prev.settings.metaTitle,
+        metaDescription: data.starterKit.settings?.metaDescription || prev.settings.metaDescription,
+      },
+      theme: { ...prev.theme, ...(data.starterKit.theme || {}) },
+    }));
+    return data.starterKit;
+  }
+
+  async function generateStarterKitPreview() {
+    setGeneratingStarterKit(true);
+    try {
+      const kit = await requestStarterKitPreview();
+      notify('success', `${kit.source === 'ai' ? 'AI' : 'Smart'} starter kit is ready for review`);
+    } catch (err) {
+      notify('error', err.response?.data?.message || err.message || 'Could not generate starter store');
+    } finally {
+      setGeneratingStarterKit(false);
+    }
+  }
+
+  function updateStarterItem(section, index, key, value) {
+    setStarterKitPreview(prev => ({
+      ...prev,
+      [section]: (prev?.[section] || []).map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item),
+    }));
+  }
+
+  function removeStarterItem(section, index) {
+    setStarterKitPreview(prev => ({ ...prev, [section]: (prev?.[section] || []).filter((_, itemIndex) => itemIndex !== index) }));
+  }
 
   async function savePlan(e) {
     e.preventDefault();
@@ -208,9 +284,28 @@ export default function SuperAdminDashboard() {
     e.preventDefault();
     setSavingTenant(true);
     try {
-      await API.post('/superadmin/tenants', tenantForm);
+      let starterKit = starterKitPreview;
+      const generatedDuringCreate = tenantForm.onboarding.initializeStore && !starterKit;
+      if (generatedDuringCreate) starterKit = await requestStarterKitPreview();
+      const resolvedTheme = generatedDuringCreate && starterKit?.theme ? {
+        ...starterKit.theme,
+        ...tenantForm.theme,
+        primaryColor: tenantForm.theme.primaryColor === emptyTenant.theme.primaryColor ? starterKit.theme.primaryColor : tenantForm.theme.primaryColor,
+        accentColor: tenantForm.theme.accentColor === emptyTenant.theme.accentColor ? starterKit.theme.accentColor : tenantForm.theme.accentColor,
+        darkColor: tenantForm.theme.darkColor === emptyTenant.theme.darkColor ? starterKit.theme.darkColor : tenantForm.theme.darkColor,
+        fontFamily: tenantForm.theme.fontFamily === emptyTenant.theme.fontFamily ? starterKit.theme.fontFamily : tenantForm.theme.fontFamily,
+      } : tenantForm.theme;
+      const { data } = await API.post('/superadmin/tenants', { ...tenantForm, theme: resolvedTheme, starterKit });
+      setLastCreatedStore({
+        name: data.storeName,
+        source: data.starterKitResult?.source,
+        counts: data.starterKitResult?.created,
+        warnings: data.starterKitResult?.warnings || [],
+      });
       setTenantForm({ ...emptyTenant, plan: plans[0]?._id || '' });
-      notify('success', 'Tenant created successfully');
+      setStarterKitPreview(null);
+      setStarterKitWarnings([]);
+      notify('success', data.starterKitResult ? 'Tenant and starter storefront created successfully' : 'Tenant created successfully');
       await loadAll();
     } catch (err) {
       notify('error', err.response?.data?.message || err.message || 'Could not create tenant');
@@ -396,9 +491,30 @@ export default function SuperAdminDashboard() {
           {activeTab === 'tenants' && (
             <div className="space-y-6">
               <div className="bg-white rounded-2xl border border-slate-200 p-6">
-                <h2 className="text-base font-bold text-slate-900 mb-4">Create Tenant / Customer Store</h2>
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
+                  <div>
+                    <h2 className="text-base font-bold text-slate-900">Create Tenant / Customer Store</h2>
+                    <p className="text-sm text-slate-500 mt-1">Create the account and hand over a useful, branded storefront instead of an empty website.</p>
+                  </div>
+                  <span className="rounded-full bg-indigo-50 text-indigo-700 px-3 py-1 text-xs font-bold">✨ AI-assisted onboarding</span>
+                </div>
+                {lastCreatedStore && (
+                  <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                    <p className="font-bold">✓ {lastCreatedStore.name} is ready</p>
+                    {lastCreatedStore.counts && (
+                      <p className="mt-1 text-emerald-700">
+                        Created {lastCreatedStore.counts.categories || 0} categories, {lastCreatedStore.counts.products || 0} sample products and {lastCreatedStore.counts.banners || 0} banners using {lastCreatedStore.source === 'ai' ? 'AI-generated' : 'smart starter'} content.
+                      </p>
+                    )}
+                    {(lastCreatedStore.warnings || []).map(warning => <p key={warning} className="mt-1 text-amber-700">⚠ {warning}</p>)}
+                  </div>
+                )}
                 <form onSubmit={createTenant} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <Input label="Store Name" value={tenantForm.storeName} onChange={v => updateTenant('storeName', v)} required />
+                  <div className="sm:col-span-2 lg:col-span-4 flex items-center gap-2 border-b border-slate-100 pb-2">
+                    <span className="w-7 h-7 rounded-full bg-slate-900 text-white inline-flex items-center justify-center text-xs font-bold">1</span>
+                    <p className="text-sm font-bold text-slate-800">Account and store identity</p>
+                  </div>
+                  <Input label="Store Name" value={tenantForm.storeName} onChange={updateStoreName} required />
                   <Input label="Slug" value={tenantForm.slug} onChange={v => updateTenant('slug', v)} required />
                   <Input label="Customer Domain" placeholder="sport.lk" value={tenantForm.domain} onChange={v => updateTenant('domain', v)} />
                   <label className="grid gap-1.5 text-xs font-semibold text-slate-600">
@@ -408,13 +524,102 @@ export default function SuperAdminDashboard() {
                     </select>
                   </label>
                   <Input label="Admin Email" value={tenantForm.adminEmail} onChange={v => updateTenant('adminEmail', v)} required />
-                  <Input label="Admin Password" value={tenantForm.adminPassword} onChange={v => updateTenant('adminPassword', v)} />
+                  <Input label="Admin Password" type="password" value={tenantForm.adminPassword} onChange={v => updateTenant('adminPassword', v)} required />
                   <Input label="WhatsApp" value={tenantForm.settings.whatsapp} onChange={v => updateTenant('settings.whatsapp', v)} />
                   <Input label="Primary Color" type="color" value={tenantForm.theme.primaryColor} onChange={v => updateTenant('theme.primaryColor', v)} />
+
+                  <div className="sm:col-span-2 lg:col-span-4 mt-2 rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-cyan-50 p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-7 h-7 rounded-full bg-indigo-600 text-white inline-flex items-center justify-center text-xs font-bold">2</span>
+                          <p className="text-sm font-bold text-slate-900">Describe the customer’s business</p>
+                        </div>
+                        <p className="text-xs text-slate-600 mt-1 ml-9">This brief is used only to prepare this tenant’s starter content. It is not shown on the customer storefront.</p>
+                      </div>
+                      <label className="inline-flex items-center gap-2 text-xs font-bold text-indigo-900 bg-white border border-indigo-200 rounded-lg px-3 py-2">
+                        <input
+                          type="checkbox"
+                          checked={tenantForm.onboarding.initializeStore}
+                          onChange={e => updateTenant('onboarding.initializeStore', e.target.checked)}
+                          className="accent-indigo-600"
+                        />
+                        Build starter storefront
+                      </label>
+                    </div>
+
+                    {tenantForm.onboarding.initializeStore && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Input label="Business Type" placeholder="Fashion boutique, electronics, grocery…" value={tenantForm.onboarding.businessType} onChange={v => updateTenant('onboarding.businessType', v)} required />
+                        <Input label="Brand Tone" placeholder="Premium, playful, professional…" value={tenantForm.onboarding.brandTone} onChange={v => updateTenant('onboarding.brandTone', v)} />
+                        <label className="grid gap-1.5 text-xs font-semibold text-slate-600 md:col-span-2">
+                          Short Business Description
+                          <textarea
+                            rows="3"
+                            maxLength="700"
+                            className="border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500"
+                            placeholder="What does this business sell, what makes it special, and where does it deliver?"
+                            value={tenantForm.onboarding.businessDescription}
+                            onChange={e => updateTenant('onboarding.businessDescription', e.target.value)}
+                          />
+                        </label>
+                        <label className="grid gap-1.5 text-xs font-semibold text-slate-600">
+                          Typical Items
+                          <textarea
+                            rows="3"
+                            maxLength="500"
+                            className="border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500"
+                            placeholder="T-shirts, handbags, shoes, watches"
+                            value={tenantForm.onboarding.itemExamples}
+                            onChange={e => updateTenant('onboarding.itemExamples', e.target.value)}
+                          />
+                          <span className="font-normal text-slate-400">Separate items with commas or new lines.</span>
+                        </label>
+                        <label className="grid gap-1.5 text-xs font-semibold text-slate-600">
+                          Target Customers
+                          <textarea
+                            rows="3"
+                            maxLength="180"
+                            className="border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900 resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500"
+                            placeholder="Young professionals in Sri Lanka looking for affordable style"
+                            value={tenantForm.onboarding.targetCustomers}
+                            onChange={e => updateTenant('onboarding.targetCustomers', e.target.value)}
+                          />
+                        </label>
+                        <div className="md:col-span-2 flex flex-wrap items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={generateStarterKitPreview}
+                            disabled={generatingStarterKit || !tenantForm.storeName.trim()}
+                            className="h-10 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-bold transition-colors"
+                          >
+                            {generatingStarterKit ? '✨ Creating starter kit…' : starterKitPreview ? '✨ Regenerate Preview' : '✨ Generate & Preview Starter Store'}
+                          </button>
+                          <p className="text-xs text-slate-500">Edit the generated content before creation. The required 6 Featured + 6 New Arrival products and one banner per type are preserved.</p>
+                        </div>
+                        {starterKitWarnings.map(warning => (
+                          <div key={warning} className="md:col-span-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">⚠ {warning}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {tenantForm.onboarding.initializeStore && starterKitPreview && (
+                    <div className="sm:col-span-2 lg:col-span-4">
+                      <StarterKitEditor
+                        kit={starterKitPreview}
+                        onChange={updateStarterItem}
+                        onRemove={removeStarterItem}
+                      />
+                    </div>
+                  )}
                   <div className="sm:col-span-2 lg:col-span-4">
-                    <button disabled={savingTenant} className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold text-sm transition-colors">
-                      {savingTenant ? 'Creating…' : 'Create Tenant'}
+                    <button disabled={savingTenant || generatingStarterKit} className="h-12 px-7 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white font-semibold text-sm transition-colors shadow-lg shadow-slate-900/10">
+                      {savingTenant ? 'Creating account and storefront…' : tenantForm.onboarding.initializeStore ? 'Create Tenant + Starter Store' : 'Create Empty Tenant'}
                     </button>
+                    {tenantForm.onboarding.initializeStore && !starterKitPreview && (
+                      <p className="text-xs text-slate-500 mt-2">If you do not preview first, the system will automatically generate the starter kit during creation.</p>
+                    )}
                   </div>
                 </form>
               </div>
@@ -757,6 +962,122 @@ function AlertChip({ tone, text }) {
     slate: 'bg-slate-200 text-slate-600',
   }[tone] || 'bg-slate-100 text-slate-600';
   return <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${cls}`}>{text}</span>;
+}
+
+function StarterKitEditor({ kit, onChange, onRemove }) {
+  const categories = kit?.categories || [];
+  const products = kit?.products || [];
+  const banners = kit?.banners || [];
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+      <div className="px-5 py-4 bg-slate-900 text-white flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="w-7 h-7 rounded-full bg-white/15 inline-flex items-center justify-center text-xs font-bold">3</span>
+            <p className="font-bold">Review the starter storefront</p>
+          </div>
+          <p className="text-xs text-slate-300 mt-1 ml-9">{kit.summary}</p>
+        </div>
+        <span className={`rounded-full px-3 py-1 text-xs font-bold ${kit.source === 'ai' ? 'bg-violet-400/20 text-violet-200' : 'bg-amber-400/20 text-amber-200'}`}>
+          {kit.source === 'ai' ? '✨ AI generated' : '⚡ Smart fallback'}
+        </span>
+      </div>
+
+      <div className="p-5 grid grid-cols-1 xl:grid-cols-3 gap-5">
+        <section className="rounded-xl border border-slate-200 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-slate-800">Categories</h3>
+            <span className="text-xs font-bold text-slate-400">{categories.length}</span>
+          </div>
+          <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+            {categories.map((category, index) => (
+              <div key={`${category.slug}-${index}`} className="flex items-center gap-2 rounded-lg bg-slate-50 p-2">
+                <input
+                  className="min-w-0 flex-1 h-9 rounded-md border border-slate-200 px-2 text-xs font-semibold"
+                  value={category.name}
+                  aria-label={`Category ${index + 1} name`}
+                  onChange={e => onChange('categories', index, 'name', e.target.value)}
+                />
+                <button type="button" onClick={() => onRemove('categories', index)} className="w-8 h-8 rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label={`Remove ${category.name}`}>×</button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 p-4 xl:col-span-2">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-slate-800">Editable sample products</h3>
+            <span className="text-xs font-bold text-slate-400">{products.length}</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1">
+            {products.map((product, index) => (
+              <div key={`${product.sku}-${index}`} className="rounded-lg bg-slate-50 p-3 border border-slate-100">
+                <span className={`inline-flex mb-2 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ${index < 6 ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'}`}>
+                  {index < 6 ? 'Featured product' : 'New arrival'}
+                </span>
+                <div className="flex gap-2">
+                  <input
+                    className="min-w-0 flex-1 h-9 rounded-md border border-slate-200 px-2 text-xs font-semibold"
+                    value={product.name}
+                    aria-label={`Product ${index + 1} name`}
+                    onChange={e => onChange('products', index, 'name', e.target.value)}
+                  />
+                  <span className="w-8 h-8 rounded-md text-slate-300 inline-flex items-center justify-center" title="Six products are required in each starter collection">🔒</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  <label className="text-[10px] font-bold text-slate-500">Price
+                    <input type="number" min="1" className="mt-1 w-full h-8 rounded-md border border-slate-200 px-2 text-xs" value={product.price} onChange={e => onChange('products', index, 'price', Number(e.target.value))} />
+                  </label>
+                  <label className="text-[10px] font-bold text-slate-500">Stock
+                    <input type="number" min="0" className="mt-1 w-full h-8 rounded-md border border-slate-200 px-2 text-xs" value={product.stock} onChange={e => onChange('products', index, 'stock', Number(e.target.value))} />
+                  </label>
+                  <label className="text-[10px] font-bold text-slate-500">Category
+                    <select className="mt-1 w-full h-8 rounded-md border border-slate-200 px-1 text-[11px]" value={product.categorySlug} onChange={e => onChange('products', index, 'categorySlug', e.target.value)}>
+                      {categories.map(category => <option key={category.slug} value={category.slug}>{category.name}</option>)}
+                    </select>
+                  </label>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 p-4 xl:col-span-2">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-slate-800">Banners and announcement</h3>
+            <span className="text-xs font-bold text-slate-400">{banners.length}</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {banners.map((banner, index) => {
+              const textKey = banner.position === 'running_top' ? 'runningText' : 'title';
+              return (
+                <div key={`${banner.position}-${index}`} className="flex items-center gap-2 rounded-lg bg-slate-50 p-2">
+                  <span className="rounded-md bg-white border border-slate-200 px-2 py-1 text-[10px] font-black uppercase text-slate-500">{banner.position.replace('_', ' ')}</span>
+                  <input className="min-w-0 flex-1 h-9 rounded-md border border-slate-200 px-2 text-xs font-semibold" value={banner[textKey] || ''} onChange={e => onChange('banners', index, textKey, e.target.value)} />
+                  <span className="w-8 h-8 rounded-md text-slate-300 inline-flex items-center justify-center" title="One starter banner is required for each banner type">🔒</span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 p-4">
+          <h3 className="text-sm font-bold text-slate-800 mb-3">Brand direction</h3>
+          <div className="flex items-center gap-3">
+            {[kit.theme?.primaryColor, kit.theme?.accentColor, kit.theme?.darkColor].map((color, index) => (
+              <div key={`${color}-${index}`} className="w-10 h-10 rounded-xl border-2 border-white shadow ring-1 ring-slate-200" style={{ backgroundColor: color }} title={color} />
+            ))}
+          </div>
+          <p className="text-xs text-slate-500 mt-3">Template: <strong className="text-slate-700">{kit.theme?.storeTemplate || 'classic'}</strong></p>
+          <p className="text-xs text-slate-500 mt-1">SEO title: <strong className="text-slate-700">{kit.settings?.metaTitle}</strong></p>
+          <p className="text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100">Initially hidden: <strong className="text-slate-700">Categories, brands and newsletter</strong>. The tenant admin can enable them from Layout Builder.</p>
+        </section>
+      </div>
+      <div className="px-5 py-3 bg-amber-50 border-t border-amber-100 text-xs text-amber-800">
+        Sample products use a professional placeholder image. The tenant admin should replace sample names, prices, stock and images with real catalogue data before advertising the store.
+      </div>
+    </div>
+  );
 }
 
 function Input({ label, value, onChange, type = 'text', placeholder = '', required = false }) {

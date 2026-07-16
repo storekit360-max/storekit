@@ -33,6 +33,9 @@ const tenantSchema = new mongoose.Schema({
     faviconUrl: { type: String, default: '' },
     metaTitle: { type: String, default: '' },
     metaDescription: { type: String, default: '' },
+    storeTagline: { type: String, default: '' },
+    heroBrowseAllLabel: { type: String, default: 'Browse All' },
+    heroStats: { type: String, default: '[]' },
     siteUrl: { type: String, default: '' },
     siteLanguage: { type: String, default: 'en' },
     ogTitle: { type: String, default: '' },
@@ -67,6 +70,10 @@ const tenantSchema = new mongoose.Schema({
     loaderStyle: { type: String, default: 'classic-ring' },
     loadingText: { type: String, default: 'Preparing your shopping experience' },
     marketingTrackingEnabled: { type: Boolean, default: true },
+    enableNewsletter: { type: Boolean, default: true },
+    starterImagesProvider: { type: String, default: '' },
+    starterImagesAttributionUrl: { type: String, default: '' },
+    homepageProductLimit: { type: Number, default: 8 },
   },
 
   subscription: {
@@ -120,6 +127,18 @@ const tenantSchema = new mongoose.Schema({
     layoutTemplate: { type: String, default: '' },
     customCSS: { type: String, default: '' },
     logoSize: { type: Number, default: 48 },
+  },
+
+  // Non-sensitive business context captured by Super Admin during onboarding.
+  // It is kept outside storefront settings so it is not exposed by /api/settings.
+  onboarding: {
+    businessType: { type: String, default: '' },
+    businessDescription: { type: String, default: '' },
+    itemExamples: { type: [String], default: [] },
+    targetCustomers: { type: String, default: '' },
+    brandTone: { type: String, default: '' },
+    starterKitSource: { type: String, enum: ['', 'ai', 'fallback', 'manual'], default: '' },
+    starterKitGeneratedAt: { type: Date, default: null },
   },
 }, { timestamps: true });
 

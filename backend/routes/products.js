@@ -931,6 +931,13 @@ router.put('/:id', adminAuth, async (req, res) => {
       body.normalizedSku = normalizeProductValue(nextSku);
       body.duplicateIndexEligible = true;
     }
+    if (before.isStarterSample && (
+      identityChanged ||
+      (body.thumbnail && body.thumbnail !== before.thumbnail) ||
+      (Array.isArray(body.images) && body.images.some(image => !(before.images || []).includes(image)))
+    )) {
+      body.isStarterSample = false;
+    }
     if (body.slug || body.name) body.slug = await makeUniqueProductSlug(body.slug || body.name, tenantId, req.params.id);
     product = await Product.findOneAndUpdate(
       { _id: req.params.id, tenantId }, { $set: { ...body, updatedAt: new Date() } }, { new: true, runValidators: false }

@@ -8,9 +8,12 @@ const User = require('../models/User');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const TenantPayment = require('../models/TenantPayment');
+const { Category, Banner, Settings, PaymentGateway, DeliveryService, BusinessPage } = require('../models/index');
 const { auth } = require('../middleware/auth');
 const { normalizeDomain } = require('../middleware/tenant');
 const subscriptionService = require('../services/subscriptionService');
+const { bootstrapTenantStore } = require('../utils/tenantBootstrap');
+const { generateStarterKit, normalizeStarterKit, sanitizeBrief } = require('../services/tenantStarterKit');
 
 const router = express.Router();
 
@@ -40,6 +43,32 @@ function superAdminOnly(req, res, next) {
 }
 
 router.use(auth, superAdminOnly);
+
+router.post('/tenant-starter-kit/preview', async (req, res, next) => {
+  try {
+    const brief = sanitizeBrief(req.body || {});
+    if (!brief.storeName || brief.storeName === 'New Store') {
+      return res.status(400).json({ message: 'Store name is required before generating a starter kit' });
+    }
+    const result = await generateStarterKit(brief);
+    res.json({ ...result, brief });
+  } catch (err) { next(err); }
+});
+
+async function cleanupFailedTenantCreation(tenantId) {
+  if (!tenantId) return;
+  await Promise.allSettled([
+    Product.deleteMany({ tenantId }),
+    Category.deleteMany({ tenantId }),
+    Banner.deleteMany({ tenantId }),
+    Settings.deleteMany({ tenantId }),
+    PaymentGateway.deleteMany({ tenantId }),
+    DeliveryService.deleteMany({ tenantId }),
+    BusinessPage.deleteMany({ tenantId }),
+    User.deleteMany({ tenantId }),
+  ]);
+  await Tenant.deleteOne({ _id: tenantId }).catch(() => {});
+}
 
 router.get('/stats', async (_req, res, next) => {
   try {
@@ -253,24 +282,80 @@ router.get('/tenants', async (_req, res, next) => {
 });
 
 router.post('/tenants', async (req, res, next) => {
+  let createdTenantId = null;
   try {
-    const { storeName, slug, domain, plan, adminEmail, adminPassword, adminFirstName, adminLastName, settings, theme } = req.body;
-    if (!storeName || !slug || !plan || !adminEmail || !adminPassword) {
+    const {
+      storeName, slug, domain, plan, adminEmail, adminPassword, adminFirstName,
+      adminLastName, settings, theme, onboarding = {}, starterKit: requestedStarterKit,
+    } = req.body;
+    if (![storeName, slug, plan, adminEmail, adminPassword].every(value => String(value || '').trim())) {
       return res.status(400).json({ message: 'storeName, slug, plan, adminEmail and adminPassword are required' });
     }
 
-    const cleanSlug = String(slug).toLowerCase().trim();
+    const cleanSlug = String(slug).toLowerCase().trim().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/(^-|-$)/g, '');
+    if (!cleanSlug || cleanSlug.length > 70) return res.status(400).json({ message: 'Enter a valid tenant slug (maximum 70 characters)' });
+    const planDoc = await Plan.findById(plan);
+    if (!planDoc) return res.status(400).json({ message: 'Selected plan does not exist' });
+
+    const initializeStore = onboarding.initializeStore !== false;
+    const brief = sanitizeBrief({
+      ...onboarding,
+      storeName,
+      currency: settings?.currency || onboarding.currency || 'LKR',
+    });
+    let starterKitResult = { starterKit: null, warnings: [] };
+    if (initializeStore) {
+      starterKitResult = requestedStarterKit
+        ? {
+            starterKit: normalizeStarterKit(
+              requestedStarterKit,
+              brief,
+              requestedStarterKit.source === 'ai' ? 'ai' : 'fallback'
+            ),
+            warnings: [],
+          }
+        : await generateStarterKit(brief);
+    }
+    const starterKit = starterKitResult.starterKit;
     const domains = [];
     const primaryDomain = domain ? normalizeDomain(domain) : '';
     if (primaryDomain) domains.push({ domain: primaryDomain, type: 'primary', verified: false, active: true });
+    const starterLogoUrl = primaryDomain && !['localhost', '127.0.0.1'].includes(primaryDomain)
+      ? `https://${primaryDomain}/api/settings/starter-logo.svg`
+      : '/api/settings/starter-logo.svg';
     const tenantSettings = {
+      ...(starterKit?.settings || {}),
       ...(settings || {}),
       ...(primaryDomain && !(settings || {}).siteUrl ? { siteUrl: `https://${primaryDomain}` } : {}),
-      metaTitle: (settings || {}).metaTitle || storeName,
-      metaDescription: (settings || {}).metaDescription || `Shop online at ${storeName}.`,
+      heroStats: typeof settings?.heroStats === 'string'
+        ? settings.heroStats
+        : JSON.stringify(settings?.heroStats || starterKit?.settings?.heroStats || []),
+      metaTitle: (settings || {}).metaTitle || starterKit?.settings?.metaTitle || storeName,
+      metaDescription: (settings || {}).metaDescription || starterKit?.settings?.metaDescription || `Shop online at ${storeName}.`,
+      logoUrl: settings?.logoUrl || (initializeStore ? starterLogoUrl : ''),
+      faviconUrl: settings?.faviconUrl || (initializeStore ? starterLogoUrl : ''),
+    };
+    const tenantTheme = { ...(starterKit?.theme || {}), ...(theme || {}) };
+    const onboardingData = {
+      businessType: brief.businessType,
+      businessDescription: brief.businessDescription,
+      itemExamples: brief.itemExamples,
+      targetCustomers: brief.targetCustomers,
+      brandTone: brief.brandTone,
+      starterKitSource: starterKit?.source || '',
+      starterKitGeneratedAt: starterKit ? new Date() : null,
     };
 
-    const tenant = await Tenant.create({ storeName, slug: cleanSlug, plan, domains, settings: tenantSettings, theme: theme || {} });
+    const tenant = await Tenant.create({
+      storeName: brief.storeName,
+      slug: cleanSlug,
+      plan,
+      domains,
+      settings: tenantSettings,
+      theme: tenantTheme,
+      onboarding: onboardingData,
+    });
+    createdTenantId = tenant._id;
 
     const user = await User.create({
       firstName: adminFirstName || 'Store',
@@ -286,14 +371,35 @@ router.post('/tenants', async (req, res, next) => {
     tenant.owner = user._id;
     await tenant.save();
 
+    let bootstrapResult = null;
+    if (initializeStore) {
+      const populatedForBootstrap = await Tenant.findById(tenant._id).populate('plan');
+      bootstrapResult = await bootstrapTenantStore(populatedForBootstrap, { starterKit });
+    }
+
     // Billing automation kicks in right here: the tenant now starts its
     // trial (or goes straight to 'active' for free/no-trial plans) with no
     // further manual configuration needed.
-    const planDoc = await Plan.findById(plan);
     if (planDoc) await subscriptionService.startSubscription(tenant, planDoc);
 
-    res.status(201).json(await Tenant.findById(tenant._id).populate('plan').populate('owner', 'firstName lastName email username role'));
-  } catch (err) { next(err); }
+    const populated = await Tenant.findById(tenant._id).populate('plan').populate('owner', 'firstName lastName email username role');
+    res.status(201).json({
+      ...populated.toObject(),
+      starterKitResult: initializeStore ? {
+        source: starterKit?.source || 'fallback',
+        summary: starterKit?.summary || '',
+        warnings: [...(starterKitResult.warnings || []), ...(bootstrapResult?.warnings || [])],
+        created: bootstrapResult,
+      } : null,
+    });
+  } catch (err) {
+    if (createdTenantId) await cleanupFailedTenantCreation(createdTenantId);
+    if (err.code === 11000) {
+      const field = Object.keys(err.keyPattern || {})[0] || 'tenant details';
+      return res.status(409).json({ message: `A tenant already uses this ${field}` });
+    }
+    next(err);
+  }
 });
 
 router.put('/tenants/:id', async (req, res, next) => {

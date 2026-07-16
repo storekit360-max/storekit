@@ -78,6 +78,7 @@ const helmetMiddleware = helmet({
         'data:',
         'blob:',
         'https://res.cloudinary.com',
+        'https://images.pexels.com',
         'https://lh3.googleusercontent.com',
         'https://*.googleusercontent.com',
         'https://www.google-analytics.com',    // GA4 beacon pixel

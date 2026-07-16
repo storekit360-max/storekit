@@ -512,6 +512,19 @@ export default function ProductDetail() {
               {images.map((_,i)=><button key={i} onClick={()=>setSelImg(i)} className={`gallery-dot ${selImg===i?'active':''}`}/>)}
             </div>
           )}
+
+          {product.imageAttribution?.provider && (
+            <p className="mt-2 text-[11px] text-gray-400">
+              Photo by{' '}
+              <a href={product.imageAttribution.photographerUrl || product.imageAttribution.sourceUrl} target="_blank" rel="noreferrer" className="underline hover:text-gray-600">
+                {product.imageAttribution.photographer || 'a contributor'}
+              </a>{' '}
+              on{' '}
+              <a href={product.imageAttribution.sourceUrl || 'https://www.pexels.com'} target="_blank" rel="noreferrer" className="underline hover:text-gray-600">
+                {product.imageAttribution.provider}
+              </a>
+            </p>
+          )}
         </div>
 
         {/* ── Product Info ── */}

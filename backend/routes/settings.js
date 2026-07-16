@@ -81,6 +81,31 @@ async function findTenantFromRequest(req) {
   }).populate('plan');
 }
 
+function escapeSvgText(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+router.get('/starter-logo.svg', async (req, res) => {
+  try {
+    const tenant = await findTenantFromRequest(req);
+    if (!tenant) return res.status(404).send('Store not found');
+    const storeName = escapeSvgText(tenant.storeName || 'Store');
+    const initials = escapeSvgText(String(tenant.storeName || 'S').split(/\s+/).filter(Boolean).slice(0, 2).map(word => word[0]).join('').toUpperCase());
+    const primary = /^#[0-9a-f]{6}$/i.test(tenant.theme?.primaryColor || '') ? tenant.theme.primaryColor : '#4f46e5';
+    const accent = /^#[0-9a-f]{6}$/i.test(tenant.theme?.accentColor || '') ? tenant.theme.accentColor : '#06b6d4';
+    const nameLength = String(tenant.storeName || '').length;
+    const fontSize = nameLength > 24 ? 30 : nameLength > 16 ? 38 : 50;
+    res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
+    res.send(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 180" role="img" aria-label="${storeName}"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${primary}"/><stop offset="1" stop-color="${accent}"/></linearGradient></defs><rect width="720" height="180" rx="30" fill="white"/><rect x="10" y="10" width="160" height="160" rx="48" fill="url(#g)"/><text x="90" y="112" text-anchor="middle" font-family="Arial,sans-serif" font-size="64" font-weight="800" fill="white">${initials}</text><text x="200" y="108" font-family="Arial,sans-serif" font-size="${fontSize}" font-weight="800" fill="#0f172a">${storeName}</text></svg>`);
+  } catch (err) { res.status(500).send('Could not create store logo'); }
+});
+
 async function getLogoUrl(req) {
   if (req.storeUnavailable) return null;
   const tenant = await findTenantFromRequest(req);

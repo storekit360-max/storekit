@@ -298,6 +298,9 @@ Tenant-specific sender settings and Resend keys can also be managed through Admi
 |---|---|
 | `OPENROUTER_API_KEY` | OpenRouter content/image provider |
 | `GEMINI_API_KEY` | Gemini fallback/provider |
+| `OPENROUTER_TEXT_MODEL` | Optional OpenRouter model override for tenant onboarding |
+| `GEMINI_TEXT_MODEL` | Optional Gemini model override for tenant onboarding |
+| `PEXELS_API_KEY` | Server-side product-photo search for new tenant starter catalogues |
 
 At least one AI provider is required for AI generation features. Core ecommerce functions do not require AI.
 
@@ -397,10 +400,36 @@ Expected shape:
 
 1. Sign in at `/superadmin/login`.
 2. Create and configure a plan.
-3. Create a tenant and assign the plan.
-4. Create the tenant admin with a strong password.
-5. Add the domain without protocol or path, for example `shop.example.com`.
-6. Ensure the tenant, subscription, and domain are active.
+3. Open **Tenants** and enter the account, plan, admin, and domain details.
+4. Add a short business brief: business type, common items, target customers,
+   and preferred brand tone.
+5. Keep **Build starter storefront** enabled and select **Generate & Preview**.
+6. Review/edit the generated categories, sample product prices/stock, banners,
+   theme direction, and SEO copy, then create the tenant.
+7. Give the tenant admin the generated credentials using a secure channel.
+8. Ask the tenant admin to replace all items marked **Starter sample** with
+   real descriptions, prices, stock, and product photographs before marketing.
+9. Ensure the tenant, subscription, and domain are active.
+
+Tenant onboarding calls OpenRouter or Gemini only from the backend. If neither
+provider is configured or a provider is temporarily unavailable, StoreKit uses
+a deterministic business-aware starter template so tenant creation can still
+finish. The seed is tenant-scoped and includes categories, editable sample
+products, one banner for every banner position, an initial logo, theme/SEO copy, COD,
+standard delivery, and core business pages. Disable **Build starter storefront**
+only when an intentionally empty tenant is required.
+
+New starter stores use a product-first homepage: six Featured products and six
+New Arrivals are shown, while Browse Categories, Shop by Brand, and Newsletter
+are initially disabled. The tenant admin can enable those sections later in
+Admin → Layout Builder; saving the newsletter section also synchronizes the
+storewide newsletter setting.
+
+For the strongest first impression, configure `PEXELS_API_KEY` in Railway. The
+backend searches Pexels once during tenant creation, hotlinks the returned CDN
+images, saves photographer/source attribution on each sample product, and adds
+a Pexels attribution link to the storefront. If the provider is unavailable,
+creation continues with the bundled product placeholder and reports a warning.
 
 ### Connect the domain to Vercel
 

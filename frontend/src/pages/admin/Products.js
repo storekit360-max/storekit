@@ -1158,6 +1158,7 @@ export default function AdminProducts() {
                         <div className="min-w-0">
                           <p className="font-semibold text-sm text-gray-800 truncate max-w-xs">{p.name}</p>
                           <p className="text-xs text-gray-400">{p.category?.name}</p>
+                          {p.isStarterSample && <span className="inline-flex mt-1 mr-1 px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold" title="Replace the sample details and image before advertising this product">Starter sample</span>}
                           {p.duplicateInfo && <span className="inline-flex mt-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold" title={p.duplicateInfo.fields?.map(f=>`${f.kind}: ${f.value}`).join(', ')}>Duplicate · {p.duplicateInfo.count}</span>}
                         </div>
                       </div>

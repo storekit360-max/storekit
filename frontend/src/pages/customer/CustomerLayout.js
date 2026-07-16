@@ -861,6 +861,17 @@ const Footer = ({ settings }) => {
               }
             </div>
             <p className="text-sm leading-relaxed mb-4" style={{color:'#64748b'}}>{settings?.storeTagline||'Premium products, delivered.'}</p>
+            {settings?.starterImagesProvider && settings?.starterImagesAttributionUrl && (
+              <a
+                href={settings.starterImagesAttributionUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex text-[11px] mb-4 hover:underline"
+                style={{color:'#94a3b8'}}
+              >
+                Starter photos provided by {settings.starterImagesProvider}
+              </a>
+            )}
             {/* Real social media accounts from the Social Media module */}
             {socialAccounts.length > 0 && (
               <div className="flex gap-2 flex-wrap">

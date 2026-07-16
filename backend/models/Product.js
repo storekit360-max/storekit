@@ -35,6 +35,12 @@ const productSchema = new mongoose.Schema({
   brand: String,
   images: [String],
   thumbnail: String,
+  imageAttribution: {
+    provider: { type: String, default: '' },
+    photographer: { type: String, default: '' },
+    photographerUrl: { type: String, default: '' },
+    sourceUrl: { type: String, default: '' },
+  },
   stock: { type: Number, default: 0 },
   lowStockThreshold: { type: Number, default: 5 },
   weight: Number,
@@ -55,6 +61,9 @@ const productSchema = new mongoose.Schema({
   isFeatured: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true },
   isOnSale: { type: Boolean, default: false },
+  // Marks editable catalogue examples created during tenant onboarding.
+  // Store admins can replace or delete them like any other product.
+  isStarterSample: { type: Boolean, default: false },
   saleEndsAt: Date,
   ratings: { average: { type: Number, default: 0 }, count: { type: Number, default: 0 } },
   views: { type: Number, default: 0 },

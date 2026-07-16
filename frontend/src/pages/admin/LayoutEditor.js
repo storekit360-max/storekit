@@ -214,7 +214,11 @@ export default function LayoutEditor() {
       PAGE_TABS.forEach(p => {
         toSave[p.id] = (layouts[p.id] || initLayout(p.id)).map(({ id, enabled, order }) => ({ id, enabled, order }));
       });
-      const { data } = await API.put('/settings', { layout_builder: toSave });
+      const newsletterSection = toSave.homepage?.find(section => section.id === 'newsletter');
+      const { data } = await API.put('/settings', {
+        layout_builder: toSave,
+        ...(newsletterSection ? { enableNewsletter: newsletterSection.enabled } : {}),
+      });
       if (!data?.settings?.layout_builder) {
         throw new Error('The server did not persist the layout configuration');
       }
