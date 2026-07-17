@@ -15,6 +15,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import API from '../../utils/api';
 import toast from 'react-hot-toast';
+import SocialPostManagement from '../../components/admin/SocialPostManagement';
 
 // ─── Platform meta-data ───────────────────────────────────────────────────────
 const PLATFORMS = [
@@ -274,7 +275,7 @@ function TokenExpiryBadge({ status }) {
 }
 
 // ─── Post Management Tab ──────────────────────────────────────────────────────
-function PostManagementTab({ connectedPlatforms }) {
+export function LegacyPostManagementTab({ connectedPlatforms }) {
   // Filters
   const [brands, setBrands]           = useState([]);
   const [categories, setCategories]   = useState([]);
@@ -899,7 +900,7 @@ export default function SocialMediaSettings() {
 
       {/* ── Post Management Tab ── */}
       {mainTab === 'post-management' && (
-        <PostManagementTab connectedPlatforms={connectedPlatformIds} />
+        <SocialPostManagement connectedPlatforms={connectedPlatformIds} />
       )}
 
       {/* ── Account Settings Tab ── */}

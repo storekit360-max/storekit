@@ -38,7 +38,7 @@
  * The productUrl comes from payload.productUrl (set by postComposer.js).
  */
 
-const GRAPH = 'https://graph.facebook.com/v21.0';
+const GRAPH = `https://graph.facebook.com/${process.env.META_GRAPH_VERSION || 'v21.0'}`;
 
 async function publish(creds, payload) {
   const { accessToken, accountId } = creds;
@@ -74,6 +74,15 @@ async function publish(creds, payload) {
                : payload.imageUrl          ? [payload.imageUrl]
                : [];
 
+  // Facebook can render a native Shop Now link card for a single-product
+  // post. A carousel cannot carry that same native CTA without discarding
+  // media, so multi-image posts intentionally keep every image and the URL in
+  // the message. WhatsApp destinations are published as link cards because a
+  // native external WhatsApp CTA is not consistently supported for feed posts.
+  if (images.length <= 1 && payload.cta && payload.cta !== 'none') {
+    return postCtaLink(accountId, accessToken, payload);
+  }
+
   if (images.length > 1) {
     return postMultipleImages(accountId, accessToken, payload, images);
   } else if (images.length === 1) {
@@ -81,6 +90,49 @@ async function publish(creds, payload) {
   } else {
     return postTextOnly(accountId, accessToken, payload);
   }
+}
+
+async function postCtaLink(pageId, accessToken, payload) {
+  const productUrl = getProductUrl(payload);
+  const whatsappMatch = String(payload.ctaUrl || payload.text || '').match(/https:\/\/wa\.me\/[^\s]+/i);
+  const destination = payload.cta === 'whatsapp' ? whatsappMatch?.[0] : productUrl;
+  if (!destination) throw new Error(`Facebook ${payload.cta} CTA requires a valid HTTPS destination`);
+  const body = { message: payload.text || '', link: destination, access_token: accessToken };
+  if (payload.cta === 'shop_now') {
+    body.call_to_action = { type: 'SHOP_NOW', value: { link: destination } };
+  }
+  let response = await fetch(`${GRAPH}/${pageId}/feed`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  let json = await response.json();
+  if (json.error && body.call_to_action) {
+    // Some Page/app combinations do not permit native feed CTA fields. Preserve
+    // the real clickable destination with a standard link card instead of
+    // failing or falsely claiming a button was created.
+    delete body.call_to_action;
+    response = await fetch(`${GRAPH}/${pageId}/feed`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    json = await response.json();
+  }
+  if (json.error) {
+    const error = new Error(`Facebook CTA post failed: ${json.error.message} (code ${json.error.code})`);
+    error.code = String(json.error.code || 'FB_CTA_ERROR');
+    throw error;
+  }
+  return successResult(json.id, accessToken);
+}
+
+async function successResult(postId, accessToken, mediaIds = []) {
+  let publishedUrl = postId ? `https://www.facebook.com/${postId}` : '';
+  if (postId) {
+    try {
+      const response = await fetch(`${GRAPH}/${postId}?fields=permalink_url&access_token=${encodeURIComponent(accessToken)}`);
+      const json = await response.json();
+      if (json.permalink_url) publishedUrl = json.permalink_url;
+    } catch (_) {}
+  }
+  return { platformPostId: postId || '', publishedUrl, platformMediaIds: mediaIds };
 }
 
 /**
@@ -145,7 +197,7 @@ async function postSingleImage(pageId, accessToken, payload, imageUrl) {
 
       if (!feedJson.error) {
         console.log(`[Facebook] ✅ Feed post with image + product link: ${feedJson.id}`);
-        return { platformPostId: feedJson.id || '' };
+        return successResult(feedJson.id, accessToken, [stageJson.id]);
       }
       console.warn(`[Facebook] Feed post with attached_media failed: ${feedJson.error.message}`);
     } else {
@@ -211,7 +263,7 @@ async function postMultipleImages(pageId, accessToken, payload, images) {
     const json = await res.json();
     if (!json.error) {
       console.log(`[Facebook] ✅ Feed post (1 image): ${json.id}`);
-      return { platformPostId: json.id || '' };
+      return successResult(json.id, accessToken, photoIds);
     }
     return postSingleImage(pageId, accessToken, payload, images[0]);
   }
@@ -232,7 +284,7 @@ async function postMultipleImages(pageId, accessToken, payload, images) {
 
   if (!json.error) {
     console.log(`[Facebook] ✅ Carousel feed post (${photoIds.length} images): ${json.id}`);
-    return { platformPostId: json.id || '' };
+    return successResult(json.id, accessToken, photoIds);
   }
 
   console.warn(`[Facebook] Multi-image feed failed (${json.error.message}) — falling back to single image`);
@@ -269,7 +321,7 @@ async function postTextOnly(pageId, accessToken, payload) {
   }
 
   console.log(`[Facebook] ✅ Text post with link: ${json.id}`);
-  return { platformPostId: json.id || '' };
+  return successResult(json.id, accessToken);
 }
 
 /**

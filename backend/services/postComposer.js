@@ -18,14 +18,15 @@
  */
 
 const { getOrCreate } = require('./socialMediaService');
-
-const STORE_URL = process.env.FRONTEND_URL || 'https://storekit.local';
+const Tenant = require('../models/Tenant');
+const { currentTenantId } = require('../middleware/tenantContext');
+const { selectTenantSiteUrl, normalizeHashtag } = require('./socialSchedulingUtils');
 
 function interpolate(template, vars) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? '');
 }
 
-function productVars(p) {
+function productVars(p, context = {}) {
   const disc = p.price && p.salePrice
     ? Math.round(((p.price - p.salePrice) / p.price) * 100) : 0;
   return {
@@ -34,13 +35,15 @@ function productVars(p) {
     salePrice:   p.salePrice    ? `LKR ${p.salePrice.toLocaleString()}` : '',
     discount:    disc           ? `${disc}%` : '',
     brand:       p.brand        || '',
-    category:    p.subCategory  || '',
-    url:         `${STORE_URL}/product/${p.slug || p._id}`,
+    category:    p.category?.name || p.subCategory || '',
+    url:         context.siteUrl ? `${context.siteUrl}/product/${p.slug || p._id}` : '',
     offerName:   '',
+    storeName:   context.storeName || 'Our Store',
+    storeHashtag: context.storeHashtag || '#ShopOnline',
   };
 }
 
-function offerVars(o) {
+function offerVars(o, context = {}) {
   return {
     productName: '',
     price:       '',
@@ -48,8 +51,10 @@ function offerVars(o) {
     discount:    o.discountPercent ? `${o.discountPercent}%` : '',
     brand:       '',
     category:    '',
-    url:         o.pageSlug ? `${STORE_URL}/campaign/${o.pageSlug}` : STORE_URL,
+    url:         o.pageSlug && context.siteUrl ? `${context.siteUrl}/campaign/${o.pageSlug}` : context.siteUrl,
     offerName:   o.name || '',
+    storeName:   context.storeName || 'Our Store',
+    storeHashtag: context.storeHashtag || '#ShopOnline',
   };
 }
 
@@ -59,12 +64,12 @@ const DEFAULTS = {
     const brandLine = v.brand ? `\n🏷️ Brand: ${v.brand}` : '';
     const catLine   = v.category ? `\n📂 ${v.category}` : '';
     return (
-      `✨ Just Landed at StoreKit!\n\n` +
+      `✨ Just Landed at ${v.storeName}!\n\n` +
       `🛍️ ${v.productName}${brandLine}${catLine}\n\n` +
       `💰 Price: ${v.price}\n\n` +
       `Don't miss out — this one won't last long! Tap the link below to grab yours now 👇\n\n` +
       `🔗 ${v.url}\n\n` +
-      `#StoreKit #NewArrival #ShopNow #SriLanka`
+      `${v.storeHashtag} #NewArrival #ShopOnline #SriLanka`
     );
   },
 
@@ -80,7 +85,7 @@ const DEFAULTS = {
       `⏰ Limited time deal — stock is running out!\n\n` +
       `Shop now before it's gone 👇\n` +
       `🔗 ${v.url}\n\n` +
-      `#StoreKit #Sale #Discount #DealOfTheDay #SriLanka`
+      `${v.storeHashtag} #Sale #Discount #SriLanka`
     );
   },
 
@@ -93,7 +98,7 @@ const DEFAULTS = {
       `⏳ Hurry — limited time only!\n\n` +
       `Shop the offer now 👇\n` +
       `🔗 ${v.url}\n\n` +
-      `#StoreKit #SpecialOffer #LimitedTime #SriLanka`
+      `${v.storeHashtag} #SpecialOffer #SriLanka`
     );
   },
 
@@ -108,7 +113,14 @@ const DEFAULTS = {
 
 async function compose(platform, trigger, entity, customMsg = '') {
   const isOffer = trigger === 'offer_active';
-  const vars    = isOffer ? offerVars(entity) : productVars(entity);
+  const tenantId = currentTenantId() || entity.tenantId;
+  const tenant = tenantId ? await Tenant.findById(tenantId).lean() : null;
+  const context = {
+    siteUrl: selectTenantSiteUrl(tenant),
+    storeName: tenant?.storeName || 'Our Store',
+    storeHashtag: normalizeHashtag(tenant?.storeName) || '#ShopOnline',
+  };
+  const vars    = isOffer ? offerVars(entity, context) : productVars(entity, context);
 
   // ── The product/offer URL — passed as dedicated field so publishers can use
   //    it as a `link` param (Facebook link preview) without parsing the text ──

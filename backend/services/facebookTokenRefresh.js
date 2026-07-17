@@ -23,7 +23,7 @@
  *   https://developers.facebook.com/docs/facebook-login/guides/access-tokens/refreshing
  */
 
-const GRAPH_VER = 'v21.0';
+const GRAPH_VER = process.env.META_GRAPH_VERSION || 'v21.0';
 const GRAPH     = `https://graph.facebook.com/${GRAPH_VER}`;
 
 // ─── How many days before expiry we proactively refresh ──────────────────────

@@ -361,7 +361,7 @@ async function testFacebook(data) {
   if (!data.accessToken) return { ok: false, message: 'No access token configured' };
   try {
     const res = await fetch(
-      `https://graph.facebook.com/v19.0/me?access_token=${data.accessToken}&fields=id,name`
+      `https://graph.facebook.com/${process.env.META_GRAPH_VERSION || 'v21.0'}/me?access_token=${data.accessToken}&fields=id,name`
     );
     const json = await res.json();
     if (json.error) return { ok: false, message: json.error.message };
@@ -375,7 +375,7 @@ async function testInstagram(data) {
   if (!data.accessToken) return { ok: false, message: 'No access token configured' };
   try {
     const res = await fetch(
-      `https://graph.facebook.com/v19.0/me?access_token=${data.accessToken}&fields=id,name,username`
+      `https://graph.facebook.com/${process.env.META_GRAPH_VERSION || 'v21.0'}/me?access_token=${data.accessToken}&fields=id,name,username`
     );
     const json = await res.json();
     if (json.error) return { ok: false, message: json.error.message };

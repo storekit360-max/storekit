@@ -24,15 +24,15 @@ const PUBLISHERS = {
 };
 
 // ── Entity loader ─────────────────────────────────────────────────────────────
-async function loadEntity(entityType, entityId) {
+async function loadEntity(entityType, entityId, tenantId = null) {
   if (!entityId) return null;
   if (entityType === 'product') {
     const Product = require('../models/Product');
-    return Product.findById(entityId).lean();
+    return Product.findOne({ _id: entityId, ...(tenantId ? { tenantId } : {}) }).populate('category', 'name').lean();
   }
   if (entityType === 'offer') {
     const { SeasonalCampaign } = require('../models/index');
-    return SeasonalCampaign.findById(entityId).lean();
+    return SeasonalCampaign.findOne({ _id: entityId, ...(tenantId ? { tenantId } : {}) }).lean();
   }
   return null;
 }
@@ -73,11 +73,15 @@ async function publishNow(opts = {}) {
     triggeredBy   = 'system',
     originalLogId = null,
     attemptNumber = 1,
+    tenantId      = null,
+    payloadOverride = null,
+    scheduleId    = null,
+    queueItemId   = null,
   } = opts;
 
   const t0      = Date.now();
   const isRetry = attemptNumber > 1;
-  const base    = { platform, trigger, triggeredBy, entityType, entityId, entityName, attemptNumber, isRetry, originalLogId };
+  const base    = { tenantId, platform, trigger, triggeredBy, entityType, entityId, entityName, attemptNumber, isRetry, originalLogId, scheduleId, queueItemId };
 
   // ── 1. Validate platform ───────────────────────────────────────────────────
   if (!PUBLISHERS[platform]) {
@@ -146,7 +150,7 @@ async function publishNow(opts = {}) {
   // ── 3. Load entity ─────────────────────────────────────────────────────────
   let entity;
   try {
-    entity = await loadEntity(entityType, entityId);
+    entity = await loadEntity(entityType, entityId, tenantId);
     if (!entity) throw new Error(`${entityType} not found: ${entityId}`);
   } catch (err) {
     return writeLog({ ...base, postText: '', imageUrl: '', durationMs: Date.now() - t0, status: 'failed', errorMessage: err.message, errorCode: 'ENTITY_NOT_FOUND' });
@@ -155,7 +159,7 @@ async function publishNow(opts = {}) {
   // ── 4. Compose post ────────────────────────────────────────────────────────
   let payload;
   try {
-    payload = await compose(platform, trigger, entity, customMsg);
+    payload = payloadOverride || await compose(platform, trigger, entity, customMsg);
   } catch (err) {
     return writeLog({ ...base, entityName: entity.name || entity.title || entityName, postText: '', imageUrl: '', durationMs: Date.now() - t0, status: 'failed', errorMessage: `Compose error: ${err.message}`, errorCode: 'COMPOSE_ERROR' });
   }
@@ -165,7 +169,19 @@ async function publishNow(opts = {}) {
   // ── 5. Publish ─────────────────────────────────────────────────────────────
   try {
     const result = await PUBLISHERS[platform].publish(creds, payload);
-    const log    = await writeLog({ ...resolved, durationMs: Date.now() - t0, status: 'success', platformPostId: result.platformPostId || '' });
+    const log    = await writeLog({ ...resolved, durationMs: Date.now() - t0, status: 'success', platformPostId: result.platformPostId || '', platformPostUrl: result.publishedUrl || '' });
+    if (log) {
+      log.publisherResult = result;
+    } else {
+      // The external mutation already succeeded. Return an explicit in-memory
+      // success so a queue worker can persist/reconcile the provider ID instead
+      // of retrying and creating a duplicate merely because audit logging failed.
+      return {
+        status: 'success', platformPostId: result.platformPostId || '',
+        platformPostUrl: result.publishedUrl || '', publisherResult: result,
+        auditLogFailed: true,
+      };
+    }
     console.log(`[Publisher] ✅ ${platform} | ${trigger} | "${resolved.entityName}" → ${result.platformPostId}`);
     return log;
   } catch (err) {

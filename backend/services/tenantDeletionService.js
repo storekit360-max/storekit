@@ -9,6 +9,10 @@ const Order = require('../models/Order');
 const Product = require('../models/Product');
 const PublishLog = require('../models/PublishLog');
 const SocialMedia = require('../models/SocialMedia');
+const SocialSchedule = require('../models/SocialSchedule');
+const SocialPostDraft = require('../models/SocialPostDraft');
+const ScheduledSocialPost = require('../models/ScheduledSocialPost');
+const SocialPublishAttempt = require('../models/SocialPublishAttempt');
 const SubscriptionInvoice = require('../models/SubscriptionInvoice');
 const SubscriptionPayment = require('../models/SubscriptionPayment');
 const TenantPayment = require('../models/TenantPayment');
@@ -44,6 +48,10 @@ const TENANT_DATA_SPECS = Object.freeze([
   { key: 'products', model: Product, field: 'tenantId' },
   { key: 'publishLogs', model: PublishLog, field: 'tenantId' },
   { key: 'socialMedia', model: SocialMedia, field: 'tenantId' },
+  { key: 'socialSchedules', model: SocialSchedule, field: 'tenantId' },
+  { key: 'socialPostDrafts', model: SocialPostDraft, field: 'tenantId' },
+  { key: 'scheduledSocialPosts', model: ScheduledSocialPost, field: 'tenantId' },
+  { key: 'socialPublishAttempts', model: SocialPublishAttempt, field: 'tenantId' },
   { key: 'subscriptionInvoices', model: SubscriptionInvoice, field: 'tenantId' },
   { key: 'subscriptionPayments', model: SubscriptionPayment, field: 'tenantId' },
   { key: 'tenantPayments', model: TenantPayment, field: 'tenant' },

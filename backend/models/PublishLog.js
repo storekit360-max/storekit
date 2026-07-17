@@ -14,7 +14,7 @@ const publishLogSchema = new mongoose.Schema(
     // ── What fired this ─────────────────────────────────────────────────────
     trigger: {
       type:    String,
-      enum:    ['new_product', 'product_discount', 'offer_active', 'manual'],
+      enum:    ['new_product', 'product_discount', 'offer_active', 'manual', 'scheduled'],
       default: 'manual',
     },
     // 'system' for automation, 'admin:<userId>' for manual/retry
@@ -49,6 +49,9 @@ const publishLogSchema = new mongoose.Schema(
 
     // ── Performance ──────────────────────────────────────────────────────────
     durationMs: { type: Number, default: 0 },
+    scheduleId: { type: mongoose.Schema.Types.ObjectId, ref: 'SocialSchedule', default: null },
+    queueItemId: { type: mongoose.Schema.Types.ObjectId, ref: 'ScheduledSocialPost', default: null },
+    platformPostUrl: { type: String, default: '' },
   },
   { timestamps: true }
 );
@@ -58,5 +61,6 @@ publishLogSchema.index({ platform: 1, createdAt: -1 });
 publishLogSchema.index({ trigger: 1, createdAt: -1 });
 publishLogSchema.index({ entityId: 1 });
 publishLogSchema.index({ originalLogId: 1 });
+publishLogSchema.index({ tenantId: 1, scheduleId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('PublishLog', publishLogSchema);

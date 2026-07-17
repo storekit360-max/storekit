@@ -55,4 +55,9 @@ const socialMediaSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now },
 }, { timestamps: true });
 
+socialMediaSchema.index(
+  { tenantId: 1 },
+  { unique: true, name: 'tenant_social_media_unique', partialFilterExpression: { tenantId: { $type: 'objectId' } } }
+);
+
 module.exports = mongoose.model('SocialMedia', socialMediaSchema);

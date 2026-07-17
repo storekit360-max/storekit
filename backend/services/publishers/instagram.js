@@ -30,11 +30,21 @@
  *       GET /{facebook-page-id}?fields=instagram_business_account&access_token=...
  */
 
-const GRAPH = 'https://graph.facebook.com/v19.0';
+const GRAPH = `https://graph.facebook.com/${process.env.META_GRAPH_VERSION || 'v21.0'}`;
 
 // Polling tuned to fit inside 15s frontend axios timeout (now 45s after api.js fix)
 const POLL_ATTEMPTS    = 10;
 const POLL_INTERVAL_MS = 1200;  // 10 × 1200ms = max 12s
+
+async function successResult(mediaId, accessToken, containerIds = []) {
+  let publishedUrl = '';
+  try {
+    const response = await fetch(`${GRAPH}/${mediaId}?fields=permalink&access_token=${encodeURIComponent(accessToken)}`);
+    const json = await response.json();
+    publishedUrl = json.permalink || '';
+  } catch (_) {}
+  return { platformPostId: mediaId || '', publishedUrl, platformMediaIds: containerIds };
+}
 
 async function publish(creds, payload) {
   const { accessToken, accountId } = creds;
@@ -118,7 +128,7 @@ async function publishSingle(accountId, accessToken, payload, imageUrl) {
   }
 
   console.log(`[Instagram] ✅ Single post published: ${p.id}`);
-  return { platformPostId: p.id || '' };
+  return successResult(p.id, accessToken, [c.id]);
 }
 
 // ── Carousel (2–10 images) ────────────────────────────────────────────────────
@@ -216,7 +226,7 @@ async function publishCarousel(accountId, accessToken, payload, images) {
   }
 
   console.log(`[Instagram] ✅ Carousel published: ${pub.id} (${childIds.length} images)`);
-  return { platformPostId: pub.id || '' };
+  return successResult(pub.id, accessToken, [carousel.id, ...childIds]);
 }
 
 // ── Status poller ─────────────────────────────────────────────────────────────
