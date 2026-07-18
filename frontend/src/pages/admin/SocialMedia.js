@@ -15,7 +15,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import API from '../../utils/api';
 import toast from 'react-hot-toast';
-import SocialPostManagement from '../../components/admin/SocialPostManagement';
 
 // ─── Platform meta-data ───────────────────────────────────────────────────────
 const PLATFORMS = [
@@ -275,7 +274,7 @@ function TokenExpiryBadge({ status }) {
 }
 
 // ─── Post Management Tab ──────────────────────────────────────────────────────
-export function LegacyPostManagementTab({ connectedPlatforms }) {
+function PostManagementTab({ connectedPlatforms }) {
   // Filters
   const [brands, setBrands]           = useState([]);
   const [categories, setCategories]   = useState([]);
@@ -285,6 +284,7 @@ export function LegacyPostManagementTab({ connectedPlatforms }) {
   // Products
   const [products, setProducts]       = useState([]);
   const [loadingProds, setLoadingProds] = useState(false);
+  const [productReloadKey, setProductReloadKey] = useState(0);
   const [selectedIds, setSelectedIds] = useState(new Set());
 
   // Platform selection
@@ -327,7 +327,7 @@ export function LegacyPostManagementTab({ connectedPlatforms }) {
       }
     };
     load();
-  }, [filterBrand, filterCat]);
+  }, [filterBrand, filterCat, productReloadKey]);
 
   const toggleProduct  = (id) => setSelectedIds(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleAllProds = () => {
@@ -417,7 +417,17 @@ export function LegacyPostManagementTab({ connectedPlatforms }) {
 
       {/* ── Filters ── */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-        <h2 className="text-sm font-semibold text-gray-800 mb-4">Filter Products</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-gray-800">Filter Products</h2>
+          <button
+            type="button"
+            onClick={() => setProductReloadKey(value => value + 1)}
+            disabled={loadingProds}
+            className="text-xs font-medium text-primary hover:opacity-80 disabled:opacity-50"
+          >
+            {loadingProds ? 'Loading…' : 'Refresh Products'}
+          </button>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="form-label">Brand</label>
@@ -635,7 +645,7 @@ export function LegacyPostManagementTab({ connectedPlatforms }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function SocialMediaSettings() {
-  // ── Main tab: 'accounts' | 'post-management'
+  // ── Main tab: account configuration or post management
   const [mainTab, setMainTab] = useState('accounts');
 
   const [loading, setLoading]           = useState(true);
@@ -900,7 +910,7 @@ export default function SocialMediaSettings() {
 
       {/* ── Post Management Tab ── */}
       {mainTab === 'post-management' && (
-        <SocialPostManagement connectedPlatforms={connectedPlatformIds} />
+        <PostManagementTab connectedPlatforms={connectedPlatformIds} />
       )}
 
       {/* ── Account Settings Tab ── */}
