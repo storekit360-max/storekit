@@ -14,8 +14,6 @@ const { refreshPlatformNow } = require('../services/tokenRefreshScheduler');
 const { getOrCreate, decryptPlatformFields } = require('../services/socialMediaService');
 const { inspectToken } = require('../services/facebookTokenRefresh');
 const { manualPublish } = require('../services/publisherService');
-const { compose } = require('../services/postComposer');
-const SocialScheduleDraft = require('../models/SocialScheduleDraft');
 
 // ─── PUBLIC: storefront footer social links (no secrets) ─────────────────────
 router.get('/public', async (req, res) => {
@@ -28,7 +26,8 @@ router.get('/public', async (req, res) => {
       whatsapp:  { label: 'WhatsApp',  color: '#25d366', urlPrefix: 'https://wa.me/' },
       telegram:  { label: 'Telegram',  color: '#229ed9', urlPrefix: 'https://t.me/' },
     };
-    const doc = await SocialMedia.findOne().lean();
+    if (!req.tenantId) return res.status(404).json([]);
+    const doc = await SocialMedia.findOne({ tenantId: req.tenantId }).lean();
     if (!doc) return res.json([]);
 
     const platforms = Object.keys(PLATFORM_META);
@@ -66,25 +65,6 @@ router.get('/public', async (req, res) => {
   }
 });
 
-// ─── TEMP DEBUG — no auth, remove after fixing ───────────────────────────────
-router.get('/debug-whatsapp', async (req, res) => {
-  const doc = await require('../models/SocialMedia').findOne();
-  res.json(doc?.whatsapp?.extraConfig || {});
-});
-
-router.get('/fix-whatsapp', async (req, res) => {
-  const SocialMedia = require('../models/SocialMedia');
-  await SocialMedia.updateOne({}, {
-    $set: {
-      'whatsapp.extraConfig.templateName': 'hello_world',
-      'whatsapp.extraConfig.languageCode': 'en_US',
-    }
-  });
-  const doc = await SocialMedia.findOne();
-  res.json(doc?.whatsapp?.extraConfig || {});
-});
-// ─── END TEMP ─────────────────────────────────────────────────────────────────
-
 // ─── All routes below require admin auth ─────────────────────────────────────
 router.use(adminAuth);
 
@@ -120,7 +100,9 @@ router.post('/bulk-post', async (req, res) => {
 
     // Load product name for logging
     const Product = require('../models/Product');
-    const product = await Product.findById(productId).select('name').lean();
+    const tenantId = req.user?.tenantId || req.tenantId;
+    if (!tenantId) return res.status(400).json({ success: false, error: 'Tenant context is required' });
+    const product = await Product.findOne({ _id: productId, tenantId }).select('name').lean();
     if (!product) {
       return res.status(404).json({ success: false, error: 'Product not found' });
     }
@@ -133,6 +115,7 @@ router.post('/bulk-post', async (req, res) => {
       customMsg:   '',
       trigger:     'manual',
       adminUserId: req.admin?._id || req.user?._id || 'unknown',
+      tenantId,
     });
 
     if (log?.status === 'success') {
@@ -150,101 +133,6 @@ router.post('/bulk-post', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-
-const tenantFilter = req => ({ tenantId: req.user?.tenantId || req.tenantId || null });
-
-// Generate reviewable captions. This deliberately creates drafts only; it does
-// not publish or schedule anything until the separate confirmation step.
-router.post('/schedules/preview', async (req, res) => {
-  try {
-    const Product = require('../models/Product');
-    const {
-      productIds, platforms, startAt, gapMinutes = 5, productsPerDay = 5,
-      offerPercent = 0, voucherCode = '', includeSinhala = true,
-      ctaType = 'shop_now',
-    } = req.body || {};
-    const validPlatforms = ['facebook', 'instagram', 'tiktok', 'whatsapp', 'telegram'];
-    const cleanPlatforms = [...new Set(Array.isArray(platforms) ? platforms : [])]
-      .filter(platform => validPlatforms.includes(platform));
-    const start = new Date(startAt);
-    const gap = Number(gapMinutes);
-    const perDay = Number(productsPerDay);
-    const offer = Number(offerPercent) || 0;
-
-    if (!Array.isArray(productIds) || !productIds.length) return res.status(400).json({ message: 'Select at least one product' });
-    if (!cleanPlatforms.length) return res.status(400).json({ message: 'Select at least one valid platform' });
-    if (Number.isNaN(start.getTime())) return res.status(400).json({ message: 'Choose a valid schedule start date and time' });
-    if (!Number.isInteger(gap) || gap < 1 || gap > 10080) return res.status(400).json({ message: 'Gap must be between 1 and 10,080 minutes' });
-    if (!Number.isInteger(perDay) || perDay < 1 || perDay > 50) return res.status(400).json({ message: 'Products per day must be between 1 and 50' });
-    if (offer < 0 || offer > 95) return res.status(400).json({ message: 'Offer percentage must be between 0 and 95' });
-
-    const productFilter = { _id: { $in: productIds }, ...tenantFilter(req), isActive: true };
-    const products = await Product.find(productFilter).lean();
-    const byId = new Map(products.map(product => [String(product._id), product]));
-    const ordered = productIds.map(id => byId.get(String(id))).filter(Boolean);
-    if (ordered.length !== productIds.length) return res.status(404).json({ message: 'One or more selected products were not found' });
-
-    const items = await Promise.all(ordered.map(async (product, index) => {
-      const day = Math.floor(index / perDay);
-      const slot = index % perDay;
-      const scheduledAt = new Date(start);
-      scheduledAt.setDate(scheduledAt.getDate() + day);
-      scheduledAt.setMinutes(scheduledAt.getMinutes() + (slot * gap));
-      const payload = await compose(cleanPlatforms[0], 'manual', product);
-      let caption = payload.text;
-      if (offer > 0) {
-        const sellingPrice = Number(product.salePrice || product.price || 0);
-        const promoPrice = sellingPrice * (1 - offer / 100);
-        caption += `\n\n🎁 Extra ${offer}% off${voucherCode ? ` with code ${String(voucherCode).toUpperCase()}` : ''}`;
-        caption += `\nOffer price: LKR ${promoPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-      }
-      if (includeSinhala) caption += '\n\nදැන්ම ඇණවුම් කරන්න — සීමිත කාලයක් සඳහා පමණයි!';
-      return { productId: product._id, productName: product.name, scheduledAt, caption };
-    }));
-
-    const draft = await SocialScheduleDraft.create({
-      ...tenantFilter(req), createdBy: req.user._id, platforms: cleanPlatforms,
-      startAt: start, gapMinutes: gap, productsPerDay: perDay,
-      offerPercent: offer, voucherCode: String(voucherCode || '').toUpperCase(),
-      includeSinhala: Boolean(includeSinhala), ctaType, items,
-    });
-    res.status(201).json({ draft, summary: { products: items.length, platforms: cleanPlatforms.length } });
-  } catch (err) {
-    console.error('[social-schedule-preview]', err);
-    res.status(500).json({ message: err.message || 'Preview generation failed' });
-  }
-});
-
-router.get('/schedule-drafts', async (req, res) => {
-  const items = await SocialScheduleDraft.find(tenantFilter(req)).sort({ createdAt: -1 }).lean();
-  res.json({ items });
-});
-
-router.patch('/schedule-drafts/:id', async (req, res) => {
-  try {
-    const items = Array.isArray(req.body?.items) ? req.body.items : [];
-    if (!items.length || items.some(item => !String(item.caption || '').trim())) {
-      return res.status(400).json({ message: 'Every product requires a caption' });
-    }
-    const draft = await SocialScheduleDraft.findOneAndUpdate(
-      { _id: req.params.id, ...tenantFilter(req) }, { $set: { items } },
-      { new: true, runValidators: true }
-    );
-    if (!draft) return res.status(404).json({ message: 'Draft not found or expired' });
-    res.json({ draft });
-  } catch (err) { res.status(400).json({ message: err.message }); }
-});
-
-router.delete('/schedule-drafts/:id', async (req, res) => {
-  const draft = await SocialScheduleDraft.findOneAndDelete({ _id: req.params.id, ...tenantFilter(req) });
-  if (!draft) return res.status(404).json({ message: 'Draft not found or expired' });
-  res.json({ message: 'Draft deleted' });
-});
-
-// Empty queue responses keep the new management UI backward-compatible until
-// a draft has been confirmed into durable scheduled jobs.
-router.get('/schedules', (_req, res) => res.json({ items: [], page: 1, pages: 1, total: 0 }));
-router.get('/schedule-batches', (_req, res) => res.json({ items: [] }));
 
 // Per-platform routes
 router.put   ('/platform/:platform',          ctrl.updatePlatform);

@@ -20,6 +20,7 @@ const {
 const { bootstrapTenantStore } = require('../utils/tenantBootstrap');
 const { normalizeWhatsappNumber } = require('../utils/whatsappConfig');
 const { generateStarterKit, normalizeStarterKit, sanitizeBrief } = require('../services/tenantStarterKit');
+const featureRegistry = require('../config/featureRegistry');
 
 const router = express.Router();
 
@@ -49,6 +50,27 @@ function superAdminOnly(req, res, next) {
 }
 
 router.use(auth, superAdminOnly);
+
+router.get('/feature-registry', async (_req, res, next) => {
+  try {
+    const [plans, tenantCounts] = await Promise.all([
+      Plan.find().select('name slug active features').sort({ name: 1 }).lean(),
+      Tenant.aggregate([{ $group: { _id: '$plan', tenants: { $sum: 1 }, activeTenants: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } } } }]),
+    ]);
+    const counts = new Map(tenantCounts.map(row => [String(row._id), row]));
+    const impact = featureRegistry.keys.reduce((result, key) => {
+      const enabledPlans = plans.filter(plan => plan.features?.[key] === true);
+      result[key] = {
+        enabledPlanCount: enabledPlans.length,
+        affectedTenantCount: enabledPlans.reduce((sum, plan) => sum + Number(counts.get(String(plan._id))?.tenants || 0), 0),
+        affectedActiveTenantCount: enabledPlans.reduce((sum, plan) => sum + Number(counts.get(String(plan._id))?.activeTenants || 0), 0),
+        plans: enabledPlans.map(plan => ({ id: plan._id, name: plan.name, slug: plan.slug, active: plan.active })),
+      };
+      return result;
+    }, {});
+    res.json({ catalog: featureRegistry.catalog, impact, governance: { registryVersion: 1, rule: 'Every plan-gated feature must be registered and represented in the Plan schema.' } });
+  } catch (error) { next(error); }
+});
 
 router.post('/tenant-starter-kit/preview', async (req, res, next) => {
   try {

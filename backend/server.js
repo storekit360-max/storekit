@@ -283,6 +283,7 @@ function safeMount(mountPath, routeModule, ...extraMiddleware) {
 // SECURITY: /api/auth/login is capped at 10 req / 15 min per IP to resist
 //           credential-stuffing attacks independently of the global limiter.
 app.use('/api/auth/login', loginLimiter);
+app.use('/api/auth/superadmin/google', loginLimiter);
 safeMount('/api/auth',          require('./routes/auth'));
 safeMount('/api/tenant',        require('./routes/tenant'));
 safeMount('/api/superadmin',    require('./routes/superadmin'));
@@ -320,10 +321,12 @@ function serveSeoAlias(pathname) {
   };
 }
 app.get('/sitemap.xml',             serveSeoAlias('/sitemap.xml'));
+app.get('/sitemap_index.xml',       serveSeoAlias('/sitemap.xml'));
 app.get('/products-sitemap.xml',    serveSeoAlias('/products-sitemap.xml'));
 app.get('/categories-sitemap.xml',  serveSeoAlias('/categories-sitemap.xml'));
 app.get('/brands-sitemap.xml',      serveSeoAlias('/brands-sitemap.xml'));
 app.get('/pages-sitemap.xml',       serveSeoAlias('/pages-sitemap.xml'));
+app.get('/google-shopping-feed.xml',serveSeoAlias('/google-shopping-feed.xml'));
 app.get('/robots.txt',              serveSeoAlias('/robots.txt'));
 
 // ─── Admin routes (+ audit logging) ──────────────────────────────────────────

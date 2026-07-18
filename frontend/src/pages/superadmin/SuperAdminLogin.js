@@ -1,14 +1,51 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import API from '../../utils/api';
 
 export default function SuperAdminLogin() {
   const navigate = useNavigate();
-  const { user, login } = useAuth();
-  const [email, setEmail] = useState('superadmin@storekit.local');
-  const [password, setPassword] = useState('SuperAdmin@123456');
+  const { user, login, loginWithGoogle } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const googleButtonRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const start = async () => {
+      try {
+        const { data } = await API.get('/auth/superadmin/google-config');
+        if (!data?.enabled || cancelled) return;
+        let script = document.querySelector('script[data-superadmin-google]');
+        if (!script) {
+          script = document.createElement('script');
+          script.src = 'https://accounts.google.com/gsi/client';
+          script.async = true; script.defer = true; script.dataset.superadminGoogle = 'true';
+          document.head.appendChild(script);
+        }
+        await new Promise((resolve, reject) => {
+          if (window.google?.accounts?.id) return resolve();
+          script.addEventListener('load', resolve, { once: true });
+          script.addEventListener('error', reject, { once: true });
+        });
+        if (cancelled || !googleButtonRef.current) return;
+        window.google.accounts.id.initialize({ client_id: data.clientId, auto_select: false, cancel_on_tap_outside: true, callback: async response => {
+          setError(''); setLoading(true);
+          try {
+            const result = await API.post('/auth/superadmin/google', { credential: response.credential });
+            loginWithGoogle(result.data.user, result.data.token);
+            navigate('/superadmin', { replace: true });
+          } catch (err) { setError(err.response?.data?.message || 'Secure Google sign-in failed'); }
+          finally { setLoading(false); }
+        }});
+        window.google.accounts.id.renderButton(googleButtonRef.current, { theme: 'outline', size: 'large', width: 352, text: 'signin_with', shape: 'pill' });
+      } catch { /* Password login remains available when Google is not configured. */ }
+    };
+    start();
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (user?.role === 'superadmin') return <Navigate to="/superadmin" replace />;
 
@@ -40,6 +77,9 @@ export default function SuperAdminLogin() {
 
         <h1 className="text-2xl font-extrabold text-slate-900 mb-1">Super Admin Login</h1>
         <p className="text-sm text-slate-500 mb-6">Manage tenants, plans, features, and custom domains.</p>
+
+        <div ref={googleButtonRef} className="min-h-[44px] flex justify-center mb-4" />
+        <div className="flex items-center gap-3 mb-4"><span className="h-px bg-slate-200 flex-1"/><span className="text-xs uppercase tracking-wider text-slate-400">or use password</span><span className="h-px bg-slate-200 flex-1"/></div>
 
         <form onSubmit={submit} className="grid gap-4">
           <label className="grid gap-1.5 text-sm font-semibold text-slate-600">
@@ -79,11 +119,7 @@ export default function SuperAdminLogin() {
           </button>
         </form>
 
-        <div className="mt-6 bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-600">
-          <strong className="text-slate-800">Default:</strong><br />
-          superadmin@storekit.local<br />
-          SuperAdmin@123456
-        </div>
+        <p className="mt-6 text-xs text-center text-slate-400">Access is restricted to enrolled platform operators. Authentication events are rate-limited and audited.</p>
       </div>
     </div>
   );

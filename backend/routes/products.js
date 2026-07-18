@@ -87,7 +87,10 @@ function validateActiveProduct(product = {}) {
   if (!image) error('Active products require a product image before they can be shown to Google');
   if (!/^https:\/\//i.test(image) && !image.startsWith('/')) error('The main product image must use HTTPS or a store-relative URL');
   if (/\.svg(?:$|[?#])/i.test(image)) error('Use a JPG, PNG, WebP, GIF, BMP, or TIFF product image; Google Merchant does not accept SVG product images');
-  if (!/\.(?:jpe?g|webp|png|gif|bmp|tiff?)(?:$|[?#])/i.test(image)) error('The main Merchant image must be JPG, PNG, WebP, GIF, BMP, or TIFF; AVIF is not supported');
+  const explicitExtension = image.split(/[?#]/)[0].match(/\.([a-z0-9]{2,5})$/i)?.[1]?.toLowerCase();
+  if (explicitExtension && !/^(?:jpe?g|webp|png|gif|bmp|tiff?)$/i.test(explicitExtension)) {
+    error('The main Merchant image must be JPG, PNG, WebP, GIF, BMP, or TIFF; AVIF and SVG are not supported');
+  }
   if (!product.gtin && !product.mpn && product.identifierExists !== false) {
     error('Add a GTIN or MPN, or confirm that this product has no manufacturer identifiers');
   }
@@ -818,8 +821,11 @@ router.get('/admin/brands', adminAuth, async (req, res) => {
 // brand tile image until a dedicated brand-logo model exists.
 router.get('/brands', async (req, res) => {
   try {
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(404).json({ brands: [] });
     const limit = Math.min(parseInt(req.query.limit, 10) || 16, 48);
     const products = await Product.find({
+      tenantId,
       isActive: true,
       brand: { $exists: true, $nin: [null, ''] },
     })

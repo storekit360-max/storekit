@@ -253,7 +253,7 @@ async function retryLog(logId, adminUserId) {
 /**
  * manualPublish — admin-initiated publish from the UI.
  */
-async function manualPublish({ platform, entityType, entityId, entityName, customMsg, trigger, adminUserId }) {
+async function manualPublish({ platform, entityType, entityId, entityName, customMsg, trigger, adminUserId, tenantId }) {
   if (process.env.APP_ENV === 'staging' && process.env.SOCIAL_MEDIA_ENABLED !== 'true') return { status: 'failed', errorCode: 'STAGING_DISABLED', errorMessage: 'Social publishing is disabled in staging' };
   return publishNow({
     platform,
@@ -263,6 +263,7 @@ async function manualPublish({ platform, entityType, entityId, entityName, custo
     entityName: entityName || '',
     customMsg:  customMsg  || '',
     triggeredBy:`admin:${adminUserId || 'unknown'}`,
+    tenantId,
     attemptNumber: 1,
   });
 }

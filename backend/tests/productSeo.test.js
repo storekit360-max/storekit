@@ -14,6 +14,8 @@ const {
   buildShippingDetails,
   buildReturnPolicy,
 } = require('../utils/productSeo');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const goodProduct = {
   _id: 'product-1', name: 'Wireless Headphones', slug: 'wireless-headphones',
@@ -52,6 +54,11 @@ test('SEO audit excludes SVG placeholders from Google Merchant listings', () => 
   assert.ok(result.errors.some(error => error.includes('SVG')));
 });
 
+test('SEO audit accepts extensionless HTTPS CDN image URLs', () => {
+  const result = productSeoAudit({ ...goodProduct, thumbnail: 'https://res.cloudinary.com/demo/image/upload/sample' }, { siteUrl: 'https://shop.example.com' });
+  assert.equal(result.merchantEligible, true);
+});
+
 test('GTIN schema property uses the correct identifier length', () => {
   assert.equal(isValidGtin('96385074'), true);
   assert.equal(isValidGtin('4006381333931'), true);
@@ -78,4 +85,22 @@ test('Shipping and return schemas contain Google-required fields', () => {
   const returns = buildReturnPolicy({ merchantCountryCode: 'LK', merchantReturnDays: 7 });
   assert.equal(returns.applicableCountry, 'LK');
   assert.equal(returns.merchantReturnDays, 7);
+});
+
+test('Merchant feed declares canonical URLs and avoids contradictory no-identifier brands', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../routes/seo.js'), 'utf8');
+  assert.match(source, /<g:canonical_link>/);
+  assert.match(source, /product\.brand && product\.identifierExists !== false/);
+});
+
+test('Railway exposes root aliases used by Vercel and Google crawlers', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+  assert.match(source, /app\.get\('\/google-shopping-feed\.xml'/);
+  assert.match(source, /app\.get\('\/sitemap_index\.xml'/);
+});
+
+test('Custom robots rules cannot silently remove Google product access', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../routes/seo.js'), 'utf8');
+  assert.match(source, /User-agent: Googlebot\\nAllow: \/product\//);
+  assert.match(source, /robotsBlocksProducts/);
 });

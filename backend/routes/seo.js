@@ -324,13 +324,14 @@ router.get('/google-shopping-feed.xml', async (req, res) => {
     <title>${xe(String(product.name).slice(0, 150))}</title>
     <description>${xe(description)}</description>
     <link>${xe(`${siteUrl}/product/${product.slug}`)}</link>
+    <g:canonical_link>${xe(`${siteUrl}/product/${product.slug}`)}</g:canonical_link>
     ${image ? `<g:image_link>${xe(image)}</g:image_link>` : ''}
     ${additionalImages}
     <g:availability>${product.stock > 0 ? 'in_stock' : 'out_of_stock'}</g:availability>
     <g:price>${Number(product.price).toFixed(2)} ${currency}</g:price>
     ${hasSale ? `<g:sale_price>${Number(activePrice).toFixed(2)} ${currency}</g:sale_price>` : ''}
     <g:condition>${merchantCondition(product.condition)}</g:condition>
-    ${product.brand ? `<g:brand>${xe(product.brand)}</g:brand>` : ''}
+    ${product.brand && product.identifierExists !== false ? `<g:brand>${xe(product.brand)}</g:brand>` : ''}
     ${Object.keys(gtinProperty(product.gtin)).length ? `<g:gtin>${xe(String(product.gtin).replace(/\D/g, ''))}</g:gtin>` : ''}
     ${product.mpn ? `<g:mpn>${xe(product.mpn)}</g:mpn>` : ''}
     ${product.identifierExists === false ? '<g:identifier_exists>no</g:identifier_exists>' : ''}
@@ -501,11 +502,11 @@ Disallow: /my-orders
 Disallow: /returns
 
 Sitemap: ${siteUrl}/sitemap.xml`;
-    if (customRobots && !/user-agent:\s*storebot-google/i.test(txt)) {
-      txt = `User-agent: StoreBot-Google\nAllow: /\n\n${txt}`;
-    }
-    if (customRobots && !/user-agent:\s*googlebot-image/i.test(txt)) {
-      txt = `User-agent: Googlebot-Image\nAllow: /\n\n${txt}`;
+    if (customRobots) {
+      // Product discovery is a core storefront contract. Keep custom rules for
+      // private/customer/admin areas, but prevent an accidental SEO editor
+      // change from removing products and images from Google.
+      txt = `User-agent: Googlebot\nAllow: /product/\nAllow: /category/\nAllow: /brand/\n\nUser-agent: Googlebot-Image\nAllow: /product/\n\nUser-agent: StoreBot-Google\nAllow: /product/\n\n${txt}`;
     }
     if (!/^\s*Sitemap:/im.test(txt)) txt += `\n\nSitemap: ${siteUrl}/sitemap.xml`;
 
@@ -567,14 +568,15 @@ router.get('/admin/product-audit', adminAuth, async (req, res) => {
     const merchantErrorCount = activeRows.reduce((sum, row) => sum + row.merchantErrors.length, 0);
     const warningCount = activeRows.reduce((sum, row) => sum + row.warnings.length, 0);
     const settings = tenant.settings || {};
-    const robotsBlocksAll = /Disallow:\s*\/\s*(?:#.*)?$/im.test(String(settings.robotsTxt || ''));
+    const robotsSource = String(settings.robotsTxt || '');
+    const robotsBlocksProducts = /Disallow:\s*\/(?:product(?:\/|\s|$)|\s*(?:#.*)?$)/im.test(robotsSource);
     const storeChecks = [
       { key: 'domain', ok: !!siteUrl, message: siteUrl ? 'Active canonical domain configured' : 'Add an active tenant domain' },
       { key: 'description', ok: !!stripHtml(settings.metaDescription), message: stripHtml(settings.metaDescription) ? 'Store meta description configured' : 'Add a store meta description' },
       { key: 'logo', ok: !!absoluteUrl(settings.logoUrl, siteUrl), message: settings.logoUrl ? 'Store logo configured' : 'Add a store logo' },
       { key: 'searchConsole', ok: !!settings.googleSearchConsole, message: settings.googleSearchConsole ? 'Search Console verification configured' : 'Configure Search Console verification' },
       { key: 'returns', ok: Number(settings.merchantReturnDays) > 0, message: Number(settings.merchantReturnDays) > 0 ? 'Merchant return window configured' : 'Configure the merchant return window' },
-      { key: 'robots', ok: !robotsBlocksAll, message: robotsBlocksAll ? 'robots.txt currently blocks the entire storefront' : 'robots.txt allows storefront crawling' },
+      { key: 'robots', ok: !robotsBlocksProducts, message: robotsBlocksProducts ? 'Custom robots.txt blocks product discovery; StoreKit will add a Google product allow rule, but remove the conflicting disallow rule' : 'robots.txt allows storefront product crawling' },
     ];
     return res.json({
       siteUrl,

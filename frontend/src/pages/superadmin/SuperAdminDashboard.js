@@ -97,6 +97,7 @@ const TABS = [
   { key: 'tenants', label: 'Tenants', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
   { key: 'billing', label: 'Billing', icon: 'M3 10h18M7 15h.01M11 15h2M3 6h18a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V7a1 1 0 011-1z' },
   { key: 'domains', label: 'Domains', icon: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0zM3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18 15 15 0 010-18z' },
+  { key: 'governance', label: 'Feature Governance', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
 ];
 
 const money = (value, currency = 'LKR') => `${currency} ${Number(value || 0).toLocaleString()}`;
@@ -145,6 +146,7 @@ export default function SuperAdminDashboard() {
   const [plans, setPlans] = useState([]);
   const [tenants, setTenants] = useState([]);
   const [monitoring, setMonitoring] = useState(null);
+  const [featureGovernance, setFeatureGovernance] = useState(null);
   const [planForm, setPlanForm] = useState(emptyPlan);
   const [tenantForm, setTenantForm] = useState(emptyTenant);
   const [selectedTenantId, setSelectedTenantId] = useState('');
@@ -170,16 +172,18 @@ export default function SuperAdminDashboard() {
   const loadAll = useCallback(async function loadAll() {
     setLoading(true);
     try {
-      const [statsRes, plansRes, tenantsRes, monitoringRes] = await Promise.all([
+      const [statsRes, plansRes, tenantsRes, monitoringRes, governanceRes] = await Promise.all([
         API.get('/superadmin/stats'),
         API.get('/superadmin/plans'),
         API.get('/superadmin/tenants'),
         API.get('/superadmin/monitoring'),
+        API.get('/superadmin/feature-registry'),
       ]);
       setStats(statsRes.data);
       setPlans(plansRes.data);
       setTenants(tenantsRes.data);
       setMonitoring(monitoringRes.data);
+      setFeatureGovernance(governanceRes.data);
       if (!tenantForm.plan && plansRes.data[0]?._id) setTenantForm(prev => ({ ...prev, plan: plansRes.data[0]._id }));
     } catch (err) {
       notify('error', err.response?.data?.message || err.message || 'Failed to load superadmin data');
@@ -727,10 +731,32 @@ export default function SuperAdminDashboard() {
               </div>
             </div>
           )}
+
+          {activeTab === 'governance' && <FeatureGovernance data={featureGovernance} plans={plans} />}
         </main>
       </div>
     </div>
   );
+}
+
+function FeatureGovernance({ data, plans }) {
+  if (!data) return <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-400">Loading feature governance…</div>;
+  return <div className="space-y-6">
+    <div className="rounded-2xl bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-900 p-6 text-white shadow-xl">
+      <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-300">Release governance</p>
+      <h2 className="mt-2 text-2xl font-extrabold">Plan impact control center</h2>
+      <p className="mt-2 max-w-3xl text-sm text-slate-300">Every plan-gated capability has one registered key. Review how many plans and active customer stores will receive a feature before changing plan assignments.</p>
+      <div className="mt-5 flex flex-wrap gap-3 text-xs"><span className="rounded-full bg-white/10 px-3 py-1.5">{data.catalog?.flatMap(group=>group.items).length || 0} registered features</span><span className="rounded-full bg-white/10 px-3 py-1.5">{plans.length} plans</span><span className="rounded-full bg-emerald-400/15 px-3 py-1.5 text-emerald-200">Schema synchronization enforced by tests</span></div>
+    </div>
+    {(data.catalog || []).map(group => <section key={group.tier} className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+      <div className="border-b border-slate-100 px-5 py-4"><h3 className="font-bold text-slate-900">{group.label}</h3><p className="text-xs text-slate-500 mt-1">{group.description}</p></div>
+      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3 p-4">{group.items.map(item=>{const impact=data.impact?.[item.key]||{};return <article key={item.key} className="rounded-xl border border-slate-200 p-4">
+        <div className="flex items-start justify-between gap-3"><div className="flex gap-2"><span>{item.icon}</span><div><p className="text-sm font-bold text-slate-900">{item.label}</p><code className="text-[11px] text-slate-400">{item.key}</code></div></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${item.default?'bg-emerald-50 text-emerald-700':'bg-slate-100 text-slate-600'}`}>Default {item.default?'ON':'OFF'}</span></div>
+        <div className="grid grid-cols-3 gap-2 mt-4 text-center"><div className="rounded-lg bg-slate-50 p-2"><strong className="block text-slate-900">{impact.enabledPlanCount||0}</strong><span className="text-[10px] text-slate-500">Plans</span></div><div className="rounded-lg bg-slate-50 p-2"><strong className="block text-slate-900">{impact.affectedTenantCount||0}</strong><span className="text-[10px] text-slate-500">Stores</span></div><div className="rounded-lg bg-indigo-50 p-2"><strong className="block text-indigo-700">{impact.affectedActiveTenantCount||0}</strong><span className="text-[10px] text-indigo-600">Active</span></div></div>
+        <p className="mt-3 text-xs text-slate-500 line-clamp-2">{(impact.plans||[]).map(plan=>plan.name).join(', ') || 'Not enabled on any plan'}</p>
+      </article>})}</div>
+    </section>)}
+  </div>;
 }
 
 function Stat({ label, value, icon, accent = 'text-indigo-600' }) {

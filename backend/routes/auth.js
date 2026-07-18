@@ -77,6 +77,11 @@ for (const [name, val] of Object.entries(__deps)) {
 // authorized-origin mismatches that are difficult to diagnose.
 const GOOGLE_LOGIN_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const googleClient = new OAuth2Client(GOOGLE_LOGIN_CLIENT_ID || undefined);
+const GOOGLE_SUPERADMIN_CLIENT_ID = process.env.GOOGLE_SUPERADMIN_CLIENT_ID || GOOGLE_LOGIN_CLIENT_ID;
+const superAdminGoogleClient = new OAuth2Client(GOOGLE_SUPERADMIN_CLIENT_ID || undefined);
+const SUPERADMIN_GOOGLE_EMAILS = new Set(
+  String(process.env.SUPERADMIN_GOOGLE_EMAILS || '').split(',').map(value => value.trim().toLowerCase()).filter(Boolean)
+);
 
 // SECURITY: Pre-hashed dummy value used in timing-safe "user not found" path.
 //           bcrypt.compare is slow by design — if we skip it when the user
@@ -306,6 +311,39 @@ router.post('/login', async (req, res, next) => {
 });
 
 // ─── Google OAuth ─────────────────────────────────────────────────────────────
+router.get('/superadmin/google-config', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!GOOGLE_SUPERADMIN_CLIENT_ID) return res.status(503).json({ enabled: false, message: 'Super admin Google Sign-In is not configured' });
+  res.json({ enabled: true, clientId: GOOGLE_SUPERADMIN_CLIENT_ID });
+});
+
+router.post('/superadmin/google', async (req, res) => {
+  try {
+    const credential = String(req.body?.credential || '');
+    if (!credential || !GOOGLE_SUPERADMIN_CLIENT_ID) return res.status(400).json({ message: 'Google credential is required' });
+    const ticket = await superAdminGoogleClient.verifyIdToken({ idToken: credential, audience: GOOGLE_SUPERADMIN_CLIENT_ID });
+    const payload = ticket.getPayload() || {};
+    const email = String(payload.email || '').trim().toLowerCase();
+    if (!payload.email_verified || !email) return res.status(403).json({ message: 'Google identity is not verified' });
+    if (SUPERADMIN_GOOGLE_EMAILS.size && !SUPERADMIN_GOOGLE_EMAILS.has(email)) {
+      return res.status(403).json({ message: 'This Google account is not authorized for platform management' });
+    }
+    const user = await User.findOne({ email, role: 'superadmin', tenantId: null });
+    if (!user || !user.isActive) return res.status(403).json({ message: 'This Google account is not authorized for platform management' });
+    if (user.googleId && user.googleId !== payload.sub) return res.status(403).json({ message: 'Google identity does not match the enrolled account' });
+    user.googleId = payload.sub;
+    if (!user.avatar && payload.picture) user.avatar = payload.picture;
+    user.isVerified = true;
+    user.lastLogin = new Date();
+    await user.save();
+    const token = generateToken(user._id);
+    res.json({ token, user: { id: user._id, firstName: user.firstName, lastName: user.lastName, username: user.username, email: user.email, role: user.role, tenantId: null, avatar: user.avatar } });
+  } catch (error) {
+    console.error('[SUPERADMIN GOOGLE AUTH]', error.message);
+    res.status(401).json({ message: 'Secure Google sign-in failed' });
+  }
+});
+
 // All tenant domains use one permanent, Google-authorized frontend origin.
 // This avoids adding every new store/custom domain to Google Cloud manually.
 router.get('/google/config', (_req, res) => {
