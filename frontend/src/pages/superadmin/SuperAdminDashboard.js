@@ -33,7 +33,6 @@ const FEATURE_CATALOG = [
       { key: 'themeBuilder',  label: 'Theme Builder',            icon: '🎨', default: false },
       { key: 'animations',    label: 'Animations',                icon: '✨', default: false },
       { key: 'socialMedia',   label: 'Social Media',              icon: '📱', default: false },
-      { key: 'aiPostCreator', label: 'AI Post Creator',            icon: '🤖', default: false },
       { key: 'automation',    label: 'Automation Rules',            icon: '⚙️', default: false },
       { key: 'backup',        label: 'Backup Center',                icon: '💾', default: false },
     ],

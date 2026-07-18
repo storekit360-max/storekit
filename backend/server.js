@@ -339,7 +339,6 @@ safeMount('/api/billing', require('./routes/billing'), tenantScope);
 safeMount('/api/whatsapp',      require('./routes/whatsapp'), tenantScope);
 safeMount('/api/social-media',  require('./routes/socialMedia'), tenantScope);
 safeMount('/api/social-scheduling', require('./routes/socialScheduling'), tenantScope);
-safeMount('/api/ai-post-creator', require('./routes/aiPostCreator'), tenantScope);
 safeMount('/api/automation',    require('./routes/automation'), tenantScope);
 safeMount('/api/deals',         require('./routes/deals'), tenantScope);
 safeMount('/api/ai',            require('./routes/ai'), tenantScope);

@@ -21,7 +21,6 @@ const featureSchema = new mongoose.Schema({
   themeBuilder:   { type: Boolean, default: false },
   animations:     { type: Boolean, default: false },
   socialMedia:    { type: Boolean, default: false },
-  aiPostCreator:  { type: Boolean, default: false },
   automation:     { type: Boolean, default: false },
   backup:         { type: Boolean, default: false },
 

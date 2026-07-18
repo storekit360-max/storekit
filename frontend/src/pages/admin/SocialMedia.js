@@ -183,6 +183,17 @@ function TokenHealthBanner({ platform, status, onRefresh, refreshing }) {
   const isCritical    = daysLeft !== null && daysLeft <= 3 && daysLeft > 0;
   const isWarning     = daysLeft !== null && daysLeft <= 10 && daysLeft > 3;
   const needsReconnect = status.reconnectNeeded;
+  const requiredScopes = platform === 'facebook' ? ['pages_manage_posts','pages_read_engagement'] : [];
+  const missingScopes = status.tokenValid !== null && requiredScopes.filter(scope => !(status.scopes || []).includes(scope));
+
+  if (platform === 'facebook' && missingScopes.length) {
+    return (
+      <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
+        <p className="font-semibold">Facebook posts may be visible only to Page/App administrators</p>
+        <p className="text-xs mt-1">Missing token permission(s): <strong>{missingScopes.join(', ')}</strong>. Grant Advanced Access in Meta App Review, switch the app to <strong>Live</strong>, then reconnect the Page with a newly generated Page token.</p>
+      </div>
+    );
+  }
 
   if (!needsReconnect && !isExpired && !isCritical && !isWarning) return null;
 
@@ -264,7 +275,6 @@ function TokenHealthBanner({ platform, status, onRefresh, refreshing }) {
     </div>
   );
 }
-
 function TokenExpiryBadge({ status }) {
   if (!status || !status.tokenExpiresAt) return null;
   const daysLeft = Math.ceil((new Date(status.tokenExpiresAt) - Date.now()) / 86400000);
@@ -284,11 +294,12 @@ function PostManagementTab({ connectedPlatforms }) {
   // Products
   const [products, setProducts]       = useState([]);
   const [loadingProds, setLoadingProds] = useState(false);
+  const [productLoadError, setProductLoadError] = useState('');
   const [productReloadKey, setProductReloadKey] = useState(0);
   const [selectedIds, setSelectedIds] = useState(new Set());
 
   // Platform selection
-  const [selPlatforms, setSelPlatforms] = useState(new Set());
+  const [selPlatforms, setSelPlatforms] = useState(()=>{try{return new Set(JSON.parse(localStorage.getItem('storekit.socialSchedule.platforms')||'[]'))}catch{return new Set()}});
 
   // Rate-limit config
   const [postsPerMin, setPostsPerMin] = useState(5);
@@ -302,31 +313,81 @@ function PostManagementTab({ connectedPlatforms }) {
 
   // Track which productIds have been posted (per-session badge)
   const [postedIds, setPostedIds]     = useState(new Set());
+  const [coupons,setCoupons] = useState([]);
+  const [scheduled,setScheduled] = useState([]);
+  const [scheduleBatches,setScheduleBatches] = useState([]);
+  const [scheduleDrafts,setScheduleDrafts] = useState([]);
+  const [reviewDraft,setReviewDraft] = useState(null);
+  const [draftItems,setDraftItems] = useState([]);
+  const [draftSaving,setDraftSaving] = useState(false);
+  const [draftConfirming,setDraftConfirming] = useState(false);
+  const [draftDeleting,setDraftDeleting] = useState('');
+  const [batchAction,setBatchAction] = useState('');
+  const [scheduling,setScheduling] = useState(false);
+  const [previewScheduled,setPreviewScheduled] = useState(null);
+  const [scheduleForm,setScheduleForm] = useState(()=>{const defaults={startAt:new Date(Date.now()+10*60000-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16),gapMinutes:5,productsPerDay:5,offerPercent:0,voucherCode:'',includeSinhala:true,ctaType:'shop_now'};try{return {...defaults,...JSON.parse(localStorage.getItem('storekit.socialSchedule.form')||'{}')}}catch{return defaults}});
+
+  const loadSchedules=useCallback(async()=>{
+    const loadAllQueueItems=async()=>{
+      const first=await API.get('/social-media/schedules',{params:{limit:250,page:1}});
+      const items=[...(first.data.items||[])];
+      const pages=Math.max(1,Number(first.data.pages)||1);
+      for(let page=2;page<=pages;page++){
+        const response=await API.get('/social-media/schedules',{params:{limit:250,page}});
+        items.push(...(response.data.items||[]));
+      }
+      return items;
+    };
+    const [jobs,batches,drafts]=await Promise.allSettled([loadAllQueueItems(),API.get('/social-media/schedule-batches',{params:{limit:50}}),API.get('/social-media/schedule-drafts')]);
+    if(jobs.status==='fulfilled')setScheduled(jobs.value);
+    if(batches.status==='fulfilled')setScheduleBatches(batches.value.data.items||[]);
+    if(drafts.status==='fulfilled')setScheduleDrafts(drafts.value.data.items||[]);
+  },[]);
 
   // ── Load brands + categories on mount ──────────────────────────────────────
   useEffect(() => {
     API.get('/products/admin/brands').then(r => setBrands(r.data || [])).catch(() => {});
     API.get('/categories').then(r => setCategories(r.data || [])).catch(() => {});
-  }, []);
+    API.get('/coupons/admin/all').then(r=>setCoupons((r.data||[]).filter(c=>c.isActive&&new Date(c.validUntil)>=new Date()))).catch(()=>{});
+    loadSchedules();
+  }, [loadSchedules]);
+  useEffect(()=>{const timer=setInterval(loadSchedules,10000);return()=>clearInterval(timer);},[loadSchedules]);
+  useEffect(()=>{localStorage.setItem('storekit.socialSchedule.form',JSON.stringify(scheduleForm))},[scheduleForm]);
+  useEffect(()=>{localStorage.setItem('storekit.socialSchedule.platforms',JSON.stringify([...selPlatforms]))},[selPlatforms]);
 
   // ── Load products whenever filter changes ───────────────────────────────────
   useEffect(() => {
+    let cancelled=false;
     const load = async () => {
       setLoadingProds(true);
-      setSelectedIds(new Set());
-      try {
-        const params = new URLSearchParams({ limit: 200, status: 'active' });
-        if (filterBrand) params.set('brand', filterBrand);
-        if (filterCat)   params.set('category', filterCat);
-        const { data } = await API.get(`/products/admin/all?${params}`);
-        setProducts(data.products || []);
-      } catch {
-        toast.error('Failed to load products');
-      } finally {
-        setLoadingProds(false);
+      setProductLoadError('');
+      const params = new URLSearchParams({ limit: 200, status: 'active' });
+      if (filterBrand) params.set('brand', filterBrand);
+      if (filterCat)   params.set('category', filterCat);
+      for(let attempt=1;attempt<=3;attempt++){
+        try {
+          const { data } = await API.get(`/products/admin/all?${params}`);
+          if (!cancelled) {
+            const nextProducts = data.products || [];
+            const nextIds = new Set(nextProducts.map(product => product._id));
+            setProducts(nextProducts);
+            setSelectedIds(current => new Set([...current].filter(id => nextIds.has(id))));
+          }
+          break;
+        } catch (error) {
+          if (attempt === 3 && !cancelled) {
+            const message = error.response?.data?.message || 'Products are temporarily unavailable.';
+            setProductLoadError(message);
+            toast.error(`${message} Please try Refresh Products.`);
+          } else {
+            await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+          }
+        }
       }
+      if(!cancelled)setLoadingProds(false);
     };
     load();
+    return()=>{cancelled=true};
   }, [filterBrand, filterCat, productReloadKey]);
 
   const toggleProduct  = (id) => setSelectedIds(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -340,6 +401,8 @@ function PostManagementTab({ connectedPlatforms }) {
   const startBulkPost = async () => {
     if (selectedIds.size === 0)   return toast.error('Select at least one product');
     if (selPlatforms.size === 0)  return toast.error('Select at least one platform');
+    const overlapsActiveSchedule=scheduleBatches.some(batch=>['active','publishing','paused'].includes(batch.activityStatus)&&(batch.products||[]).some(id=>selectedIds.has(String(id))));
+    if(overlapsActiveSchedule)return toast.error('One or more selected products already belong to an active or paused schedule. Stop that schedule or select different products before posting immediately.');
 
     const productList  = products.filter(p => selectedIds.has(p._id));
     const platformList = [...selPlatforms];
@@ -410,7 +473,37 @@ function PostManagementTab({ connectedPlatforms }) {
 
   const stopBulkPost = () => { abortRef.current = true; };
 
+  const openScheduleDraft=draft=>{setReviewDraft(draft);setDraftItems((draft.items||[]).map(item=>({...item,productId:String(item.productId)})))};
+  const createPostSchedule=async()=>{
+    if(!selectedIds.size)return toast.error('Select at least one product');
+    if(!selPlatforms.size)return toast.error('Select at least one platform');
+    if(running)return toast.error('Stop the immediate bulk-post process before creating a schedule for these products');
+    setScheduling(true);
+    try{
+      const {data}=await API.post('/social-media/schedules/preview',{
+        productIds:[...selectedIds],platforms:[...selPlatforms],
+        startAt:new Date(scheduleForm.startAt).toISOString(),gapMinutes:Number(scheduleForm.gapMinutes),productsPerDay:Number(scheduleForm.productsPerDay),
+        offerPercent:Number(scheduleForm.offerPercent)||0,voucherCode:scheduleForm.voucherCode,includeSinhala:scheduleForm.includeSinhala,ctaType:scheduleForm.ctaType,
+      },{timeout:180000});
+      toast.success(`${data.summary.products} product descriptions generated for review. Nothing has been scheduled yet.`);
+      openScheduleDraft(data.draft);
+      await loadSchedules();
+    }catch(error){toast.error(error.response?.data?.message||'Preview generation failed');}
+    finally{setScheduling(false)}
+  };
+
+  const saveDraft=async()=>{if(!reviewDraft)return;setDraftSaving(true);try{const {data}=await API.patch(`/social-media/schedule-drafts/${reviewDraft._id}`,{items:draftItems});setReviewDraft(data.draft);setDraftItems((data.draft.items||[]).map(item=>({...item,productId:String(item.productId)})));toast.success('Description edits saved as a draft');await loadSchedules()}catch(error){toast.error(error.response?.data?.message||'Draft could not be saved')}finally{setDraftSaving(false)}};
+  const confirmDraft=async()=>{if(!reviewDraft)return;if(!window.confirm(`Confirm and schedule all ${draftItems.length} products? Posting will begin at ${new Date(reviewDraft.startAt).toLocaleString()}.`))return;setDraftConfirming(true);try{const {data}=await API.post(`/social-media/schedule-drafts/${reviewDraft._id}/confirm`,{items:draftItems},{timeout:180000});toast.success(`${data.products} products confirmed and scheduled across ${data.days} day${data.days===1?'':'s'}`);setReviewDraft(null);setDraftItems([]);await loadSchedules()}catch(error){toast.error(error.response?.data?.message||'Draft could not be confirmed')}finally{setDraftConfirming(false)}};
+  const discardDraft=async draft=>{if(!window.confirm('Delete this unconfirmed description draft permanently? Nothing has been scheduled from it.'))return;setDraftDeleting(draft._id);try{await API.delete(`/social-media/schedule-drafts/${draft._id}`);if(reviewDraft?._id===draft._id){setReviewDraft(null);setDraftItems([])}toast.success('Description draft deleted');await loadSchedules()}catch(error){toast.error(error.response?.data?.message||'Draft could not be deleted')}finally{setDraftDeleting('')}};
+
+  const cancelScheduled=async id=>{if(!window.confirm('Cancel this pending scheduled post?'))return;try{await API.post(`/social-media/schedules/${id}/cancel`);toast.success('Scheduled post cancelled');loadSchedules();}catch(error){toast.error(error.response?.data?.message||'Cancel failed')}};
+  const retryScheduled=async id=>{if(!window.confirm('Retry this failed post using the exact saved caption? It will be queued for approximately 30 seconds from now.'))return;try{await API.post(`/social-media/schedules/${id}/retry`);toast.success('Failed post queued for retry');loadSchedules()}catch(error){toast.error(error.response?.data?.message||'Retry failed')}};
+  const removeScheduled=async item=>{if(!window.confirm(`Remove ${item.productName} (${item.platform}) from the queue list? This does not delete an already-published social post.`))return;try{await API.delete(`/social-media/schedules/${item._id}`);if(previewScheduled?._id===item._id)setPreviewScheduled(null);toast.success('Scheduled queue item removed');loadSchedules();}catch(error){toast.error(error.response?.data?.message||'Remove failed')}};
+  const manageScheduleBatch=async(batchId,action)=>{if(action==='stop'&&!window.confirm('Stop this schedule permanently? All unpublished posts in this plan will be cancelled.'))return;setBatchAction(`${batchId}:${action}`);try{const {data}=await API.post(`/social-media/schedules/batch/${batchId}/${action}`);toast.success(action==='pause'?'Schedule paused':action==='resume'?'Schedule resumed with remaining times shifted forward':data.message||'Schedule stopped');await loadSchedules()}catch(error){toast.error(error.response?.data?.message||`Schedule could not be ${action}d`)}finally{setBatchAction('')}};
+  const deleteScheduleBatch=async batch=>{if(!window.confirm(`Delete this scheduling activity and all ${batch.totalJobs} related queue items? Unpublished items will not post. Social posts already published on Facebook, Instagram or other platforms will remain there.`))return;setBatchAction(`${batch.batchId}:delete`);try{const {data}=await API.delete(`/social-media/schedules/batch/${batch.batchId}`);if(previewScheduled?.batchId===batch.batchId)setPreviewScheduled(null);toast.success(data.message||'Scheduling activity and related queue items deleted');await loadSchedules()}catch(error){toast.error(error.response?.data?.message||'Scheduling activity could not be deleted');await loadSchedules()}finally{setBatchAction('')}};
+
   const connectedIds = connectedPlatforms || [];
+  const scheduledSelectionOverlap=scheduleBatches.some(batch=>['active','publishing','paused'].includes(batch.activityStatus)&&(batch.products||[]).some(id=>selectedIds.has(String(id))));
 
   return (
     <div className="space-y-6">
@@ -421,13 +514,18 @@ function PostManagementTab({ connectedPlatforms }) {
           <h2 className="text-sm font-semibold text-gray-800">Filter Products</h2>
           <button
             type="button"
-            onClick={() => setProductReloadKey(value => value + 1)}
+            className="text-xs font-medium text-primary disabled:opacity-50"
             disabled={loadingProds}
-            className="text-xs font-medium text-primary hover:opacity-80 disabled:opacity-50"
+            onClick={() => setProductReloadKey(value => value + 1)}
           >
             {loadingProds ? 'Loading…' : 'Refresh Products'}
           </button>
         </div>
+        {productLoadError && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            {productLoadError} Previously loaded products remain available; select Refresh Products to retry.
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="form-label">Brand</label>
@@ -553,6 +651,61 @@ function PostManagementTab({ connectedPlatforms }) {
         </div>
       </div>
 
+      {/* ── Durable schedule + promotion config ── */}
+      <div className="bg-white rounded-2xl shadow-sm border border-violet-100 p-5 space-y-4">
+        <div><h2 className="text-sm font-semibold text-gray-800">Schedule Selected Products</h2><p className="text-xs text-gray-500 mt-1">Choose the first daily peak time, product gap and products per day. The same daily time window repeats until every selected product is posted to all selected platforms.</p></div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <label className="text-xs text-gray-500">Start date & time<input type="datetime-local" className="form-input mt-1" value={scheduleForm.startAt} onChange={e=>setScheduleForm({...scheduleForm,startAt:e.target.value})}/></label>
+          <label className="text-xs text-gray-500">Gap between products (minutes)<input type="number" min="1" max="10080" className="form-input mt-1" value={scheduleForm.gapMinutes} onChange={e=>setScheduleForm({...scheduleForm,gapMinutes:e.target.value})}/></label>
+          <label className="text-xs text-gray-500">Products per day (per platform)<input type="number" min="1" max="50" step="1" className="form-input mt-1" value={scheduleForm.productsPerDay} onChange={e=>setScheduleForm({...scheduleForm,productsPerDay:e.target.value})}/></label>
+          <label className="text-xs text-gray-500">Voucher<select className="form-input mt-1" value={scheduleForm.voucherCode} onChange={e=>{const coupon=coupons.find(c=>c.code===e.target.value);setScheduleForm({...scheduleForm,voucherCode:e.target.value,offerPercent:coupon?.type==='percentage'?coupon.value:0})}}><option value="">No voucher / no extra offer</option>{coupons.map(c=><option value={c.code} key={c._id}>{c.code} — {c.type==='percentage'?`${c.value}%`:`LKR ${Number(c.value).toLocaleString()}`}</option>)}</select></label>
+          <label className="text-xs text-gray-500">Offer percentage<input type="number" min="0" max="95" step="0.01" className="form-input mt-1" value={scheduleForm.offerPercent} onChange={e=>setScheduleForm({...scheduleForm,offerPercent:e.target.value})}/></label>
+        </div>
+        {selectedIds.size>0&&<div className="rounded-xl bg-violet-50 p-3 text-xs text-violet-800">Schedule plan: {selectedIds.size} products · up to {Number(scheduleForm.productsPerDay)||0} per day · {Math.ceil(selectedIds.size/(Number(scheduleForm.productsPerDay)||1))} day(s) · first post each day at {scheduleForm.startAt?new Date(scheduleForm.startAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'—'} · {Number(scheduleForm.gapMinutes)||0}-minute gaps.</div>}
+        <div><p className="text-sm font-semibold text-gray-800 mb-2">Facebook post format</p><div className="grid grid-cols-1 sm:grid-cols-3 gap-2">{[{value:'shop_now',label:'🛒 Shop Now button',help:'One complete fitted preview image plus a button to the exact product page.'},{value:'whatsapp',label:'💬 WhatsApp button',help:'One complete fitted preview image plus a prefilled WhatsApp button.'},{value:'none',label:'Multi-image carousel',help:'All product images, but Facebook cannot add a native button to this organic format.'}].map(option=><label key={option.value} className={`rounded-xl border p-3 cursor-pointer ${scheduleForm.ctaType===option.value?'border-primary bg-primary/5':'border-gray-200'}`}><span className="flex items-center gap-2 text-sm font-medium"><input type="radio" name="scheduleCta" value={option.value} checked={scheduleForm.ctaType===option.value} onChange={event=>setScheduleForm({...scheduleForm,ctaType:event.target.value})}/>{option.label}</span><span className="block text-xs text-gray-500 mt-1 ml-5">{option.help}</span></label>)}</div><div className="mt-2 space-y-1 text-xs text-amber-700"><p><strong>Facebook:</strong> Meta supports the native Shop Now/WhatsApp button on a single link-card preview. Select Multi-image carousel when showing every product image is more important than the button.</p><p><strong>Instagram:</strong> Organic feed and carousel posts do not support per-post native CTA buttons. The reviewed caption will contain the product link, WhatsApp link and phone number; configure the WhatsApp contact button on the Instagram professional profile for a tappable profile action.</p></div></div>
+        <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900"><strong>Review required before scheduling</strong><span className="block text-xs text-blue-700 mt-1">Generate the verified descriptions first, review or edit every product, then use Confirm &amp; Schedule. No post is scheduled by the preview button.</span></div>
+        <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={scheduleForm.includeSinhala} onChange={e=>setScheduleForm({...scheduleForm,includeSinhala:e.target.checked})}/><span><strong>Include Sinhala</strong><span className="block text-xs text-gray-500">Enabled: attractive natural Sinhala + English mixed caption. Disabled: English-only caption.</span></span></label>
+        {selectedIds.size>0&&Number(scheduleForm.offerPercent)>0&&<div className="rounded-xl bg-green-50 p-3 text-xs text-green-800">Example: {(()=>{const p=products.find(x=>selectedIds.has(x._id));const price=Number(p?.salePrice||p?.price||0);return p?`${p.name}: LKR ${price.toLocaleString()} → LKR ${(price*(1-Number(scheduleForm.offerPercent)/100)).toLocaleString(undefined,{maximumFractionDigits:2})} with ${scheduleForm.voucherCode||'a required percentage voucher'}`:''})()}</div>}
+        <div className="flex justify-end"><button className="btn-primary" disabled={scheduling||!selectedIds.size||!selPlatforms.size} onClick={createPostSchedule}>{scheduling?'Generating descriptions…':'📝 Generate & Review Descriptions'}</button></div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-cyan-100 overflow-hidden">
+        <div className="p-4 border-b"><h2 className="text-sm font-semibold text-gray-800">Description Drafts Awaiting Confirmation</h2><p className="text-xs text-gray-500 mt-1">Drafts expire after 24 hours. They are not scheduled and cannot publish until an admin confirms them.</p></div>
+        {!scheduleDrafts.length?<div className="p-6 text-sm text-center text-gray-400">No unconfirmed drafts.</div>:<div className="divide-y">{scheduleDrafts.map(draft=><div key={draft._id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><p className="text-sm font-semibold text-gray-900">{draft.items?.length||0} products → {(draft.platforms||[]).map(platform=>platform.charAt(0).toUpperCase()+platform.slice(1)).join(', ')}</p><p className="text-xs text-gray-500 mt-1">Starts {new Date(draft.startAt).toLocaleString()} · {draft.productsPerDay} products/day · {draft.gapMinutes}-minute gap{draft.voucherCode?` · Voucher ${draft.voucherCode}`:''} · Facebook button: {draft.ctaType==='shop_now'?'Shop Now':draft.ctaType==='whatsapp'?'WhatsApp':'None'}</p><p className="text-xs text-amber-600 mt-1">Unconfirmed — nothing will be posted yet</p></div><div className="flex gap-2"><button disabled={draftDeleting===draft._id} className="px-3 py-2 rounded-lg bg-cyan-50 text-cyan-700 text-xs font-medium disabled:opacity-50" onClick={()=>openScheduleDraft(draft)}>Review & Edit</button><button disabled={draftDeleting===draft._id} className="px-3 py-2 rounded-lg bg-red-50 text-red-600 text-xs font-medium disabled:opacity-50" onClick={()=>discardDraft(draft)}>{draftDeleting===draft._id?'Deleting…':'Delete Draft'}</button></div></div>)}</div>}
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-indigo-100 overflow-hidden">
+        <div className="p-4 border-b flex items-center justify-between"><div><h2 className="text-sm font-semibold text-gray-800">Scheduling Activities</h2><p className="text-xs text-gray-500 mt-1">Persistent server activity remains visible after navigation or browser restart and refreshes every 10 seconds.</p></div><button className="text-xs text-primary" onClick={loadSchedules}>Refresh</button></div>
+        {!scheduleBatches.length?<div className="p-6 text-sm text-center text-gray-400">No scheduling activity yet.</div>:<div className="p-4 grid grid-cols-1 xl:grid-cols-2 gap-3">{scheduleBatches.map(batch=>{
+          const finished=batch.published+batch.failed+batch.cancelled;
+          const progress=batch.totalJobs?Math.round(finished/batch.totalJobs*100):0;
+          const actionable=['active','publishing','paused'].includes(batch.activityStatus);
+          const busy=batchAction.startsWith(`${batch.batchId}:`);
+          const deleting=batchAction===`${batch.batchId}:delete`;
+          return <div key={batch.batchId} className="rounded-xl border border-gray-200 p-4 space-y-3">
+            <div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-sm text-gray-900">{batch.totalProducts} products → {(batch.platforms||[]).map(p=>p.charAt(0).toUpperCase()+p.slice(1)).join(', ')}</p><p className="text-xs text-gray-500 mt-1">{batch.productsPerDay||'—'} products/day · {batch.gapMinutes||'—'}-minute gap</p></div><span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${batch.activityStatus==='paused'?'bg-amber-100 text-amber-700':batch.activityStatus==='stopped'?'bg-red-100 text-red-700':batch.activityStatus==='completed'?'bg-green-100 text-green-700':'bg-blue-100 text-blue-700'}`}>{batch.activityStatus}</span></div>
+            <div className="grid grid-cols-2 gap-2 text-xs"><div className="bg-gray-50 rounded-lg p-2"><span className="text-gray-400 block">Started</span>{new Date(batch.scheduleStartAt||batch.firstPostAt).toLocaleString()}</div><div className="bg-gray-50 rounded-lg p-2"><span className="text-gray-400 block">Next post</span>{batch.activityStatus==='paused'?'Paused':batch.nextPostAt?new Date(batch.nextPostAt).toLocaleString():'No pending posts'}</div></div>
+            <div><div className="flex justify-between text-xs text-gray-500 mb-1"><span>{finished} / {batch.totalJobs} finished</span><span>{progress}%</span></div><div className="h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-indigo-500 transition-all" style={{width:`${progress}%`}}/></div><div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 mt-2"><span>{batch.pending} pending</span><span>{batch.processing} publishing</span><span className="text-green-600">{batch.published} published</span>{batch.failed>0&&<span className="text-red-600">{batch.failed} failed</span>}{batch.cancelled>0&&<span>{batch.cancelled} stopped</span>}</div></div>
+            <div className="flex flex-wrap justify-end gap-2 pt-1">
+              {actionable&&(batch.activityStatus==='paused'?<button disabled={busy} className="px-3 py-1.5 rounded-lg bg-green-50 text-green-700 text-xs font-medium disabled:opacity-50" onClick={()=>manageScheduleBatch(batch.batchId,'resume')}>{busy&&!deleting?'Working…':'▶ Resume'}</button>:<button disabled={busy} className="px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 text-xs font-medium disabled:opacity-50" onClick={()=>manageScheduleBatch(batch.batchId,'pause')}>{busy&&!deleting?'Working…':'⏸ Pause'}</button>)}
+              {actionable&&<button disabled={busy} className="px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-xs font-medium disabled:opacity-50" onClick={()=>manageScheduleBatch(batch.batchId,'stop')}>■ Stop</button>}
+              <button disabled={busy} className="px-3 py-1.5 rounded-lg border border-red-200 text-red-700 text-xs font-medium hover:bg-red-50 disabled:opacity-50" onClick={()=>deleteScheduleBatch(batch)}>{deleting?'Deleting…':'🗑 Delete Activity'}</button>
+            </div>
+          </div>;
+        })}</div>}
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="p-4 border-b flex justify-between"><div><h2 className="text-sm font-semibold text-gray-800">Scheduled Queue</h2><p className="text-xs text-gray-400">All {scheduled.length} scheduled platform job{scheduled.length===1?'':'s'}</p></div><button className="text-xs text-primary" onClick={loadSchedules}>Refresh</button></div>
+        {!scheduled.length ? <div className="p-6 text-sm text-center text-gray-400">No scheduled posts yet.</div> : (
+          <div className="overflow-x-auto max-h-96"><table className="w-full text-xs"><thead className="bg-gray-50 text-left text-gray-500 sticky top-0"><tr>{['Product','Platform','Scheduled','Offer','Caption','Status','Actions'].map(h=><th className="p-3" key={h}>{h}</th>)}</tr></thead><tbody>{scheduled.map(item=><tr className="border-t align-top" key={item._id}><td className="p-3 min-w-48 font-medium">{item.productName}</td><td className="p-3 capitalize">{item.platform}</td><td className="p-3 whitespace-nowrap">{new Date(item.scheduledAt).toLocaleString()}</td><td className="p-3 whitespace-nowrap">{item.voucherCode?<>{item.productSalePercentSnapshot>0&&<span className="block">Sale {item.productSalePercentSnapshot}%</span>}<span>{item.offerPercent?`${item.offerPercent}% voucher · ${item.voucherCode}`:`Voucher ${item.voucherCode}`}</span></>:item.productSalePercentSnapshot>0?`Product sale ${item.productSalePercentSnapshot}%`:'Regular price'}</td><td className="p-3 max-w-xs"><button className="text-left hover:text-primary" onClick={()=>setPreviewScheduled(item)}><span className="line-clamp-3 whitespace-pre-line">{item.caption}</span><span className="text-primary block mt-1">View full content</span></button></td><td className="p-3"><span className="px-2 py-1 rounded-full bg-gray-100 capitalize">{item.status==='pending'&&item.batchState==='paused'?'paused':item.status}</span>{item.failureReason&&<p className="text-red-500 mt-1 max-w-xs">{item.failureReason}</p>}</td><td className="p-3"><div className="flex flex-col gap-1">{item.status==='pending'&&<button className="text-amber-600 text-left" onClick={()=>cancelScheduled(item._id)}>Cancel</button>}{item.status==='failed'&&<button className="text-green-600 text-left" onClick={()=>retryScheduled(item._id)}>Retry saved caption</button>}{item.status!=='processing'&&<button className="text-red-500 text-left" onClick={()=>removeScheduled(item)}>Remove</button>}</div></td></tr>)}</tbody></table></div>
+        )}
+      </div>
+
+      {reviewDraft&&<div className="fixed inset-0 z-[10060] bg-black/60 flex items-center justify-center p-3 sm:p-5" onClick={()=>setReviewDraft(null)}><div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[94vh] flex flex-col" onClick={event=>event.stopPropagation()}><div className="p-5 border-b flex items-start justify-between gap-3"><div><h3 className="text-lg font-bold text-gray-900">Review Product Descriptions</h3><p className="text-xs text-gray-500 mt-1">{draftItems.length} products · {(reviewDraft.platforms||[]).join(', ')} · starts {new Date(reviewDraft.startAt).toLocaleString()}</p><p className="text-xs text-cyan-700 mt-1">Facebook button: <strong>{reviewDraft.ctaType==='shop_now'?'Shop Now':reviewDraft.ctaType==='whatsapp'?'WhatsApp':'None'}</strong></p><p className="text-xs font-medium text-amber-600 mt-1">Nothing is scheduled until you select Confirm &amp; Schedule.</p></div><button className="text-xl text-gray-400 hover:text-gray-700" onClick={()=>setReviewDraft(null)}>✕</button></div><div className="overflow-y-auto p-5 space-y-5">{draftItems.map((item,index)=><div key={item.productId} className="rounded-xl border border-gray-200 overflow-hidden"><div className="bg-gray-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-1"><div><span className="text-xs text-gray-400">Product {index+1} of {draftItems.length}</span><p className="text-sm font-semibold text-gray-900">{item.productName}</p></div><span className="text-xs text-gray-500">Scheduled: {new Date(item.scheduledAt).toLocaleString()}</span></div><div className="p-4"><textarea className="form-input w-full min-h-[320px] font-mono text-xs leading-5" value={item.caption} maxLength={5000} onChange={event=>setDraftItems(current=>current.map(row=>row.productId===item.productId?{...row,caption:event.target.value}:row))}/><div className="flex justify-between mt-2 text-xs"><span className={item.caption.trim()?'text-green-600':'text-red-500'}>{item.caption.trim()?'Ready for validation':'Caption cannot be empty'}</span><span className="text-gray-400">{item.caption.length} / 5,000</span></div></div></div>)}</div><div className="p-5 border-t bg-gray-50 flex flex-col sm:flex-row items-center justify-between gap-3"><p className="text-xs text-gray-500">Confirmation rechecks prices, voucher validity, CTA destination, product links, WhatsApp details and connected platforms.</p><div className="flex gap-2 w-full sm:w-auto"><button className="btn-outline flex-1 sm:flex-none" disabled={draftSaving||draftConfirming} onClick={saveDraft}>{draftSaving?'Saving…':'Save Draft'}</button><button className="btn-primary flex-1 sm:flex-none" disabled={draftSaving||draftConfirming||draftItems.some(item=>!item.caption.trim())} onClick={confirmDraft}>{draftConfirming?'Confirming…':'✓ Confirm & Schedule'}</button></div></div></div></div>}
+
+      {previewScheduled&&<div className="fixed inset-0 z-[10050] bg-black/60 flex items-center justify-center p-4" onClick={()=>setPreviewScheduled(null)}><div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6" onClick={event=>event.stopPropagation()}><div className="flex items-start justify-between gap-3 mb-4"><div><h3 className="text-lg font-bold text-gray-900">Generated Post Content</h3><p className="text-xs text-gray-500 mt-1">{previewScheduled.productName} → <span className="capitalize">{previewScheduled.platform}</span></p></div><button onClick={()=>setPreviewScheduled(null)} className="text-gray-400 hover:text-gray-700 text-xl">✕</button></div><div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4 text-xs"><div className="bg-gray-50 rounded-lg p-2"><span className="text-gray-400 block">Scheduled</span>{new Date(previewScheduled.scheduledAt).toLocaleString()}</div><div className="bg-gray-50 rounded-lg p-2"><span className="text-gray-400 block">Regular price</span>LKR {Number(previewScheduled.regularPriceSnapshot??previewScheduled.sellingPriceSnapshot).toLocaleString()}</div><div className="bg-gray-50 rounded-lg p-2"><span className="text-gray-400 block">Sale price</span>LKR {Number(previewScheduled.sellingPriceSnapshot).toLocaleString()}</div><div className="bg-gray-50 rounded-lg p-2"><span className="text-gray-400 block">Final offer price</span>LKR {Number(previewScheduled.promotionalPriceSnapshot).toLocaleString()}</div><div className="bg-gray-50 rounded-lg p-2"><span className="text-gray-400 block">Voucher</span>{previewScheduled.voucherCode||'None'}</div><div className="bg-gray-50 rounded-lg p-2"><span className="text-gray-400 block">Facebook button</span>{previewScheduled.ctaType==='shop_now'?'Shop Now':previewScheduled.ctaType==='whatsapp'?'WhatsApp':'None'}</div></div><div className="rounded-xl border border-gray-200 bg-gray-50 p-4 whitespace-pre-wrap text-sm leading-6 text-gray-800">{previewScheduled.caption}</div><div className="mt-4 flex items-center justify-between"><span className="text-xs text-gray-400">Source: {previewScheduled.captionSource} · Status: {previewScheduled.status}</span><div className="flex gap-2">{previewScheduled.status==='pending'&&<button className="btn-outline text-sm" onClick={()=>cancelScheduled(previewScheduled._id)}>Cancel</button>}{previewScheduled.status==='failed'&&<button className="px-4 py-2 rounded-lg bg-green-50 text-green-700 text-sm font-medium" onClick={()=>retryScheduled(previewScheduled._id)}>Retry saved caption</button>}{previewScheduled.status!=='processing'&&<button className="px-4 py-2 rounded-lg bg-red-50 text-red-600 text-sm font-medium" onClick={()=>removeScheduled(previewScheduled)}>Remove</button>}</div></div></div></div>}
+
       {/* ── Progress bar ── */}
       {running && progress && (
         <div className="bg-white rounded-2xl shadow-sm border border-blue-100 p-5">
@@ -626,16 +779,18 @@ function PostManagementTab({ connectedPlatforms }) {
       {!running && (
         <div className="flex items-center justify-between bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <div className="text-sm text-gray-500">
-            {selectedIds.size > 0 && selPlatforms.size > 0
+            {scheduledSelectionOverlap
+              ? 'Selected products already exist in an active schedule'
+              : selectedIds.size > 0 && selPlatforms.size > 0
               ? `${selectedIds.size} product${selectedIds.size !== 1 ? 's' : ''} × ${selPlatforms.size} platform${selPlatforms.size !== 1 ? 's' : ''} = ${selectedIds.size * selPlatforms.size} posts`
               : 'Select products and platforms above to start'}
           </div>
           <button
             onClick={startBulkPost}
-            disabled={selectedIds.size === 0 || selPlatforms.size === 0}
+            disabled={selectedIds.size === 0 || selPlatforms.size === 0 || scheduledSelectionOverlap}
             className="btn-primary flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            🚀 Post Selected
+            🚀 Post Selected Now
           </button>
         </div>
       )}
@@ -1139,7 +1294,7 @@ export default function SocialMediaSettings() {
                     'hashtags',
                     e.target.value.split(',').map(h => h.trim()).filter(Boolean)
                   )}
-                  placeholder="#storekit, #sale, #newproduct, #srilanka"
+                  placeholder="#shopzen, #sale, #newproduct, #srilanka"
                   className="form-input"
                 />
                 {activeTpl.hashtags?.length > 0 && (

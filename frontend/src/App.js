@@ -59,7 +59,6 @@ const LayoutEditor       = lazy(() => import('./pages/admin/LayoutEditor'));
 const AdminLayout        = lazy(() => import('./pages/admin/AdminLayout'));
 const Monitoring         = lazy(() => import('./pages/admin/Monitoring'));
 const SocialMediaSettings = lazy(() => import('./pages/admin/SocialMedia'));
-const AIPostCreator      = lazy(() => import('./pages/admin/AIPostCreator'));
 const AutomationRules    = lazy(() => import('./pages/admin/AutomationRules'));
 const BackupCenter       = lazy(() => import('./pages/admin/BackupCenter'));
 const AdminDeals         = lazy(() => import('./pages/admin/Deals'));
@@ -253,7 +252,6 @@ export default function App() {
                       <Route path="animations"       element={<AnimationSettings/>}/>
                       <Route path="theme-builder"    element={<ThemeBuilder/>}/>
                       <Route path="social-media"     element={<SocialMediaSettings/>}/>
-                      <Route path="ai-post-creator"  element={<AIPostCreator/>}/>
                       <Route path="automation"       element={<AutomationRules/>}/>
                       <Route path="deals"            element={<AdminDeals/>}/>
                       <Route path="marketing"        element={<AdminMarketing/>}/>

@@ -238,9 +238,6 @@ const globalLimiter = rateLimit({
   skip: (req) => {
     if (!isProd) return true;                              // dev: no limit
     if (req.path === '/api/health') return true;           // health probes
-    // Exempt cheap read-only admin endpoints that would otherwise be
-    // hammered by rapid UI navigation (e.g. template list, product picker).
-    if (req.path === '/api/ai-post-creator/templates') return true;
     return false;
   },
 });
