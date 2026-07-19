@@ -80,6 +80,26 @@ async function addMessage(ticket, { author, body, kind = 'reply', platformAgent 
     }
   }
 
+  // Create platform-level notification for super admin when admin replies
+  if (!platformAgent && kind === 'reply') {
+    try {
+      const Notification = require('../models/index').Notification;
+      const User = require('../models/User');
+      const adminUser = await User.findById(author).select('firstName lastName').lean();
+      const tenantDoc = await require('../models/Tenant').findById(ticket.tenant).select('storeName').lean();
+      await Notification.create({
+        tenantId: null, // platform-level notification
+        type: 'support_reply',
+        title: `Support Reply: ${ticket.subject}`,
+        message: `${adminUser?.firstName} ${adminUser?.lastName} replied to ticket #${ticket.number}`,
+        link: `/superadmin/support-center?ticket=${ticket._id}`,
+        data: { ticketId: String(ticket._id), superAdminId: String(author) },
+      });
+    } catch (error) {
+      console.error('[SUPPORT_REPLY_PLATFORM_NOTIFICATION_FAILED]', error.message);
+    }
+  }
+
   return message;
 }
 
