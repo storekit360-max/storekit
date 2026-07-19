@@ -8,7 +8,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { AnimationProvider } from './context/AnimationContext';
 import { ScrollProgressBar, FloatingShapes } from './components/Cinematic';
 import AnalyticsBootstrap from './hooks/useAnalytics';
-import CookieConsent from './components/CookieConsent';
+// import CookieConsent from './components/CookieConsent'; // Disabled - cookie consent banner removed
 
 // ─── Lazy-loaded Customer Pages ───────────────────────────────────────────────
 // Each page is code-split into its own chunk. If one chunk fails to load
