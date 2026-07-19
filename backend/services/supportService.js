@@ -32,6 +32,24 @@ async function createTicket({ tenant, requester, subject, category, priority = '
     console.error('[SUPPORT_NOTIFICATION_FAILED]', error.message);
   }
 
+  // Create a tenant-level notification for admin users
+  try {
+    const Notification = require('../models/index').Notification;
+    const User = require('../models/User');
+    const requesterUser = await User.findById(requester).select('firstName lastName email').lean();
+    const tenantDoc = await require('../models/Tenant').findById(tenant).select('storeName').lean();
+    await Notification.create({
+      tenantId: tenant, // tenant-level notification
+      type: 'support_ticket',
+      title: `New Support Ticket: ${subject}`,
+      message: `${requesterUser?.firstName || 'Customer'} ${requesterUser?.lastName || ''} opened ticket #${ticket.number}`,
+      link: `/admin/support?ticket=${ticket._id}`,
+      data: { ticketId: String(ticket._id), tenantId: String(tenant), requesterId: String(requester), ticketNumber: ticket.number },
+    });
+  } catch (error) {
+    console.error('[SUPPORT_TENANT_NOTIFICATION_FAILED]', error.message);
+  }
+
   return ticket;
 }
 
@@ -41,6 +59,27 @@ async function addMessage(ticket, { author, body, kind = 'reply', platformAgent 
   if (platformAgent && kind !== 'internal_note' && !ticket.firstRespondedAt) update.$set.firstRespondedAt = message.createdAt;
   if (kind !== 'internal_note') update.$set.status = platformAgent ? 'pending_customer' : 'open';
   await SupportTicket.updateOne({ _id: ticket._id }, update);
+
+  // Create a tenant-level notification for admin when super admin replies
+  if (platformAgent && kind === 'reply') {
+    try {
+      const Notification = require('../models/index').Notification;
+      const User = require('../models/User');
+      const adminUser = await User.findById(author).select('firstName lastName').lean();
+      const tenantDoc = await require('../models/Tenant').findById(ticket.tenant).select('storeName').lean();
+      await Notification.create({
+        tenantId: ticket.tenant, // tenant-level notification
+        type: 'support_reply',
+        title: `Support Reply: ${ticket.subject}`,
+        message: `${adminUser?.firstName} ${adminUser?.lastName} replied to ticket #${ticket.number}`,
+        link: `/admin/support?ticket=${ticket._id}`,
+        data: { ticketId: String(ticket._id), superAdminId: String(author) },
+      });
+    } catch (error) {
+      console.error('[SUPPORT_REPLY_TENANT_NOTIFICATION_FAILED]', error.message);
+    }
+  }
+
   return message;
 }
 

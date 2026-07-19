@@ -14,6 +14,8 @@ const PANEL_TYPES = [
   'return_request',
   'gift_card',   // gift card purchases, slip uploads, activations, rejections
   'system',      // platform announcements and maintenance notices
+  'support_ticket',  // Added support ticket notifications
+  'support_reply'    // Added support reply notifications
 ];
 
 // ── Helper: get which types are enabled in Settings ───────────────────────────
@@ -32,12 +34,16 @@ router.get('/', adminAuth, async (req, res) => {
   try {
     const enabled = await getEnabledTypes();
     const [notifications, unreadCount] = await Promise.all([
-      Notification.find({ type: { $in: enabled } })
+      Notification.find({ 
+        type: { $in: enabled },
+        tenantId: req.user.tenantId 
+      })
         .sort({ createdAt: -1 })
         .limit(60)
         .lean(),
       Notification.countDocuments({
         type: { $in: enabled },
+        tenantId: req.user.tenantId,
         isRead: false,
       }),
     ]);
