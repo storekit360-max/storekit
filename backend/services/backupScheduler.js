@@ -11,6 +11,7 @@
  */
 
 const { createBackup, getSettings } = require('./backupService');
+const { runTrackedJob } = require('./operationsService');
 
 let _timer = null;
 
@@ -33,7 +34,7 @@ async function tick() {
         await getSettings().then(s =>
           s.updateOne({ lastDaily: new Date() })
         );
-        createBackup({ type: 'daily', triggeredBy: 'scheduler' }).catch(e =>
+        runTrackedJob('backup-daily', () => createBackup({ type: 'daily', triggeredBy: 'scheduler' })).catch(e =>
           console.error('[BackupScheduler] Daily backup error:', e.message)
         );
       }
@@ -48,7 +49,7 @@ async function tick() {
         await getSettings().then(s =>
           s.updateOne({ lastWeekly: new Date() })
         );
-        createBackup({ type: 'weekly', triggeredBy: 'scheduler' }).catch(e =>
+        runTrackedJob('backup-weekly', () => createBackup({ type: 'weekly', triggeredBy: 'scheduler' })).catch(e =>
           console.error('[BackupScheduler] Weekly backup error:', e.message)
         );
       }
@@ -63,7 +64,7 @@ async function tick() {
         await getSettings().then(s =>
           s.updateOne({ lastMonthly: new Date() })
         );
-        createBackup({ type: 'monthly', triggeredBy: 'scheduler' }).catch(e =>
+        runTrackedJob('backup-monthly', () => createBackup({ type: 'monthly', triggeredBy: 'scheduler' })).catch(e =>
           console.error('[BackupScheduler] Monthly backup error:', e.message)
         );
       }
@@ -86,4 +87,8 @@ function stopBackupScheduler() {
   if (_timer) { clearInterval(_timer); _timer = null; }
 }
 
-module.exports = { startBackupScheduler, stopBackupScheduler };
+function getBackupSchedulerHealth() {
+  return { running: Boolean(_timer), intervalMs: 60 * 1000, scheduler: 'in_process_polling' };
+}
+
+module.exports = { getBackupSchedulerHealth, startBackupScheduler, stopBackupScheduler };

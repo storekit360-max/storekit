@@ -8,6 +8,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { AnimationProvider } from './context/AnimationContext';
 import { ScrollProgressBar, FloatingShapes } from './components/Cinematic';
 import AnalyticsBootstrap from './hooks/useAnalytics';
+import CookieConsent from './components/CookieConsent';
 
 // ─── Lazy-loaded Customer Pages ───────────────────────────────────────────────
 // Each page is code-split into its own chunk. If one chunk fails to load
@@ -24,6 +25,7 @@ const Checkout       = lazy(() => import('./pages/customer/Checkout'));
 
 const ForgotPassword = lazy(() => import('./pages/customer/ForgotPassword'));
 const GoogleAuthBridge = lazy(() => import('./pages/customer/GoogleAuthBridge'));
+const PlatformAccount = lazy(() => import('./pages/customer/PlatformAccount'));
 const Account        = lazy(() => import('./pages/customer/Account'));
 const MyOrders       = lazy(() => import('./pages/customer/MyOrders'));
 const Wishlist       = lazy(() => import('./pages/customer/Wishlist'));
@@ -63,9 +65,11 @@ const AutomationRules    = lazy(() => import('./pages/admin/AutomationRules'));
 const BackupCenter       = lazy(() => import('./pages/admin/BackupCenter'));
 const AdminDeals         = lazy(() => import('./pages/admin/Deals'));
 const AdminMarketing     = lazy(() => import('./pages/admin/Marketing'));
+const AdminSupport       = lazy(() => import('./pages/admin/SupportCenter'));
 
 const SuperAdminLogin = lazy(() => import('./pages/superadmin/SuperAdminLogin'));
 const SuperAdminDashboard = lazy(() => import('./pages/superadmin/SuperAdminDashboard'));
+const SuperAdminMfaEnrollment = lazy(() => import('./pages/superadmin/SuperAdminMfaEnrollment'));
 
 // Keep named lazy components at module scope. Creating lazy() inside a render
 // produces a new component identity and can show the loader again unnecessarily.
@@ -156,6 +160,7 @@ const AdminRoute = ({ children }) => {
 const SuperAdminRoute = ({ children }) => {
   const { user } = useAuth();
   if (!user || user.role !== 'superadmin') return <Navigate to="/superadmin/login" replace/>;
+  if (user.mfaEnrollmentRequired) return <SuperAdminMfaEnrollment/>;
   return children;
 };
 
@@ -183,6 +188,7 @@ export default function App() {
               <BrowserRouter>
                 <ScrollToTop/>
                 <AnalyticsBootstrap />
+                <CookieConsent />
                 <Toaster
                   position="bottom-right"
                   toastOptions={{
@@ -227,9 +233,10 @@ export default function App() {
                     <Route path="/register"        element={<Register/>}/>
                     <Route path="/forgot-password" element={<ForgotPassword/>}/>
                     <Route path="/google-auth-bridge" element={<GoogleAuthBridge/>}/>
+                    <Route path="/platform-account/:token" element={<PlatformAccount/>}/>
 
                     <Route path="/superadmin/login" element={<SuperAdminLogin/>}/>
-                    <Route path="/superadmin" element={<SuperAdminRoute><SuperAdminDashboard/></SuperAdminRoute>}/>
+                    <Route path="/superadmin/*" element={<SuperAdminRoute><SuperAdminDashboard/></SuperAdminRoute>}/>
 
                     <Route path="/admin" element={<AdminRoute><AdminLayout/></AdminRoute>}>
                       <Route index                   element={<Dashboard/>}/>
@@ -257,6 +264,7 @@ export default function App() {
                       <Route path="marketing"        element={<AdminMarketing/>}/>
                       <Route path="monitoring"       element={<Monitoring/>}/>
                       <Route path="backup"           element={<BackupCenter/>}/>
+                      <Route path="support"          element={<AdminSupport/>}/>
                     </Route>
                   </Routes>
                 </Suspense>

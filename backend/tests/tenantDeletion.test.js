@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const curfoxClient = require('../services/curfoxClient');
+const PlatformAnnouncement = require('../models/PlatformAnnouncement');
 const {
   TENANT_DATA_SPECS,
   deleteTenantData,
@@ -41,6 +42,7 @@ test('tenant data cleanup always uses tenant-scoped filters and preserves Super 
   const originalUserDelete = User.deleteMany;
   const originalUserUpdate = User.updateMany;
   const originalClearToken = curfoxClient.clearTenantToken;
+  const originalAnnouncementUpdate = PlatformAnnouncement.updateMany;
 
   try {
     TENANT_DATA_SPECS.forEach(spec => {
@@ -58,6 +60,7 @@ test('tenant data cleanup always uses tenant-scoped filters and preserves Super 
       return { modifiedCount: 0 };
     };
     curfoxClient.clearTenantToken = tenantId => calls.push({ key: 'curfoxToken', tenantId });
+    PlatformAnnouncement.updateMany = async (filter, update) => { calls.push({ key: 'announcementRefs', filter, update }); return { modifiedCount: 0 }; };
 
     const result = await deleteTenantData('tenant-a');
 
@@ -75,11 +78,13 @@ test('tenant data cleanup always uses tenant-scoped filters and preserves Super 
       update: { $set: { tenantId: null } },
     });
     assert.equal(calls.find(item => item.key === 'curfoxToken').tenantId, 'tenant-a');
+    assert.deepEqual(calls.find(item => item.key === 'announcementRefs'), { key: 'announcementRefs', filter: { tenantIds: 'tenant-a' }, update: { $pull: { tenantIds: 'tenant-a' } } });
     assert.equal(result.total, TENANT_DATA_SPECS.length + 2);
   } finally {
     TENANT_DATA_SPECS.forEach((spec, index) => { spec.model.deleteMany = originalSpecDeletes[index]; });
     User.deleteMany = originalUserDelete;
     User.updateMany = originalUserUpdate;
     curfoxClient.clearTenantToken = originalClearToken;
+    PlatformAnnouncement.updateMany = originalAnnouncementUpdate;
   }
 });

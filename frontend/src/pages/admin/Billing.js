@@ -27,8 +27,9 @@ export default function Billing() {
   const [billing, setBilling] = useState(null);
   const [payments, setPayments] = useState([]);
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({ method: 'bank_transfer', reference: '', amount: '', note: '' });
+  const [form, setForm] = useState({ method: 'bank_transfer', reference: '', couponCode: '', note: '' });
   const [proofFile, setProofFile] = useState(null);
+  const [quote, setQuote] = useState(null);
 
   async function loadAll() {
     setLoading(true);
@@ -41,7 +42,8 @@ export default function Billing() {
       setPlan(statusRes.data.plan);
       setBilling(statusRes.data.billing);
       setPayments(paymentsRes.data || []);
-      setForm(f => ({ ...f, amount: statusRes.data.billing?.nextPaymentAmount || '' }));
+      const quoteRes = await API.post('/billing/quote', {});
+      setQuote(quoteRes.data);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Could not load billing information');
     } finally {
@@ -53,16 +55,17 @@ export default function Billing() {
 
   async function submitPayment(e) {
     e.preventDefault();
-    if (!form.reference.trim()) return toast.error('Please enter a payment reference / slip number');
-    if (!proofFile) return toast.error('Please upload the payment slip/proof file');
+    if (!quote) return toast.error('Refresh the subscription quote before submitting');
+    if (Number(quote?.total || 0) > 0 && !form.reference.trim()) return toast.error('Please enter a payment reference / slip number');
+    if (Number(quote?.total || 0) > 0 && !proofFile) return toast.error('Please upload the payment slip/proof file');
     setSubmitting(true);
     try {
       const payload = new FormData();
       Object.entries(form).forEach(([key, value]) => payload.append(key, value ?? ''));
-      payload.append('proof', proofFile);
-      await API.post('/billing/payments', payload);
-      toast.success('Payment submitted — awaiting super admin approval');
-      setForm(f => ({ ...f, reference: '', note: '' }));
+      if (proofFile) payload.append('proof', proofFile);
+      const { data } = await API.post('/billing/payments', payload);
+      toast.success(data.autoApproved ? 'Coupon applied — subscription activated' : 'Payment submitted — awaiting super admin approval');
+      setForm(f => ({ ...f, reference: '', couponCode: '', note: '' }));
       setProofFile(null);
       loadAll();
     } catch (err) {
@@ -70,6 +73,11 @@ export default function Billing() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function applySubscriptionCoupon() {
+    try { const { data } = await API.post('/billing/quote', { couponCode: form.couponCode }); setQuote(data); toast.success(data.couponCode ? `Coupon ${data.couponCode} applied` : 'Subscription quote refreshed'); }
+    catch (err) { setQuote(null); toast.error(err.response?.data?.message || 'Coupon could not be applied'); }
   }
 
   if (loading) {
@@ -153,16 +161,10 @@ export default function Billing() {
                 <option value="other">Other</option>
               </select>
             </label>
-            <label className="grid gap-1.5 text-xs font-semibold text-slate-600">
-              Amount Paid ({currency})
-              <input
-                type="number" step="0.01" min="0"
-                className="h-10 border border-slate-300 rounded-lg px-3 text-sm"
-                value={form.amount}
-                onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-              />
-            </label>
-            <label className="grid gap-1.5 text-xs font-semibold text-slate-600 sm:col-span-2">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm"><span className="text-xs font-semibold text-slate-500">Server-calculated amount</span><strong className="mt-1 block text-lg text-slate-900">{fmtMoney(quote?.total ?? billing?.nextPaymentAmount, quote?.currency || currency)}</strong></div>
+            <label className="grid gap-1.5 text-xs font-semibold text-slate-600 sm:col-span-2">Subscription Coupon<div className="flex gap-2"><input value={form.couponCode} onChange={e => setForm(f => ({ ...f, couponCode: e.target.value.toUpperCase() }))} placeholder="Coupon code" className="h-10 flex-1 rounded-lg border border-slate-300 px-3 font-mono text-sm uppercase" /><button type="button" onClick={applySubscriptionCoupon} className="rounded-lg border border-indigo-200 bg-indigo-50 px-4 text-xs font-bold text-indigo-700">Apply</button></div></label>
+            {quote && <div className="sm:col-span-2 grid grid-cols-2 gap-2 rounded-xl border border-slate-200 p-3 text-xs sm:grid-cols-4"><span>Subtotal<strong className="block text-sm">{fmtMoney(quote.subtotal, quote.currency)}</strong></span><span>Discount<strong className="block text-sm text-emerald-600">−{fmtMoney(quote.discountAmount, quote.currency)}</strong></span><span>Tax<strong className="block text-sm">{fmtMoney(quote.taxAmount, quote.currency)}</strong></span><span>Total<strong className="block text-sm">{fmtMoney(quote.total, quote.currency)}</strong></span>{quote.contractNumber && <span className="col-span-full text-violet-700">Enterprise contract {quote.contractNumber} applied</span>}</div>}
+            {Number(quote?.total || 0) > 0 && <label className="grid gap-1.5 text-xs font-semibold text-slate-600 sm:col-span-2">
               Payment Reference / Slip Number
               <input
                 className="h-10 border border-slate-300 rounded-lg px-3 text-sm"
@@ -170,8 +172,8 @@ export default function Billing() {
                 value={form.reference}
                 onChange={e => setForm(f => ({ ...f, reference: e.target.value }))}
               />
-            </label>
-            <label className="grid gap-1.5 text-xs font-semibold text-slate-600 sm:col-span-2">
+            </label>}
+            {Number(quote?.total || 0) > 0 && <label className="grid gap-1.5 text-xs font-semibold text-slate-600 sm:col-span-2">
               Upload Payment Slip / Proof
               <input
                 type="file"
@@ -180,7 +182,7 @@ export default function Billing() {
                 onChange={e => setProofFile(e.target.files?.[0] || null)}
               />
               {proofFile && <span className="text-xs text-slate-400">{proofFile.name}</span>}
-            </label>
+            </label>}
             <label className="grid gap-1.5 text-xs font-semibold text-slate-600 sm:col-span-2">
               Note (optional)
               <textarea
@@ -192,10 +194,10 @@ export default function Billing() {
             </label>
             <div className="sm:col-span-2">
               <button
-                disabled={submitting}
+                disabled={submitting || !quote}
                 className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold text-sm transition-colors"
               >
-                {submitting ? 'Submitting…' : 'Submit Payment'}
+                {submitting ? 'Submitting…' : Number(quote?.total || 0) === 0 ? 'Redeem Coupon & Activate' : 'Submit Payment'}
               </button>
             </div>
           </form>

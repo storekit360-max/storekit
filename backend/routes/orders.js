@@ -522,11 +522,8 @@ router.post('/', orderRateLimiter, async (req, res) => {
     let userId;
     if (req.headers.authorization) {
       try {
-        const jwt = require('jsonwebtoken');
-        const decoded = jwt.verify(
-          req.headers.authorization.replace('Bearer ', ''),
-          process.env.JWT_SECRET
-        );
+        const jwtKeyring = require('../utils/jwtKeyring');
+        const decoded = jwtKeyring.verify(req.headers.authorization.replace('Bearer ', ''));
         userId = decoded.id;
       } catch {}
     }

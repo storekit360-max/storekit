@@ -10,6 +10,9 @@ export default function SuperAdminLogin() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mfaChallenge, setMfaChallenge] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+  const [googleEnabled, setGoogleEnabled] = useState(false);
   const googleButtonRef = useRef(null);
 
   useEffect(() => {
@@ -17,7 +20,11 @@ export default function SuperAdminLogin() {
     const start = async () => {
       try {
         const { data } = await API.get('/auth/superadmin/google-config');
-        if (!data?.enabled || cancelled) return;
+        if (!data?.enabled || cancelled) {
+          setGoogleEnabled(false);
+          return;
+        }
+        setGoogleEnabled(true);
         let script = document.querySelector('script[data-superadmin-google]');
         if (!script) {
           script = document.createElement('script');
@@ -35,13 +42,14 @@ export default function SuperAdminLogin() {
           setError(''); setLoading(true);
           try {
             const result = await API.post('/auth/superadmin/google', { credential: response.credential });
+            if (result.data.mfaRequired) { setMfaChallenge(result.data.challengeToken); return; }
             loginWithGoogle(result.data.user, result.data.token);
             navigate('/superadmin', { replace: true });
           } catch (err) { setError(err.response?.data?.message || 'Secure Google sign-in failed'); }
           finally { setLoading(false); }
         }});
         window.google.accounts.id.renderButton(googleButtonRef.current, { theme: 'outline', size: 'large', width: 352, text: 'signin_with', shape: 'pill' });
-      } catch { /* Password login remains available when Google is not configured. */ }
+      } catch { setGoogleEnabled(false); /* Password login remains available when Google is not configured. */ }
     };
     start();
     return () => { cancelled = true; };
@@ -55,6 +63,7 @@ export default function SuperAdminLogin() {
     setLoading(true);
     try {
       const loggedUser = await login(email, password);
+      if (loggedUser.mfaRequired) { setMfaChallenge(loggedUser.challengeToken); return; }
       if (loggedUser.role !== 'superadmin') {
         throw new Error('This account is not a super admin account');
       }
@@ -64,6 +73,16 @@ export default function SuperAdminLogin() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const submitMfa = async (e) => {
+    e.preventDefault(); setError(''); setLoading(true);
+    try {
+      const { data } = await API.post('/auth/mfa/challenge', { challengeToken: mfaChallenge, code: mfaCode });
+      loginWithGoogle(data.user, data.token);
+      navigate('/superadmin', { replace: true });
+    } catch (err) { setError(err.response?.data?.message || 'MFA verification failed'); }
+    finally { setLoading(false); }
   };
 
   return (
@@ -78,8 +97,9 @@ export default function SuperAdminLogin() {
         <h1 className="text-2xl font-extrabold text-slate-900 mb-1">Super Admin Login</h1>
         <p className="text-sm text-slate-500 mb-6">Manage tenants, plans, features, and custom domains.</p>
 
-        <div ref={googleButtonRef} className="min-h-[44px] flex justify-center mb-4" />
-        <div className="flex items-center gap-3 mb-4"><span className="h-px bg-slate-200 flex-1"/><span className="text-xs uppercase tracking-wider text-slate-400">or use password</span><span className="h-px bg-slate-200 flex-1"/></div>
+        {mfaChallenge ? <form onSubmit={submitMfa} className="grid gap-4"><div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-800"><strong className="block">Multi-factor verification</strong>Enter the six-digit authenticator code or one unused recovery code.</div><label className="grid gap-1.5 text-sm font-semibold text-slate-600">Authenticator or recovery code<input autoFocus required value={mfaCode} onChange={e => setMfaCode(e.target.value)} autoComplete="one-time-code" className="h-11 rounded-xl border border-slate-300 px-4 text-sm tracking-widest" /></label>{error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</div>}<button disabled={loading} className="h-12 rounded-xl bg-indigo-600 font-semibold text-white disabled:opacity-60">{loading ? 'Verifying…' : 'Verify and sign in'}</button><button type="button" onClick={() => { setMfaChallenge(''); setMfaCode(''); setError(''); }} className="text-sm text-slate-500">Use a different account</button></form> : <>
+        {googleEnabled && <><div ref={googleButtonRef} className="min-h-[44px] flex justify-center mb-4" />
+        <div className="flex items-center gap-3 mb-4"><span className="h-px bg-slate-200 flex-1"/><span className="text-xs uppercase tracking-wider text-slate-400">or use password</span><span className="h-px bg-slate-200 flex-1"/></div></>}
 
         <form onSubmit={submit} className="grid gap-4">
           <label className="grid gap-1.5 text-sm font-semibold text-slate-600">
@@ -118,6 +138,7 @@ export default function SuperAdminLogin() {
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
+        </>}
 
         <p className="mt-6 text-xs text-center text-slate-400">Access is restricted to enrolled platform operators. Authentication events are rate-limited and audited.</p>
       </div>

@@ -30,6 +30,9 @@
 
 const Tenant = require('../models/Tenant');
 const TenantPayment = require('../models/TenantPayment');
+const SubscriptionInvoice = require('../models/SubscriptionInvoice');
+const BillingDunningEvent = require('../models/BillingDunningEvent');
+const billingCommercial = require('./billingCommercialService');
 
 // How long a tenant keeps running after a trial/billing period ends before
 // being auto-suspended for non-payment. Override with BILLING_GRACE_DAYS.
@@ -218,30 +221,32 @@ async function syncTenantsForPlanUpdate(plan) {
 }
 
 // ── Tenant admin submits proof of payment for the current amount owed ──────
-async function submitPayment(tenantId, { method, reference, proofUrl, note, amount } = {}) {
+async function submitPayment(tenantId, { method, reference, proofUrl, note, couponCode } = {}) {
   const tenant = await Tenant.findById(tenantId).populate('plan');
   if (!tenant) throw new Error('Tenant not found');
   const plan = tenant.plan;
   if (!plan) throw new Error('Tenant has no plan assigned');
 
-  const cycle = tenant.billing?.billingCycle || plan.billingCycle || 'monthly';
+  const existingPending = await TenantPayment.exists({ tenant: tenant._id, status: { $in: ['pending', 'processing'] } });
+  if (existingPending) { const error = new Error('A subscription payment is already awaiting review'); error.statusCode = 409; throw error; }
+  const quote = await billingCommercial.calculateQuote(tenant, plan, couponCode);
+  const cycle = quote.billingCycle;
   const periodStart = tenant.billing?.currentPeriodEnd || tenant.billing?.trialEndsAt || new Date();
   const periodEnd = addCycle(periodStart, cycle);
-  const paymentAmount = amount != null && amount !== ''
-    ? Number(amount)
-    : Number(tenant.billing?.nextPaymentAmount ?? plan.price ?? 0);
+  const paymentAmount = quote.total;
 
-  if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
-    const err = new Error('Payment amount must be greater than zero');
+  if (!Number.isFinite(paymentAmount) || paymentAmount < 0) {
+    const err = new Error('Payment amount cannot be negative');
     err.statusCode = 400;
     throw err;
   }
 
-  return TenantPayment.create({
+  const payment = await TenantPayment.create({
     tenant: tenant._id,
     plan: plan._id,
     amount: paymentAmount,
-    currency: plan.currency || 'LKR',
+    subtotal: quote.subtotal, discountAmount: quote.discountAmount, taxAmount: quote.taxAmount,
+    currency: quote.currency,
     billingCycle: cycle,
     periodStart,
     periodEnd,
@@ -250,8 +255,20 @@ async function submitPayment(tenantId, { method, reference, proofUrl, note, amou
     proofUrl: proofUrl || '',
     note: note || '',
     status: 'pending',
+    couponCode: quote.coupon?.code || '',
+    quoteSnapshot: { taxLines: quote.taxLines, contractId: quote.contract?._id || null, calculatedAt: new Date() },
     submittedAt: new Date(),
   });
+  try { await billingCommercial.reserveCoupon(quote, tenant._id, payment._id); return payment; }
+  catch (error) { await TenantPayment.deleteOne({ _id: payment._id, status: 'pending' }).catch(() => {}); throw error; }
+}
+
+async function quoteSubscription(tenantId, couponCode) {
+  const tenant = await Tenant.findById(tenantId).populate('plan');
+  if (!tenant) { const error = new Error('Tenant not found'); error.statusCode = 404; throw error; }
+  if (!tenant.plan) { const error = new Error('Tenant has no plan assigned'); error.statusCode = 409; throw error; }
+  const quote = await billingCommercial.calculateQuote(tenant, tenant.plan, couponCode);
+  return { subtotal: quote.subtotal, discountAmount: quote.discountAmount, taxAmount: quote.taxAmount, taxLines: quote.taxLines, total: quote.total, currency: quote.currency, billingCycle: quote.billingCycle, couponCode: quote.coupon?.code || '', contractNumber: quote.contract?.contractNumber || '' };
 }
 
 // ── Super admin approves a submitted payment — this is the single manual
@@ -288,6 +305,34 @@ async function approvePayment(paymentId, reviewerId) {
   return payment;
 }
 
+// Applies an already-validated payment to the tenant subscription. Keeping this
+// state change separate lets the billing ledger own the approval transition and
+// safely return a payment to pending if activation fails.
+async function activateApprovedPayment(payment) {
+  const tenant = await Tenant.findById(payment.tenant).populate('plan');
+  if (!tenant) throw new Error('Tenant not found');
+
+  const updated = await Tenant.findByIdAndUpdate(tenant._id, {
+    $set: withMirroredSubscription({
+      status: 'active',
+      'billing.subscriptionStatus': 'active',
+      'billing.currentPeriodStart': payment.periodStart,
+      'billing.currentPeriodEnd': payment.periodEnd,
+      'billing.nextPaymentDate': payment.periodEnd,
+      'billing.nextPaymentAmount': Number(tenant.plan?.price || payment.amount || 0),
+      'billing.lastPaymentDate': new Date(),
+      'billing.gracePeriodEndsAt': null,
+      'billing.cancelledAt': null,
+      'billing.cancelReason': '',
+      'billing.lastDeactivatedBy': '',
+      'billing.dunningAttempt': 0,
+      'billing.lastDunningAt': null,
+    }),
+  }, { new: true, runValidators: true });
+  if (!updated) throw new Error('Tenant not found');
+  return updated;
+}
+
 async function rejectPayment(paymentId, reviewerId, reason) {
   const payment = await TenantPayment.findById(paymentId);
   if (!payment) throw new Error('Payment not found');
@@ -303,7 +348,7 @@ async function rejectPayment(paymentId, reviewerId, reason) {
 
 // ── Super admin manually stops a tenant's business (no more auto-renewal) ──
 async function deactivateTenant(tenantId, reason, by = 'superadmin') {
-  return Tenant.findByIdAndUpdate(tenantId, {
+  const tenant = await Tenant.findByIdAndUpdate(tenantId, {
     $set: withMirroredSubscription({
       status: 'suspended',
       'billing.subscriptionStatus': 'cancelled',
@@ -312,6 +357,10 @@ async function deactivateTenant(tenantId, reason, by = 'superadmin') {
       'billing.lastDeactivatedBy': by,
     }),
   }, { new: true });
+  if (tenant) {
+    require('./platformNotificationService').enqueueTenantEvent('tenant_suspended', tenant._id, tenant.billing?.cancelledAt?.toISOString() || String(Date.now()), { reason: reason || 'No reason provided', eventDate: new Date().toISOString().slice(0, 10) }).catch(error => console.error('[TENANT_SUSPENSION_NOTIFICATION_FAILED]', error.message));
+  }
+  return tenant;
 }
 
 // ── Super admin manually reactivates a tenant (independent of the payment
@@ -402,9 +451,7 @@ async function tick() {
 
   // 1. Trials that have ended -> past_due, grace period starts
   const endedTrials = await Tenant.find({ 'billing.subscriptionStatus': 'trial', 'billing.trialEndsAt': { $lte: now } }).populate('plan');
-  await Promise.all(endedTrials.map(tenant => Tenant.findByIdAndUpdate(tenant._id, {
-    $set: withMirroredSubscription({ 'billing.subscriptionStatus': 'past_due', 'billing.gracePeriodEndsAt': graceEndsFrom(now, tenant.plan) }),
-  })));
+  await Promise.all(endedTrials.map(tenant => beginDunning(tenant, now, 'Trial ended; subscription payment is due')));
 
   // 2. Active PAID subscriptions whose period has ended -> past_due, grace period starts
   //    (nextPaymentAmount > 0 excludes free plans, which never expire this way)
@@ -413,28 +460,57 @@ async function tick() {
     'billing.currentPeriodEnd': { $ne: null, $lte: now },
     'billing.nextPaymentAmount': { $gt: 0 },
   }).populate('plan');
-  await Promise.all(endedPeriods.map(tenant => Tenant.findByIdAndUpdate(tenant._id, {
-    $set: withMirroredSubscription({ 'billing.subscriptionStatus': 'past_due', 'billing.gracePeriodEndsAt': graceEndsFrom(now, tenant.plan) }),
-  })));
+  await Promise.all(endedPeriods.map(tenant => beginDunning(tenant, now, 'Subscription renewal payment is due')));
 
   // 3. past_due tenants whose grace period has expired -> auto-suspend
-  await Tenant.updateMany(
-    { 'billing.subscriptionStatus': 'past_due', 'billing.gracePeriodEndsAt': { $lte: now } },
-    { $set: withMirroredSubscription({ status: 'suspended', 'billing.subscriptionStatus': 'suspended', 'billing.lastDeactivatedBy': 'system' }) }
+  const expiring = await Tenant.find({ 'billing.subscriptionStatus': 'past_due', 'billing.gracePeriodEndsAt': { $lte: now } });
+  await Promise.all(expiring.map(async tenant => {
+    await Tenant.findByIdAndUpdate(tenant._id, { $set: withMirroredSubscription({ status: 'suspended', 'billing.subscriptionStatus': 'suspended', 'billing.lastDeactivatedBy': 'system' }) });
+    const event = await BillingDunningEvent.create({ tenantId: tenant._id, event: 'suspended', attemptNumber: tenant.billing?.dunningAttempt || 1, message: 'Store suspended after the payment grace period expired' });
+    await require('./platformNotificationService').enqueueTenantEvent('tenant_suspended', tenant._id, event._id, { reason: 'Payment grace period expired', eventDate: now.toISOString().slice(0, 10) }).catch(error => console.error('[TENANT_SUSPENSION_NOTIFICATION_FAILED]', error.message));
+  }));
+  const reminders = await processDunningReminders(now);
+  return { processed: endedTrials.length + endedPeriods.length + expiring.length + reminders.queued, failed: reminders.failed, message: `Billing lifecycle: ${endedTrials.length} trials, ${endedPeriods.length} renewals, ${reminders.queued} queued notifications, ${expiring.length} suspensions` };
+}
+
+async function processDunningReminders(now = new Date()) {
+  try {
+    const result = await require('./platformNotificationService').scanLifecycleAutomations(now);
+    return { queued: result.queued, failed: 0 };
+  } catch (error) {
+    console.error('[BILLING_NOTIFICATION_SCAN_FAILED]', error.message);
+    return { queued: 0, failed: 1 };
+  }
+}
+
+async function beginDunning(tenant, now, message) {
+  const graceEnd = graceEndsFrom(now, tenant.plan);
+  const attempt = Number(tenant.billing?.dunningAttempt || 0) + 1;
+  const quote = await billingCommercial.calculateQuote(tenant, tenant.plan, '');
+  const invoice = await SubscriptionInvoice.findOneAndUpdate(
+    { tenantId: tenant._id, status: { $in: ['open', 'issued', 'past_due'] }, periodEnd: tenant.billing?.currentPeriodEnd || tenant.billing?.trialEndsAt },
+    { $set: { status: 'past_due', dueAt: now, amount: quote.total, subtotal: quote.subtotal, discountAmount: quote.discountAmount, taxAmount: quote.taxAmount, taxLines: quote.taxLines }, $setOnInsert: { planId: tenant.plan?._id, invoiceNumber: `SK-DUE-${String(tenant._id).slice(-6).toUpperCase()}-${now.toISOString().slice(0, 10).replace(/-/g, '')}`, currency: quote.currency, billingCycle: quote.billingCycle, periodStart: tenant.billing?.currentPeriodStart, periodEnd: tenant.billing?.currentPeriodEnd || tenant.billing?.trialEndsAt, provider: 'manual' } },
+    { upsert: true, new: true, runValidators: true }
   );
+  await Tenant.findByIdAndUpdate(tenant._id, { $set: withMirroredSubscription({ 'billing.subscriptionStatus': 'past_due', 'billing.nextPaymentAmount': quote.total, 'billing.gracePeriodEndsAt': graceEnd, 'billing.dunningAttempt': attempt, 'billing.lastDunningAt': now }) });
+  await BillingDunningEvent.create({ tenantId: tenant._id, invoiceId: invoice._id, event: 'grace_started', attemptNumber: attempt, scheduledFor: graceEnd, message });
 }
 
 module.exports = {
   GRACE_PERIOD_DAYS,
   addCycle,
+  activateApprovedPayment,
   startSubscription,
   handlePlanChange,
   syncTenantsForPlanUpdate,
   submitPayment,
   approvePayment,
   rejectPayment,
+  quoteSubscription,
   deactivateTenant,
   reactivateTenant,
   getOverview,
   tick,
+  processDunningReminders,
+  withMirroredSubscription,
 };

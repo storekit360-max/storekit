@@ -11,12 +11,13 @@
  */
 
 const { tick } = require('./subscriptionService');
+const { runTrackedJob } = require('./operationsService');
 
 let _timer = null;
 
 async function run() {
   try {
-    await tick();
+    await runTrackedJob('subscription-billing', tick);
   } catch (err) {
     console.error('[SubscriptionScheduler] Tick error:', err.message);
   }
@@ -33,4 +34,8 @@ function stopSubscriptionScheduler() {
   if (_timer) { clearInterval(_timer); _timer = null; }
 }
 
-module.exports = { startSubscriptionScheduler, stopSubscriptionScheduler };
+function getSubscriptionSchedulerHealth() {
+  return { running: Boolean(_timer), intervalMs: 60 * 60 * 1000, scheduler: 'in_process_polling' };
+}
+
+module.exports = { getSubscriptionSchedulerHealth, startSubscriptionScheduler, stopSubscriptionScheduler };

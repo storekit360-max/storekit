@@ -135,12 +135,17 @@ function blockUnavailableStore(req, res, next) {
   next();
 }
 
-function requireFeature(featureName) {
-  return (req, res, next) => {
+function requireFeature(featureName, runtimeFlagKey = featureName) {
+  return async (req, res, next) => {
     if (!req.plan?.features?.[featureName]) {
       return res.status(403).json({ message: `Feature '${featureName}' is not enabled for this plan` });
     }
-    next();
+    try {
+      const { evaluateFlags } = require('../services/runtimeFeatureFlagService');
+      const results = await evaluateFlags([runtimeFlagKey], { tenantId: req.tenantId, userId: req.user?._id, anonymousId: req.get('X-Anonymous-ID'), country: req.tenant?.settings?.merchantCountryCode, role: req.user?.role || 'customer', planFeatures: req.plan?.features || {} });
+      if (results[runtimeFlagKey] && !results[runtimeFlagKey].enabled) return res.status(403).json({ code: 'FEATURE_DISABLED', message: `Feature '${featureName}' is temporarily unavailable` });
+      next();
+    } catch (error) { next(error); }
   };
 }
 

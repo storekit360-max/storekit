@@ -11,8 +11,10 @@ const stats = {
     cacheMisses:  0,
     throttled:    0,
     startedAt:    Date.now(),
+    recentDurations: [],
+    window: { requests: 0, errors: 0, totalMs: 0 },
   };
-  
+
   // ─── Request / Response tracker ──────────────────────────────────────────────
   function monitoringMiddleware(req, res, next) {
     const start = Date.now();
@@ -34,6 +36,11 @@ const stats = {
       e.totalMs += ms;
       if (status >= 400) e.errors++;
       e.statusCodes[status] = (e.statusCodes[status] || 0) + 1;
+      stats.window.requests++;
+      stats.window.totalMs += ms;
+      if (status >= 400) stats.window.errors++;
+      stats.recentDurations.push(ms);
+      if (stats.recentDurations.length > 1000) stats.recentDurations.splice(0, stats.recentDurations.length - 1000);
   
       // Per-IP
       if (ip) stats.ips[ip] = (stats.ips[ip] || 0) + 1;
@@ -41,7 +48,7 @@ const stats = {
   
     next();
   }
-  
+
   // ─── Cache hit/miss helpers (call from your cache middleware) ─────────────────
   function recordCacheHit()  { stats.cacheHits++;  }
   function recordCacheMiss() { stats.cacheMisses++; }
@@ -101,6 +108,23 @@ const stats = {
     stats.cacheMisses = 0;
     stats.throttled = 0;
     stats.startedAt = Date.now();
+    stats.recentDurations = [];
+    stats.window = { requests: 0, errors: 0, totalMs: 0 };
+  }
+
+  function consumeWindowSnapshot() {
+    const window = { ...stats.window };
+    const sorted = [...stats.recentDurations].sort((a, b) => a - b);
+    const p95Index = sorted.length ? Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1) : 0;
+    stats.window = { requests: 0, errors: 0, totalMs: 0 };
+    stats.recentDurations = [];
+    return {
+      requestsInWindow: window.requests,
+      totalErrors: window.errors,
+      errorRate: window.requests ? Number(((window.errors / window.requests) * 100).toFixed(2)) : 0,
+      averageMs: window.requests ? Math.round(window.totalMs / window.requests) : 0,
+      p95Ms: sorted[p95Index] || 0,
+    };
   }
   
   module.exports = {
@@ -110,5 +134,5 @@ const stats = {
     recordThrottled,
     getSnapshot,
     resetStats,
+    consumeWindowSnapshot,
   };
-  

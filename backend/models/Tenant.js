@@ -119,6 +119,10 @@ const tenantSchema = new mongoose.Schema({
     cancelledAt: { type: Date, default: null },
     cancelReason: { type: String, default: '' },
     lastDeactivatedBy: { type: String, default: '' },
+    stripeCustomerId: { type: String, default: '', trim: true },
+    stripeSubscriptionId: { type: String, default: '', trim: true },
+    dunningAttempt: { type: Number, default: 0, min: 0 },
+    lastDunningAt: { type: Date, default: null },
   },
 
   // Used only to serialize an explicitly verified Super Admin deletion. The
@@ -159,8 +163,16 @@ const tenantSchema = new mongoose.Schema({
     starterKitSource: { type: String, enum: ['', 'ai', 'fallback', 'manual'], default: '' },
     starterKitGeneratedAt: { type: Date, default: null },
   },
+  management: {
+    tags: { type: [String], default: [] },
+    archivedAt: { type: Date, default: null },
+    archivedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    archiveReason: { type: String, default: '', maxlength: 500 },
+  },
 }, { timestamps: true });
 
 tenantSchema.index({ 'domains.domain': 1 }, { unique: true, sparse: true });
+tenantSchema.index({ 'management.tags': 1, createdAt: -1 });
+tenantSchema.index({ 'management.archivedAt': 1, createdAt: -1 });
 
 module.exports = mongoose.models.Tenant || mongoose.model('Tenant', tenantSchema);

@@ -43,7 +43,7 @@ export default function Account() {
     finally { setSaving(false); }
   };
 
-  const updateMarketingConsent=async(granted)=>{try{await API.put('/marketing/consent',{granted});setMarketingConsent(granted);toast.success(granted?'Marketing preferences enabled':'Marketing preferences disabled');}catch(err){toast.error(err?.response?.data?.message||'Could not update consent');}};
+  const updateMarketingConsent=async(granted)=>{try{await API.put('/marketing/consent',{granted});setMarketingConsent(granted);window.dispatchEvent(new CustomEvent('storekit:marketing-consent',{detail:{granted}}));toast.success(granted?'Marketing preferences enabled':'Marketing preferences disabled and prior behavior history deleted');}catch(err){toast.error(err?.response?.data?.message||'Could not update consent');}};
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8" style={{ background: 'var(--body-bg)' }}>

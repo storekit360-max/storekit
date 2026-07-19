@@ -36,6 +36,9 @@ const userSchema = new mongoose.Schema({
   password:   { type: String, required: true },
   phone:      { type: String },
   role:       { type: String, enum: ['customer', 'admin', 'superadmin'], default: 'customer' },
+  platformRoleIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'PlatformRole' }],
+  mfaEnrollmentRequired: { type: Boolean, default: false },
+  tokenVersion: { type: Number, default: 0, min: 0, select: false },
   tenantId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   isActive:   { type: Boolean, default: true },
   isVerified: { type: Boolean, default: false },
@@ -55,6 +58,7 @@ const userSchema = new mongoose.Schema({
     granted: { type: Boolean, default: false },
     updatedAt: Date,
     source: { type: String, default: '' },
+    revision: { type: Number, default: 0, min: 0 },
   },
 
   // ─── SECURITY: Account lockout fields ───────────────────────────────────

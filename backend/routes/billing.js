@@ -8,6 +8,7 @@ const { auth } = require('../middleware/auth');
 const Tenant = require('../models/Tenant');
 const TenantPayment = require('../models/TenantPayment');
 const subscriptionService = require('../services/subscriptionService');
+const billingLifecycle = require('../services/billingLifecycleService');
 
 const router = express.Router();
 
@@ -71,18 +72,24 @@ router.get('/payments', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+router.post('/quote', async (req, res, next) => {
+  try { res.json(await subscriptionService.quoteSubscription(req.user.tenantId, req.body?.couponCode)); }
+  catch (err) { next(err); }
+});
+
 // POST /api/billing/payments — submit proof of payment for super admin review
 router.post('/payments', uploadProof.single('proof'), async (req, res, next) => {
   try {
-    const { method, reference, note, amount } = req.body;
-    if (!reference || !String(reference).trim()) {
-      return res.status(400).json({ message: 'A payment reference / slip number is required' });
+    const { method, reference, note, couponCode } = req.body;
+    const quote = await subscriptionService.quoteSubscription(req.user.tenantId, couponCode);
+    if (quote.total > 0 && (!reference || !String(reference).trim())) return res.status(400).json({ message: 'A payment reference / slip number is required' });
+    if (!req.file && quote.total > 0) return res.status(400).json({ message: 'Please upload the payment slip/proof file' });
+    const proofUrl = req.file ? `${publicBase(req)}/uploads/tenant-payment-proofs/${req.file.filename}` : '';
+    const payment = await subscriptionService.submitPayment(req.user.tenantId, { method: quote.total === 0 ? 'coupon' : method, reference: quote.total === 0 ? `COUPON-${quote.couponCode}` : reference, proofUrl, note, couponCode });
+    if (payment.amount === 0) {
+      const result = await billingLifecycle.approveManualPayment(payment._id, req.user._id);
+      return res.status(201).json({ ...result.payment.toObject(), autoApproved: true, invoiceId: result.invoice._id });
     }
-    if (!req.file) {
-      return res.status(400).json({ message: 'Please upload the payment slip/proof file' });
-    }
-    const proofUrl = `${publicBase(req)}/uploads/tenant-payment-proofs/${req.file.filename}`;
-    const payment = await subscriptionService.submitPayment(req.user.tenantId, { method, reference, proofUrl, note, amount });
     res.status(201).json(payment);
   } catch (err) { next(err); }
 });

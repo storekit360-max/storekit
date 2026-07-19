@@ -1,12 +1,15 @@
 'use strict';
 
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const { auth, adminAuth } = require('../middleware/auth');
 const BehaviorEvent = require('../models/BehaviorEvent');
 const User = require('../models/User');
 const Product = require('../models/Product');
 const Tenant = require('../models/Tenant');
+const eventLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 120, standardHeaders: true, legacyHeaders: false });
+const CLICK_PAGES = new Set(['home','shop','category','brand','product','cart','checkout','account','orders','wishlist','returns','content','other']);
 
 function tenantId(req, res) {
   const id = req.user?.tenantId || req.tenantId;
@@ -25,12 +28,13 @@ router.put('/consent', auth, async (req, res) => {
   const id=tenantId(req,res);if(!id)return;
   if(typeof req.body.granted!=='boolean')return res.status(400).json({message:'granted must be a boolean'});
   const consent={granted:req.body.granted,updatedAt:new Date(),source:'customer_account'};
-  const user=await User.findOneAndUpdate({_id:req.user._id,tenantId:id},{$set:{marketingConsent:consent}},{new:true}).select('marketingConsent');
+  const user=await User.findOneAndUpdate({_id:req.user._id,tenantId:id},{$set:{'marketingConsent.granted':consent.granted,'marketingConsent.updatedAt':consent.updatedAt,'marketingConsent.source':consent.source},$inc:{'marketingConsent.revision':1}},{new:true}).select('marketingConsent');
   if(!user)return res.status(404).json({message:'Customer not found'});
-  res.json({granted:user.marketingConsent.granted,updatedAt:user.marketingConsent.updatedAt});
+  const deleted=req.body.granted?0:(await BehaviorEvent.deleteMany({tenantId:id,customer:user._id})).deletedCount;
+  res.json({granted:user.marketingConsent.granted,updatedAt:user.marketingConsent.updatedAt,deletedEvents:deleted});
 });
 
-router.post('/events', auth, async (req, res) => {
+router.post('/events', eventLimiter, auth, async (req, res) => {
   try {
     const id=tenantId(req,res);if(!id)return;
     const tenant=await Tenant.findById(id).select('settings.marketingTrackingEnabled').lean();
@@ -40,11 +44,22 @@ router.post('/events', auth, async (req, res) => {
     if(user.marketingConsent?.granted!==true)return res.status(202).json({tracked:false,reason:'consent_required'});
     const eventType=String(req.body.eventType||'').trim().toLowerCase();
     if(!/^[a-z][a-z0-9_]{1,49}$/.test(eventType))return res.status(400).json({message:'Invalid event type'});
+    let interaction={};
+    if(eventType==='storefront_click'){
+      const normalizedX=Number(req.body.interaction?.normalizedX);const normalizedY=Number(req.body.interaction?.normalizedY);const page=String(req.body.interaction?.page||'');const viewport=String(req.body.interaction?.viewport||'');
+      if(!Number.isFinite(normalizedX)||normalizedX<0||normalizedX>=1||!Number.isFinite(normalizedY)||normalizedY<0||normalizedY>=1)return res.status(400).json({message:'Click coordinates must be normalized between zero and one'});
+      if(!CLICK_PAGES.has(page)||!['mobile','tablet','desktop'].includes(viewport))return res.status(400).json({message:'Click page or viewport bucket is invalid'});
+      interaction={normalizedX:Number(normalizedX.toFixed(3)),normalizedY:Number(normalizedY.toFixed(3)),page,viewport};
+    }
     let product=null;
     if(req.body.productId){const exists=await Product.exists({_id:req.body.productId,tenantId:id});if(!exists)return res.status(400).json({message:'Product does not belong to this store'});product=req.body.productId;}
     const metadata={};
     for(const key of ['page','query','campaign'])if(typeof req.body.metadata?.[key]==='string')metadata[key]=req.body.metadata[key].slice(0,200);
-    await BehaviorEvent.create({tenantId:id,customer:user._id,eventType,product,device:String(req.body.device||req.get('user-agent')||'').slice(0,80),source:String(req.body.source||'storefront').slice(0,80),metadata});
+    const consentRevision=Number(user.marketingConsent?.revision||0);
+    const event=await BehaviorEvent.create({tenantId:id,customer:user._id,eventType,product,device:eventType==='storefront_click'?interaction.viewport:String(req.body.device||req.get('user-agent')||'').slice(0,80),source:eventType==='storefront_click'?'storefront_heatmap':String(req.body.source||'storefront').slice(0,80),metadata:eventType==='storefront_click'?{}:metadata,interaction,consentRevision});
+    const revisionFilter=consentRevision===0?{$or:[{'marketingConsent.revision':0},{'marketingConsent.revision':{$exists:false}}]}:{'marketingConsent.revision':consentRevision};
+    const stillConsented=await User.exists({_id:user._id,tenantId:id,'marketingConsent.granted':true,...revisionFilter});
+    if(!stillConsented){await BehaviorEvent.deleteOne({_id:event._id});return res.status(202).json({tracked:false,reason:'consent_changed'});}
     res.status(201).json({tracked:true});
   }catch(err){res.status(500).json({message:err.message});}
 });

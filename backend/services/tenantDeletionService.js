@@ -1,5 +1,7 @@
 'use strict';
 
+const mongoose = require('mongoose');
+
 const AutomationRule = require('../models/AutomationRule');
 const BehaviorEvent = require('../models/BehaviorEvent');
 const CourierIntegration = require('../models/CourierIntegration');
@@ -16,6 +18,20 @@ const SocialPublishAttempt = require('../models/SocialPublishAttempt');
 const SubscriptionInvoice = require('../models/SubscriptionInvoice');
 const SubscriptionPayment = require('../models/SubscriptionPayment');
 const TenantPayment = require('../models/TenantPayment');
+const BillingPaymentAttempt = require('../models/BillingPaymentAttempt');
+const BillingRefund = require('../models/BillingRefund');
+const BillingDunningEvent = require('../models/BillingDunningEvent');
+const BillingCouponRedemption = require('../models/BillingCouponRedemption');
+const EnterpriseContract = require('../models/EnterpriseContract');
+const FeatureFlagExposure = require('../models/FeatureFlagExposure');
+const TenantNote = require('../models/TenantNote');
+const NotificationDelivery = require('../models/NotificationDelivery');
+const SupportTicket = require('../models/SupportTicket');
+const SupportMessage = require('../models/SupportMessage');
+const PlatformAnnouncement = require('../models/PlatformAnnouncement');
+const WebhookEvent = require('../models/WebhookEvent');
+const AuthSession = require('../models/AuthSession');
+const MfaFactor = require('../models/MfaFactor');
 const User = require('../models/User');
 const {
   Category,
@@ -55,6 +71,18 @@ const TENANT_DATA_SPECS = Object.freeze([
   { key: 'subscriptionInvoices', model: SubscriptionInvoice, field: 'tenantId' },
   { key: 'subscriptionPayments', model: SubscriptionPayment, field: 'tenantId' },
   { key: 'tenantPayments', model: TenantPayment, field: 'tenant' },
+  { key: 'billingPaymentAttempts', model: BillingPaymentAttempt, field: 'tenantId' },
+  { key: 'billingRefunds', model: BillingRefund, field: 'tenantId' },
+  { key: 'billingDunningEvents', model: BillingDunningEvent, field: 'tenantId' },
+  { key: 'billingCouponRedemptions', model: BillingCouponRedemption, field: 'tenantId' },
+  { key: 'enterpriseContracts', model: EnterpriseContract, field: 'tenantId' },
+  { key: 'featureFlagExposures', model: FeatureFlagExposure, field: 'tenantId' },
+  { key: 'tenantNotes', model: TenantNote, field: 'tenantId' },
+  { key: 'notificationDeliveries', model: NotificationDelivery, field: 'tenant' },
+  { key: 'supportTickets', model: SupportTicket, field: 'tenant' },
+  { key: 'supportMessages', model: SupportMessage, field: 'tenant' },
+  { key: 'webhookEvents', model: WebhookEvent, field: 'tenantId' },
+  { key: 'authSessions', model: AuthSession, field: 'tenantId' },
   { key: 'categories', model: Category, field: 'tenantId' },
   { key: 'coupons', model: Coupon, field: 'tenantId' },
   { key: 'banners', model: Banner, field: 'tenantId' },
@@ -95,7 +123,9 @@ async function getTenantDataCounts(tenantId) {
     await spec.model.countDocuments(tenantFilter(spec, tenantId)),
   ]));
   const tenantUsers = await User.countDocuments({ tenantId, role: { $ne: 'superadmin' } });
-  const counts = Object.fromEntries([...rows, ['users', tenantUsers]]);
+  const tenantUserIds = mongoose.isValidObjectId(tenantId) ? await User.find({ tenantId, role: { $ne: 'superadmin' } }).distinct('_id') : [];
+  const mfaFactors = tenantUserIds.length ? await MfaFactor.countDocuments({ userId: { $in: tenantUserIds } }) : 0;
+  const counts = Object.fromEntries([...rows, ['mfaFactors', mfaFactors], ['users', tenantUsers]]);
   const total = Object.values(counts).reduce((sum, value) => sum + Number(value || 0), 0);
   return { counts, total };
 }
@@ -116,12 +146,20 @@ async function deleteTenantData(tenantId) {
     deleted[spec.key] = result.deletedCount || 0;
   }
 
+  const tenantUserIds = mongoose.isValidObjectId(tenantId) ? await User.find({ tenantId, role: { $ne: 'superadmin' } }).distinct('_id') : [];
+  if (tenantUserIds.length) {
+    const mfaFactors = await MfaFactor.deleteMany({ userId: { $in: tenantUserIds } });
+    deleted.mfaFactors = mfaFactors.deletedCount || 0;
+  }
   const users = await User.deleteMany({ tenantId, role: { $ne: 'superadmin' } });
   deleted.users = users.deletedCount || 0;
 
   // Platform super-admin identities are global. If legacy data accidentally
   // attached one to this tenant, preserve the account and remove only the link.
   await User.updateMany({ tenantId, role: 'superadmin' }, { $set: { tenantId: null } });
+  // Historical campaigns remain auditable, but must not retain a reference to
+  // an erased tenant or accidentally target it if a draft is later published.
+  await PlatformAnnouncement.updateMany({ tenantIds: tenantId }, { $pull: { tenantIds: tenantId } });
 
   return {
     deleted,

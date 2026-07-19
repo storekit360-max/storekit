@@ -13,6 +13,7 @@
 
 import { useEffect } from 'react';
 import { fbqSafe } from './useAnalytics';
+import { analyticsConsentAllowed } from '../components/CookieConsent';
 import { useLocation } from 'react-router-dom';
 import {
   generateEventId,
@@ -116,7 +117,7 @@ export function applyAdvancedMatching(billing = {}) {
   const cfg = getSeoConfig();
   if (!cfg.metaPixelId && !window.__fbPixelInitIds) return;
   const pixelId = cfg.metaPixelId || Object.keys(window.__fbPixelInitIds || {})[0];
-  if (!pixelId || !window.fbq) return;
+  if (!pixelId || !window.fbq || !analyticsConsentAllowed()) return;
 
   // Only re-init if we haven't already applied matching in this session
   const matchKey = `__fbAM_${pixelId}`;

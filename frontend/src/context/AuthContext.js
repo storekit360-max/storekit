@@ -10,6 +10,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     const { data } = await API.post('/auth/login', { email, password });
+    if (data.mfaRequired) return { ...data.user, mfaRequired: true, challengeToken: data.challengeToken };
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
     setUser(data.user);

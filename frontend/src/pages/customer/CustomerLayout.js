@@ -13,6 +13,7 @@ import FlashSaleBanner from '../../components/FlashSaleBanner';
 import CouponBanner from '../../components/CouponBanner';
 import StoreLoader from '../../components/StoreLoader';
 import PositionBanner from '../../components/PositionBanner';
+import useStorefrontClickAnalytics from '../../hooks/useStorefrontClickAnalytics';
 
 /* ─────────────────────────────────────────────────────────────────
    RESPONSIVE LAYOUT FIXES — v2
@@ -953,6 +954,8 @@ const Footer = ({ settings }) => {
 export default function CustomerLayout() {
   const { campaign } = useSeasonal();
   const { settings, storeStatus }  = useTheme();
+  const { user } = useAuth();
+  useStorefrontClickAnalytics(user);
 
   React.useEffect(() => {
     if (settings?.googleSearchConsole) {

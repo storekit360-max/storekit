@@ -240,10 +240,12 @@ export default function BackupCenter() {
   };
 
   const restore = async (id) => {
-    if (!window.confirm('⚠️ This will restore the database from this backup. An emergency backup will be created first. Continue?')) return;
+    const expected = `RESTORE TENANT ${id}`;
+    const confirmation = window.prompt(`This replaces this store's backed-up data. An emergency tenant backup is completed first. Type:\n${expected}`);
+    if (confirmation === null) return;
     setActionBusy(b => ({ ...b, [id+'r']: true }));
     try {
-      await API.post(`/backup/${id}/restore`);
+      await API.post(`/backup/${id}/restore`, { confirmation });
       toast.success('Restore completed successfully');
     } catch (e) {
       toast.error(e.response?.data?.message || 'Restore failed');
@@ -283,7 +285,7 @@ export default function BackupCenter() {
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:24, flexWrap:'wrap', gap:12 }}>
         <div>
           <h1 style={{ fontSize:22, fontWeight:800, color:'#1f2937', margin:0 }}>Backup Center</h1>
-          <p style={{ fontSize:13, color:'#6b7280', margin:'4px 0 0' }}>Google Drive-powered database backups</p>
+          <p style={{ fontSize:13, color:'#6b7280', margin:'4px 0 0' }}>Tenant-isolated recovery points in platform-managed storage</p>
         </div>
         <div style={{ display:'flex', gap:8 }}>
           <Btn onClick={load} color='#6b7280'>↻ Refresh</Btn>
@@ -300,7 +302,7 @@ export default function BackupCenter() {
             <p style={{ margin:0, fontWeight:700, color:'#92400e', fontSize:14 }}>⚠️ Google Drive not connected</p>
             <p style={{ margin:'3px 0 0', fontSize:12, color:'#78350f' }}>Connect your Google account to enable backups. Takes 30 seconds.</p>
           </div>
-          <Btn onClick={connectDrive} color='#f59e0b'>🔗 Connect Google Drive</Btn>
+          <span style={{ fontSize:12, color:'#92400e', fontWeight:700 }}>Contact StoreKit platform support</span>
         </div>
       )}
 
@@ -340,10 +342,6 @@ export default function BackupCenter() {
         title='Google Drive Storage'
         action={
           <div style={{ display:'flex', gap:8 }}>
-            {driveConnected
-              ? <Btn small onClick={disconnectDrive} color='#ef4444'>Disconnect</Btn>
-              : <Btn small onClick={connectDrive} color='#22c55e'>Connect Drive</Btn>
-            }
             <Btn small onClick={loadStorage} color='#6b7280'>Check Storage</Btn>
           </div>
         }
@@ -365,7 +363,7 @@ export default function BackupCenter() {
 
       {/* Tabs */}
       <div style={{ display:'flex', gap:4, marginBottom:16 }}>
-        {['history','settings'].map(t => (
+        {['history'].map(t => (
           <button key={t} onClick={()=>setTab(t)} style={{
             padding:'7px 18px', borderRadius:8, border:'none', fontWeight:600, fontSize:13, cursor:'pointer',
             background: tab===t ? '#6366f1' : '#f3f4f6',

@@ -24,9 +24,10 @@
 
 'use strict';
 
-const jwt  = require('jsonwebtoken');
+const jwtKeyring = require('../utils/jwtKeyring');
 const User = require('../models/User');
 const Tenant = require('../models/Tenant');
+const AuthSession = require('../models/AuthSession');
 
 // ─── Account lockout constants ────────────────────────────────────────────────
 // SECURITY: After 5 wrong passwords the account is locked for 15 minutes.
@@ -49,15 +50,18 @@ if (process.env.JWT_AUDIENCE) jwtVerifyOptions.audience = process.env.JWT_AUDIEN
 //           strict verification works end-to-end.
 //           This helper is also exported so auth.js routes can use it without
 //           duplicating the signing logic.
-function generateToken(userId) {
-  const payload = { id: userId };
+function generateToken(userOrId, { sessionId, tokenVersion, expiresIn = '30d' } = {}) {
+  const userId = userOrId?._id || userOrId;
+  const resolvedVersion = tokenVersion ?? userOrId?.tokenVersion ?? 0;
+  const payload = { id: userId, ver: Number(resolvedVersion || 0) };
+  if (sessionId) payload.jti = sessionId;
   const options = {
-    expiresIn: '30d', // unchanged — matches existing 30-day session length
+    expiresIn,
   };
   if (process.env.JWT_ISSUER)   options.issuer   = process.env.JWT_ISSUER;
   if (process.env.JWT_AUDIENCE) options.audience = process.env.JWT_AUDIENCE;
 
-  return jwt.sign(payload, process.env.JWT_SECRET, options);
+  return jwtKeyring.sign(payload, options);
 }
 
 // ─── auth middleware ──────────────────────────────────────────────────────────
@@ -76,14 +80,24 @@ const auth = async (req, res, next) => {
     // SECURITY: Verify signature, expiration, issuer, and audience in one call.
     //           jsonwebtoken throws on any failure so the catch block handles all
     //           invalid-token cases uniformly.
-    const decoded = jwt.verify(token, process.env.JWT_SECRET, jwtVerifyOptions);
+    const decoded = jwtKeyring.verify(token, jwtVerifyOptions);
 
     // SECURITY: Always fetch the user from the DB on every request so that
     //           deactivated accounts are rejected immediately (no need to wait
     //           for the token to expire).
-    const user = await User.findById(decoded.id).select('-password');
+    const user = await User.findById(decoded.id).select('-password +tokenVersion');
     if (!user || !user.isActive) {
       return res.status(401).json({ message: 'Unauthorized' });
+    }
+    if (Number(decoded.ver || 0) !== Number(user.tokenVersion || 0)) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+    if (decoded.jti) {
+      const session = await AuthSession.findOne({ sessionId: decoded.jti, userId: user._id }).select('revokedAt expiresAt').lean();
+      if (!session || session.revokedAt || session.expiresAt <= new Date()) return res.status(401).json({ message: 'Unauthorized' });
+      req.authSessionId = decoded.jti;
+      // Avoid a write on every API call while still keeping useful recent-device data.
+      AuthSession.updateOne({ sessionId: decoded.jti, lastSeenAt: { $lt: new Date(Date.now() - 5 * 60 * 1000) } }, { $set: { lastSeenAt: new Date() } }).catch(() => {});
     }
 
     req.user = user;

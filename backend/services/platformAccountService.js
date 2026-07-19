@@ -1,0 +1,10 @@
+'use strict';
+const crypto=require('crypto');const PlatformAccountToken=require('../models/PlatformAccountToken');
+function pepper(){const value=process.env.PLATFORM_ACCOUNT_TOKEN_KEY||process.env.JWT_SECRET;if(!value)throw new Error('PLATFORM_ACCOUNT_TOKEN_KEY or JWT_SECRET is required');return value;}
+function hashToken(token){return crypto.createHmac('sha256',pepper()).update(String(token)).digest('hex');}
+function issueToken(){return crypto.randomBytes(32).toString('base64url');}
+function validatePassword(password,settings={}){const errors=[];const minimum=Math.min(Math.max(Number(settings['security.passwordMinLength'])||8,8),128);if(!password||password.length<minimum)errors.push(`At least ${minimum} characters`);if(settings['security.passwordRequireUppercase']!==false&&!/[A-Z]/.test(password))errors.push('At least one uppercase letter');if(settings['security.passwordRequireLowercase']!==false&&!/[a-z]/.test(password))errors.push('At least one lowercase letter');if(settings['security.passwordRequireNumber']!==false&&!/[0-9]/.test(password))errors.push('At least one number');if(settings['security.passwordRequireSpecial']!==false&&!/[^A-Za-z0-9]/.test(password))errors.push('At least one special character');return{valid:errors.length===0,errors};}
+function escapeHtml(value){return String(value||'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+async function createToken({type,email,userId=null,roleIds=[],createdBy,ttlMinutes}){const plainText=issueToken();const token=await PlatformAccountToken.create({type,tokenHash:hashToken(plainText),email:String(email).toLowerCase().trim(),userId,roleIds,createdBy,expiresAt:new Date(Date.now()+ttlMinutes*60000)});return{token,plainText};}
+async function findValid(plainText){return PlatformAccountToken.findOne({tokenHash:hashToken(plainText),usedAt:null,expiresAt:{$gt:new Date()}}).select('+tokenHash');}
+module.exports={hashToken,issueToken,validatePassword,escapeHtml,createToken,findValid};

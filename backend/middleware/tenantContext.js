@@ -2,7 +2,7 @@
 
 const { AsyncLocalStorage } = require('async_hooks');
 const mongoose = require('mongoose');
-const jwt = require('jsonwebtoken');
+const jwtKeyring = require('../utils/jwtKeyring');
 
 const tenantStorage = new AsyncLocalStorage();
 let installed = false;
@@ -39,7 +39,7 @@ async function tenantContextMiddleware(req, _res, next) {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
     if (token) {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded = jwtKeyring.verify(token);
       const User = require('../models/User');
       const user = await User.findById(decoded.id).select('tenantId role').lean();
       tenantId = chooseRequestTenantId(tenantId, user);

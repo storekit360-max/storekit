@@ -2,7 +2,7 @@
  * useAnalytics.js — GA4, GTM, and Meta Pixel bootstrap for StoreKit
  *
  * Architecture:
- *  - index.html loads the fbq() STUB (shim + async fbevents.js) without init.
+ *  - index.html creates only the local fbq() queue; it makes no Meta request.
  *    window.fbq is available from the very first millisecond of page load.
  *  - bootstrapAnalytics() calls fbq('init', pixelId, advancedMatchData) once
  *    the Pixel ID is fetched from admin Settings → SEO panel.
@@ -26,6 +26,8 @@
 
 import { useEffect } from 'react';
 import { getAdvancedMatchingData, captureFbclid } from '../utils/metaPixelHelpers';
+import API from '../utils/api';
+import { analyticsConsentAllowed } from '../components/CookieConsent';
 
 /**
  * fbqSafe — always use this instead of window.fbq() directly.
@@ -38,7 +40,7 @@ import { getAdvancedMatchingData, captureFbclid } from '../utils/metaPixelHelper
  * event deduplication with the Conversions API.
  */
 export function fbqSafe(type, eventName, params, options) {
-  if (window.fbq) {
+  if (analyticsConsentAllowed() && window.fbq) {
     if (options) {
       window.fbq(type, eventName, params, options);
     } else {
@@ -81,7 +83,7 @@ function injectNoscript(html, id) {
  *                              used for Advanced Matching on init
  */
 export function bootstrapAnalytics(cfg, userData) {
-  if (!cfg) return;
+  if (!cfg || !analyticsConsentAllowed()) return;
 
   // ── fbc / Click ID capture — MUST run before fbq('init') ─────────────────
   // Reads fbclid from the URL and writes _fbc cookie in Meta's documented
@@ -123,6 +125,7 @@ export function bootstrapAnalytics(cfg, userData) {
   // Advanced Matching: if a logged-in user is passed, their hashed PII is
   // included in the init call so Meta can match events from the first PageView.
   if (cfg.metaPixelId && window.fbq) {
+    injectScript('https://connect.facebook.net/en_US/fbevents.js', 'fb-pixel-loader');
     window.__fbPixelInitIds = window.__fbPixelInitIds || {};
 
     if (!window.__fbPixelInitIds[cfg.metaPixelId]) {
@@ -155,6 +158,8 @@ export function bootstrapAnalytics(cfg, userData) {
 /** Mount once at App root — reads user from localStorage for Advanced Matching */
 export default function AnalyticsBootstrap() {
   useEffect(() => {
+    let cancelled = false;
+    let policy = 'consent_required';
     // Try to get logged-in user for Advanced Matching at init time
     let userData = null;
     try {
@@ -162,17 +167,19 @@ export default function AnalyticsBootstrap() {
       if (raw) userData = JSON.parse(raw);
     } catch { }
 
-    const cfg = window.__STOREKIT_SEO__;
-    if (cfg) bootstrapAnalytics(cfg, userData);
+    const run = () => { if (!cancelled && analyticsConsentAllowed(policy)) bootstrapAnalytics(window.__STOREKIT_SEO__, userData); };
+    API.get('/platform-settings/public').then(({ data }) => { policy = data?.['security.cookiePolicy'] || policy; run(); }).catch(() => {});
 
     // Also listen for delayed injection (settings loaded after mount)
     const handler = () => {
       let u = null;
       try { u = JSON.parse(localStorage.getItem('user')); } catch { }
-      bootstrapAnalytics(window.__STOREKIT_SEO__, u);
+      if (analyticsConsentAllowed(policy)) bootstrapAnalytics(window.__STOREKIT_SEO__, u);
     };
+    const consentHandler = event => { if (event.detail?.value === 'accepted') { try { userData = JSON.parse(localStorage.getItem('user')); } catch { } run(); } };
     window.addEventListener('storekit:seo-ready', handler);
-    return () => window.removeEventListener('storekit:seo-ready', handler);
+    window.addEventListener('storekit:cookie-consent', consentHandler);
+    return () => { cancelled = true; window.removeEventListener('storekit:seo-ready', handler); window.removeEventListener('storekit:cookie-consent', consentHandler); };
   }, []);
   return null;
 }

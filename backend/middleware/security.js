@@ -381,6 +381,11 @@ function errorHandler(err, req, res, _next) { // eslint-disable-line no-unused-v
   // SECURITY: For all other errors, return a generic 500 in production.
   //           In development, we include the message to aid local debugging.
   const status = err.status || err.statusCode || 500;
+  if (status >= 500) {
+    require('../services/operationsService').recordSystemError(err, req, status).catch(recordError => {
+      console.error('[SYSTEM_ERROR_PERSIST_FAILED]', { correlationId: req.correlationId, error: recordError.message });
+    });
+  }
   res.status(status).json({
     message: isProduction ? 'An unexpected error occurred' : (err.message || 'Server error'),
     // SECURITY: Never include err.stack in the response — even in development.

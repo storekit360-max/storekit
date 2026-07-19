@@ -43,6 +43,10 @@ const { auth, generateToken, recordFailedLogin, clearFailedLogin, isAccountLocke
 const { Notification, OTP, Coupon } = require('../models/index');
 const { sendMail, otpEmailHtml }    = require('../utils/mailer');
 const { getHeaderDomainCandidates, normalizeDomain } = require('../middleware/tenant');
+const { issueSession, recordAuthEvent, revokeAllUserSessions } = require('../services/authSessionService');
+const AuthSession = require('../models/AuthSession');
+const MfaFactor = require('../models/MfaFactor');
+const { createChallengeToken, createEnrollment, getFactor, verifyChallengeToken, verifyFactor } = require('../services/mfaService');
 
 // ─── DIAGNOSTIC GUARD ─────────────────────────────────────────────────────────
 // A "Router.use() requires a middleware function" crash means one of the
@@ -180,13 +184,14 @@ async function attachLegacyCustomerToTenant(user, tenantId) {
 
 // ─── Password strength validator ─────────────────────────────────────────────
 // Returns { valid: Boolean, errors: String[] } — unchanged from original.
-function validatePasswordStrength(password) {
+function validatePasswordStrength(password, settings = {}) {
   const errors = [];
-  if (!password || password.length < 8)      errors.push('At least 8 characters');
-  if (!/[A-Z]/.test(password))               errors.push('At least one uppercase letter (A-Z)');
-  if (!/[a-z]/.test(password))               errors.push('At least one lowercase letter (a-z)');
-  if (!/[0-9]/.test(password))               errors.push('At least one number (0-9)');
-  if (!/[^A-Za-z0-9]/.test(password))        errors.push('At least one special character (!@#$%^&* etc.)');
+  const minimum = Math.min(Math.max(Number(settings['security.passwordMinLength']) || 8, 8), 128);
+  if (!password || password.length < minimum) errors.push(`At least ${minimum} characters`);
+  if (settings['security.passwordRequireUppercase'] !== false && !/[A-Z]/.test(password)) errors.push('At least one uppercase letter (A-Z)');
+  if (settings['security.passwordRequireLowercase'] !== false && !/[a-z]/.test(password)) errors.push('At least one lowercase letter (a-z)');
+  if (settings['security.passwordRequireNumber'] !== false && !/[0-9]/.test(password)) errors.push('At least one number (0-9)');
+  if (settings['security.passwordRequireSpecial'] !== false && !/[^A-Za-z0-9]/.test(password)) errors.push('At least one special character (!@#$%^&* etc.)');
   return { valid: errors.length === 0, errors };
 }
 
@@ -196,12 +201,17 @@ function validatePasswordStrength(password) {
 // they reach this handler.
 router.post('/register', async (req, res, next) => {
   try {
+    const registrationEnabled = req.platformSettings?.['registration.enabled'] !== false;
+    const invitationOnly = req.platformSettings?.['registration.invitationOnly'] === true;
+    if (!registrationEnabled || invitationOnly) {
+      return res.status(403).json({ code: 'REGISTRATION_CLOSED', message: invitationOnly ? 'Registration is currently invitation only' : 'Registration is currently closed' });
+    }
     const { firstName, lastName, username, email, password, phone } = req.body;
     const tenant = await resolveTenantFromRequest(req);
     const tenantId = tenant?._id || null;
     const normalizedEmail = String(email || '').toLowerCase().trim();
 
-    const pwCheck = validatePasswordStrength(password);
+    const pwCheck = validatePasswordStrength(password, req.platformSettings);
     if (!pwCheck.valid) {
       return res.status(400).json({ message: 'Password is too weak', errors: pwCheck.errors });
     }
@@ -230,7 +240,7 @@ router.post('/register', async (req, res, next) => {
       link:    '/admin/customers',
     });
 
-    const token = generateToken(user._id);
+    const token = await issueSession(user, req, 'registration');
 
     res.status(201).json({
       token,
@@ -249,15 +259,25 @@ router.post('/register', async (req, res, next) => {
 router.post('/login', async (req, res, next) => {
   try {
     const { email, password } = req.body;
+    const tenant = await resolveTenantFromRequest(req);
+    const tenantId = tenant?._id || null;
+    const normalizedEmail = String(email || '').toLowerCase().trim();
 
     // SECURITY: Find user; if not found, run a dummy bcrypt compare to make
     //           timing indistinguishable from a wrong-password scenario.
-    const user = await User.findOne({ email });
+    // Superadmin users have tenantId=null, so they won't be found when a
+    // tenant domain is resolved (e.g. localhost -> Demo Store). Always
+    // also check for superadmin matching by email without tenant filter.
+    let user = await User.findOne({ tenantId, email: normalizedEmail }).select('+tokenVersion');
+    if (!user) {
+      user = await User.findOne({ tenantId: null, email: normalizedEmail, role: 'superadmin' }).select('+tokenVersion');
+    }
 
     if (!user) {
       // SECURITY: Timing-safe — always do a bcrypt comparison so response time
       //           is the same whether the email exists or not.
       await bcrypt.compare(password || '', DUMMY_HASH).catch(() => {});
+      recordAuthEvent(req, { email: normalizedEmail, eventType: 'login', outcome: 'failure', reason: 'invalid_credentials', authMethod: 'password' }).catch(() => {});
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
@@ -265,6 +285,7 @@ router.post('/login', async (req, res, next) => {
     //           Locked accounts get a generic 429 to signal they should wait.
     if (isAccountLocked(user)) {
       const minutesLeft = Math.ceil((user.lockUntil - Date.now()) / 60000);
+      recordAuthEvent(req, { user, eventType: 'login', outcome: 'blocked', reason: 'account_locked', authMethod: 'password' }).catch(() => {});
       return res.status(429).json({
         message: `Account temporarily locked. Please try again in ${minutesLeft} minute(s).`,
       });
@@ -275,6 +296,7 @@ router.post('/login', async (req, res, next) => {
     if (!passwordMatch) {
       // SECURITY: Increment failed-login counter; this may lock the account.
       await recordFailedLogin(user);
+      recordAuthEvent(req, { user, eventType: user.loginAttempts >= 5 ? 'account_locked' : 'login', outcome: 'failure', reason: 'invalid_credentials', authMethod: 'password' }).catch(() => {});
       // SECURITY: Identical message whether the email or the password is wrong
       //           to prevent user enumeration.
       return res.status(401).json({ message: 'Invalid email or password' });
@@ -290,7 +312,15 @@ router.post('/login', async (req, res, next) => {
     user.lastLogin = Date.now();
     await user.save();
 
-    const token = generateToken(user._id);
+    const mfaFactor = user.role === 'superadmin' ? await getFactor(user._id) : null;
+    if (user.role === 'superadmin' && req.platformSettings?.['security.mfaPolicy'] === 'platform_required' && !mfaFactor?.enabled && !user.mfaEnrollmentRequired) {
+      user.mfaEnrollmentRequired = true;
+      await user.save();
+    }
+    if (mfaFactor?.enabled) {
+      return res.json({ mfaRequired: true, challengeToken: createChallengeToken(user, 'password'), user: { id: user._id, email: user.email, role: user.role } });
+    }
+    const token = await issueSession(user, req, 'password');
 
     res.json({
       token,
@@ -303,6 +333,7 @@ router.post('/login', async (req, res, next) => {
         role:      user.role,
         tenantId:   user.tenantId,
         avatar:    user.avatar,
+        mfaEnrollmentRequired: user.mfaEnrollmentRequired === true,
       },
     });
   } catch (err) {
@@ -328,7 +359,7 @@ router.post('/superadmin/google', async (req, res) => {
     if (SUPERADMIN_GOOGLE_EMAILS.size && !SUPERADMIN_GOOGLE_EMAILS.has(email)) {
       return res.status(403).json({ message: 'This Google account is not authorized for platform management' });
     }
-    const user = await User.findOne({ email, role: 'superadmin', tenantId: null });
+    const user = await User.findOne({ email, role: 'superadmin', tenantId: null }).select('+tokenVersion');
     if (!user || !user.isActive) return res.status(403).json({ message: 'This Google account is not authorized for platform management' });
     if (user.googleId && user.googleId !== payload.sub) return res.status(403).json({ message: 'Google identity does not match the enrolled account' });
     user.googleId = payload.sub;
@@ -336,10 +367,17 @@ router.post('/superadmin/google', async (req, res) => {
     user.isVerified = true;
     user.lastLogin = new Date();
     await user.save();
-    const token = generateToken(user._id);
-    res.json({ token, user: { id: user._id, firstName: user.firstName, lastName: user.lastName, username: user.username, email: user.email, role: user.role, tenantId: null, avatar: user.avatar } });
+    const mfaFactor = await getFactor(user._id);
+    if (req.platformSettings?.['security.mfaPolicy'] === 'platform_required' && !mfaFactor?.enabled && !user.mfaEnrollmentRequired) {
+      user.mfaEnrollmentRequired = true;
+      await user.save();
+    }
+    if (mfaFactor?.enabled) return res.json({ mfaRequired: true, challengeToken: createChallengeToken(user, 'google'), user: { id: user._id, email: user.email, role: user.role } });
+    const token = await issueSession(user, req, 'google');
+    res.json({ token, user: { id: user._id, firstName: user.firstName, lastName: user.lastName, username: user.username, email: user.email, role: user.role, tenantId: null, avatar: user.avatar, mfaEnrollmentRequired: user.mfaEnrollmentRequired === true } });
   } catch (error) {
     console.error('[SUPERADMIN GOOGLE AUTH]', error.message);
+    recordAuthEvent(req, { email: '', eventType: 'login', outcome: 'failure', reason: 'google_verification_failed', authMethod: 'google' }).catch(() => {});
     res.status(401).json({ message: 'Secure Google sign-in failed' });
   }
 });
@@ -432,7 +470,7 @@ router.post('/google', async (req, res, next) => {
     if (dirty) await user.save();
     else await User.findByIdAndUpdate(user._id, { lastLogin: Date.now() });
 
-    const token = generateToken(user._id);
+    const token = await issueSession(user, req, 'google');
 
     res.json({
       token,
@@ -451,6 +489,7 @@ router.post('/google', async (req, res, next) => {
     // SECURITY: Log the internal error but return a generic message so Google
     //           API internals are not disclosed.
     console.error('[GOOGLE AUTH ERROR]', err.message);
+    recordAuthEvent(req, { email: '', eventType: 'login', outcome: 'failure', reason: 'google_verification_failed', authMethod: 'google' }).catch(() => {});
     res.status(500).json({ message: 'Google sign-in failed' });
   }
 });
@@ -541,7 +580,7 @@ router.post('/reset-password', async (req, res, next) => {
     const tenant = await resolveTenantFromRequest(req);
     const tenantId = tenant?._id || null;
 
-    const pwCheck = validatePasswordStrength(newPassword);
+    const pwCheck = validatePasswordStrength(newPassword, req.platformSettings);
     if (!pwCheck.valid) {
       return res.status(400).json({ message: 'Password is too weak', errors: pwCheck.errors });
     }
@@ -551,12 +590,15 @@ router.post('/reset-password', async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid or expired reset token. Please restart the password reset process.' });
     }
 
-    const user = await User.findOne(tenantId ? { tenantId, email: normalizedEmail } : { email: normalizedEmail });
+    const user = await User.findOne(tenantId ? { tenantId, email: normalizedEmail } : { email: normalizedEmail }).select('+tokenVersion');
     if (!user) return res.status(404).json({ message: 'User not found' });
 
     user.password  = newPassword;
     user.lastLogin = Date.now();
+    user.tokenVersion = Number(user.tokenVersion || 0) + 1;
     await user.save();
+
+    await revokeAllUserSessions(user._id, user._id, 'Password reset');
 
     record.used = true;
     await record.save();
@@ -564,7 +606,9 @@ router.post('/reset-password', async (req, res, next) => {
     // SECURITY: Also clear any lockout from repeated bad-password attempts.
     await clearFailedLogin(user);
 
-    const token = generateToken(user._id);
+    const mfaFactor = user.role === 'superadmin' ? await getFactor(user._id) : null;
+    if (mfaFactor?.enabled) return res.json({ message: 'Password reset successfully', mfaRequired: true, challengeToken: createChallengeToken(user, 'password_reset'), user: { id: user._id, email: user.email, role: user.role } });
+    const token = await issueSession(user, req, 'password_reset');
 
     res.json({
       message: 'Password reset successfully',
@@ -587,6 +631,67 @@ router.post('/reset-password', async (req, res, next) => {
 
 // ─── Get profile ──────────────────────────────────────────────────────────────
 router.get('/me', auth, async (req, res) => { res.json(req.user); });
+
+// ─── Multi-factor authentication ─────────────────────────────────────────────
+router.get('/mfa/status', auth, async (req, res, next) => {
+  try {
+    const factor = await getFactor(req.user._id);
+    res.json({ enrolled: Boolean(factor), enabled: factor?.enabled === true, enrolledAt: factor?.enrolledAt || null, lastUsedAt: factor?.lastUsedAt || null });
+  } catch (error) { next(error); }
+});
+
+router.post('/mfa/setup', auth, async (req, res, next) => {
+  try {
+    if (req.user.role !== 'superadmin') return res.status(403).json({ message: 'Platform MFA enrollment is currently limited to Super Admin operators' });
+    const enrollment = await createEnrollment(req.user);
+    res.json(enrollment);
+  } catch (error) { next(error); }
+});
+
+router.post('/mfa/confirm', auth, async (req, res, next) => {
+  try {
+    const verification = await verifyFactor(req.user._id, req.body?.code, { allowRecovery: false });
+    if (!verification.valid) return res.status(400).json({ message: 'Invalid authenticator code' });
+    verification.factor.enabled = true; verification.factor.enrolledAt = new Date(); await verification.factor.save();
+    await User.updateOne({ _id: req.user._id }, { $set: { mfaEnrollmentRequired: false } });
+    if (req.authSessionId) await AuthSession.updateOne({ sessionId: req.authSessionId }, { $set: { mfaVerifiedAt: new Date(), lastStepUpAt: new Date() } });
+    res.json({ message: 'Multi-factor authentication enabled' });
+  } catch (error) { next(error); }
+});
+
+router.post('/mfa/challenge', async (req, res) => {
+  try {
+    const payload = verifyChallengeToken(String(req.body?.challengeToken || ''));
+    const user = await User.findById(payload.id).select('+tokenVersion');
+    if (!user || !user.isActive || Number(user.tokenVersion || 0) !== Number(payload.ver || 0)) return res.status(401).json({ message: 'MFA challenge expired or invalid' });
+    const verification = await verifyFactor(user._id, req.body?.code);
+    if (!verification.valid) { await recordAuthEvent(req, { user, eventType: 'login', outcome: 'failure', reason: 'invalid_mfa', authMethod: payload.method }); return res.status(401).json({ message: 'Invalid authenticator or recovery code' }); }
+    const token = await issueSession(user, req, payload.method, { mfaVerified: true });
+    if (user.mfaEnrollmentRequired) { user.mfaEnrollmentRequired = false; await user.save(); }
+    res.json({ token, recoveryCodeUsed: verification.method === 'recovery', remainingRecoveryCodes: verification.remainingRecoveryCodes, user: { id: user._id, firstName: user.firstName, lastName: user.lastName, username: user.username, email: user.email, role: user.role, tenantId: user.tenantId, avatar: user.avatar, mfaEnrollmentRequired: false } });
+  } catch (error) { res.status(401).json({ message: 'MFA challenge expired or invalid' }); }
+});
+
+router.post('/mfa/step-up', auth, async (req, res, next) => {
+  try {
+    if (!req.authSessionId) return res.status(400).json({ message: 'Sign in again before completing step-up authentication' });
+    const verification = await verifyFactor(req.user._id, req.body?.code);
+    if (!verification.valid) return res.status(401).json({ message: 'Invalid authenticator or recovery code' });
+    await AuthSession.updateOne({ sessionId: req.authSessionId, userId: req.user._id }, { $set: { mfaVerifiedAt: new Date(), lastStepUpAt: new Date() } });
+    res.json({ message: 'Step-up authentication complete', validForSeconds: 600, recoveryCodeUsed: verification.method === 'recovery' });
+  } catch (error) { next(error); }
+});
+
+router.delete('/mfa', auth, async (req, res, next) => {
+  try {
+    const verification = await verifyFactor(req.user._id, req.body?.code);
+    if (!verification.valid) return res.status(401).json({ message: 'Invalid authenticator or recovery code' });
+    await MfaFactor.deleteOne({ userId: req.user._id });
+    await User.updateOne({ _id: req.user._id }, { $inc: { tokenVersion: 1 } });
+    await revokeAllUserSessions(req.user._id, req.user._id, 'MFA disabled');
+    res.json({ message: 'Multi-factor authentication disabled. Sign in again.' });
+  } catch (error) { next(error); }
+});
 
 // ─── Update profile ───────────────────────────────────────────────────────────
 router.put('/profile', auth, async (req, res, next) => {
@@ -627,7 +732,7 @@ router.put('/change-password', auth, async (req, res, next) => {
   try {
     const { newPassword } = req.body;
 
-    const pwCheck = validatePasswordStrength(newPassword);
+    const pwCheck = validatePasswordStrength(newPassword, req.platformSettings);
     if (!pwCheck.valid) {
       return res.status(400).json({ message: 'Password is too weak', errors: pwCheck.errors });
     }

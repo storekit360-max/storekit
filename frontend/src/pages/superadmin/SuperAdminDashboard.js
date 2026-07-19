@@ -1,8 +1,25 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import API from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
-import SuperAdminBilling from './SuperAdminBilling';
+import CommandPalette from '../../components/superadmin/CommandPalette';
+import useModalFocus from '../../hooks/useModalFocus';
+import ModuleErrorBoundary from '../../components/superadmin/ModuleErrorBoundary';
+
+const SuperAdminBilling = lazy(() => import('./SuperAdminBilling'));
+const SuperAdminAccessControl = lazy(() => import('./SuperAdminAccessControl'));
+const SuperAdminAudit = lazy(() => import('./SuperAdminAudit'));
+const SuperAdminTenantWorkspace = lazy(() => import('./SuperAdminTenantWorkspace'));
+const SuperAdminSecurity = lazy(() => import('./SuperAdminSecurity'));
+const SuperAdminPlatformSettings = lazy(() => import('./SuperAdminPlatformSettings'));
+const SuperAdminIntegrations = lazy(() => import('./SuperAdminIntegrations'));
+const SuperAdminOperations = lazy(() => import('./SuperAdminOperations'));
+const SuperAdminFeatureFlags = lazy(() => import('./SuperAdminFeatureFlags'));
+const SuperAdminNotificationsCenter = lazy(() => import('./SuperAdminNotificationsCenter'));
+const SuperAdminSupportCenter = lazy(() => import('./SuperAdminSupportCenter'));
+const SuperAdminAnalytics = lazy(() => import('./SuperAdminAnalytics'));
+const SuperAdminDeveloperCenter = lazy(() => import('./SuperAdminDeveloperCenter'));
+const SuperAdminBackups = lazy(() => import('./SuperAdminBackups'));
 
 // ── Full feature catalog ─────────────────────────────────────────────────
 // Every toggle a tenant's storefront/admin can possibly use, grouped into
@@ -92,12 +109,25 @@ const emptyTenant = {
 };
 
 const TABS = [
-  { key: 'overview', label: 'Overview', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
-  { key: 'plans', label: 'Plans', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
-  { key: 'tenants', label: 'Tenants', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
-  { key: 'billing', label: 'Billing', icon: 'M3 10h18M7 15h.01M11 15h2M3 6h18a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V7a1 1 0 011-1z' },
-  { key: 'domains', label: 'Domains', icon: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0zM3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18 15 15 0 010-18z' },
-  { key: 'governance', label: 'Feature Governance', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
+  { key: 'overview', label: 'Overview', permission: 'platform.view', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+  { key: 'plans', label: 'Plans', permission: 'billing.view', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
+  { key: 'tenants', label: 'Tenants', permission: 'tenant.view', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
+  { key: 'billing', label: 'Billing', permission: 'billing.view', icon: 'M3 10h18M7 15h.01M11 15h2M3 6h18a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V7a1 1 0 011-1z' },
+  { key: 'domains', label: 'Domains', permission: 'tenant.view', icon: 'M21 12a9 9 0 11-18 0 9 9 0 0118 0zM3.6 9h16.8M3.6 15h16.8M12 3a15 15 0 010 18 15 15 0 010-18z' },
+  { key: 'governance', label: 'Feature Governance', permission: 'featureflags.view', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
+  { key: 'runtime-flags', label: 'Runtime Flags', permission: 'featureflags.view', icon: 'M5 3v18m0-16h11l-2 4 2 4H5' },
+  { key: 'access', label: 'Access Control', permission: 'roles.view', icon: 'M12 11c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm-7 9a7 7 0 0114 0M19 8v6m3-3h-6' },
+  { key: 'audit', label: 'Audit Trail', permission: 'audit.view', icon: 'M9 12h6m-6 4h6M7 3h10a2 2 0 012 2v14a2 2 0 01-2 2H7a2 2 0 01-2-2V5a2 2 0 012-2z' },
+  { key: 'tenant-workspace', label: 'Tenant Workspace', permission: 'tenant.view', icon: 'M4 21V10l8-7 8 7v11M9 21v-6h6v6M7 10h10' },
+  { key: 'security', label: 'Security Center', permission: 'security.view', icon: 'M12 3l8 4v5c0 5-3.4 8.7-8 9-4.6-.3-8-4-8-9V7l8-4zm-2 9l2 2 4-4' },
+  { key: 'platform-settings', label: 'Platform Settings', permission: 'settings.view', icon: 'M12 15.5A3.5 3.5 0 1012 8a3.5 3.5 0 000 7.5zM19.4 15a1.7 1.7 0 00.34 1.88l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 00-1.88-.34 1.7 1.7 0 00-1.03 1.56V20H9.7v-.08a1.7 1.7 0 00-1.03-1.56 1.7 1.7 0 00-1.88.34l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 005 14.7a1.7 1.7 0 00-1.56-1.03H3.3v-3h.14A1.7 1.7 0 005 9.64a1.7 1.7 0 00-.34-1.88l-.06-.06 2.12-2.12.06.06A1.7 1.7 0 008.66 6 1.7 1.7 0 009.7 4.4V4h5v.4A1.7 1.7 0 0015.74 6a1.7 1.7 0 001.88-.34l.06-.06 2.12 2.12-.06.06a1.7 1.7 0 00-.34 1.88 1.7 1.7 0 001.56 1.03h.34v3h-.34A1.7 1.7 0 0019.4 15z' },
+  { key: 'integrations', label: 'Integrations', permission: 'infrastructure.view', icon: 'M8 12h8m-4-4v8M5 5l3 3m11-3l-3 3M5 19l3-3m11 3l-3-3' },
+  { key: 'operations', label: 'Operations', permission: 'monitoring.view', icon: 'M3 12h3l2-6 4 12 3-8 2 2h4' },
+  { key: 'platform-backups', label: 'Backups', permission: 'infrastructure.view', icon: 'M4 7v10c0 2 3.6 4 8 4s8-2 8-4V7M4 7c0 2 3.6 4 8 4s8-2 8-4M4 7c0-2 3.6-4 8-4s8 2 8 4' },
+  { key: 'notifications-center', label: 'Notifications', permission: 'notifications.view', icon: 'M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m2 4h2' },
+  { key: 'support-center', label: 'Support', permission: 'support.view', icon: 'M18.4 5.6A9 9 0 105.6 18.4M8 10a4 4 0 118 0c0 2-2 2-2 4m-2 4h.01' },
+  { key: 'platform-analytics', label: 'Analytics', permission: 'analytics.view', icon: 'M4 19V9m5 10V5m5 14v-7m5 7V3' },
+  { key: 'developer-center', label: 'Developers', permission: 'developer.view', icon: 'M8 9l-3 3 3 3m8-6l3 3-3 3m-5 3l2-12' },
 ];
 
 const money = (value, currency = 'LKR') => `${currency} ${Number(value || 0).toLocaleString()}`;
@@ -139,13 +169,21 @@ function tenantStorefrontUrl(tenant, path = '') {
 
 export default function SuperAdminDashboard() {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState('overview');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [platformPermissions, setPlatformPermissions] = useState(null);
+  const visibleTabs = useMemo(() => platformPermissions === null ? TABS : TABS.filter(tab => platformPermissions.includes(tab.permission)), [platformPermissions]);
+  const routeTab = location.pathname.split('/')[2] || 'overview';
+  const activeTab = visibleTabs.some(tab => tab.key === routeTab) ? routeTab : (visibleTabs[0]?.key || 'overview');
+  const setActiveTab = useCallback(tab => navigate(tab === 'overview' ? '/superadmin' : `/superadmin/${tab}`), [navigate]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
 
   const [stats, setStats] = useState({ tenants: 0, activeTenants: 0, plans: 0, admins: 0 });
   const [plans, setPlans] = useState([]);
   const [tenants, setTenants] = useState([]);
   const [monitoring, setMonitoring] = useState(null);
+  const [recentDeployments, setRecentDeployments] = useState([]);
   const [featureGovernance, setFeatureGovernance] = useState(null);
   const [planForm, setPlanForm] = useState(emptyPlan);
   const [tenantForm, setTenantForm] = useState(emptyTenant);
@@ -160,31 +198,67 @@ export default function SuperAdminDashboard() {
   const [starterKitWarnings, setStarterKitWarnings] = useState([]);
   const [lastCreatedStore, setLastCreatedStore] = useState(null);
   const [tenantDeletion, setTenantDeletion] = useState(null);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const notifRef = useRef(null);
+  const notifPollRef = useRef(null);
+
+  // ── Notification polling ─────────────────────────────────────────────────
+  const loadNotifications = useCallback(async () => {
+    try {
+      const { data } = await API.get('/superadmin/notifications', { params: { limit: 20 }, skipCache: true });
+      setNotifications(data.notifications);
+      setUnreadCount(data.unreadCount);
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => {
+    loadNotifications();
+    notifPollRef.current = setInterval(loadNotifications, 10000);
+    return () => { if (notifPollRef.current) clearInterval(notifPollRef.current); };
+  }, [loadNotifications]);
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  async function markAllRead() {
+    try { await API.put('/superadmin/notifications/read-all'); setUnreadCount(0); setNotifications(prev => prev.map(n => ({ ...n, isRead: true }))); } catch (_) {}
+  }
+
+  async function markRead(id) {
+    try { await API.put(`/superadmin/notifications/${id}/read`); setNotifications(prev => prev.map(n => n._id === id ? { ...n, isRead: true } : n)); setUnreadCount(prev => Math.max(0, prev - 1)); } catch (_) {}
+  }
 
   const selectedTenant = useMemo(() => tenants.find(t => t._id === selectedTenantId), [tenants, selectedTenantId]);
 
-  function notify(type, text) {
+  const notify = useCallback((type, text) => {
     setToast({ type, text });
     window.clearTimeout(notify._t);
     notify._t = window.setTimeout(() => setToast(null), 4000);
-  }
+  }, []);
 
   const loadAll = useCallback(async function loadAll() {
     setLoading(true);
     try {
-      const [statsRes, plansRes, tenantsRes, monitoringRes, governanceRes] = await Promise.all([
+      const [statsRes, plansRes, tenantsRes, monitoringRes, governanceRes] = await Promise.allSettled([
         API.get('/superadmin/stats'),
         API.get('/superadmin/plans'),
         API.get('/superadmin/tenants'),
         API.get('/superadmin/monitoring'),
         API.get('/superadmin/feature-registry'),
       ]);
-      setStats(statsRes.data);
-      setPlans(plansRes.data);
-      setTenants(tenantsRes.data);
-      setMonitoring(monitoringRes.data);
-      setFeatureGovernance(governanceRes.data);
-      if (!tenantForm.plan && plansRes.data[0]?._id) setTenantForm(prev => ({ ...prev, plan: plansRes.data[0]._id }));
+      if (statsRes.status === 'fulfilled') setStats(statsRes.value.data);
+      if (plansRes.status === 'fulfilled') setPlans(plansRes.value.data);
+      if (tenantsRes.status === 'fulfilled') setTenants(tenantsRes.value.data);
+      if (monitoringRes.status === 'fulfilled') setMonitoring(monitoringRes.value.data);
+      if (governanceRes.status === 'fulfilled') setFeatureGovernance(governanceRes.value.data);
+      if (!tenantForm.plan && plansRes.status === 'fulfilled' && plansRes.value.data[0]?._id) setTenantForm(prev => ({ ...prev, plan: plansRes.value.data[0]._id }));
     } catch (err) {
       notify('error', err.response?.data?.message || err.message || 'Failed to load superadmin data');
     } finally {
@@ -193,6 +267,29 @@ export default function SuperAdminDashboard() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => {
+    API.get('/superadmin/access/me')
+      .then(({ data }) => setPlatformPermissions(data.permissions || []))
+      .catch(error => notify('error', error.response?.data?.message || 'Failed to load platform permissions'));
+  }, [notify]);
+  useEffect(() => {
+    if (!platformPermissions?.includes('monitoring.view')) { setRecentDeployments([]); return; }
+    API.get('/superadmin/operations/deployments', { params: { limit: 5 }, skipCache: true }).then(({ data }) => setRecentDeployments(data.rows || [])).catch(() => setRecentDeployments([]));
+  }, [platformPermissions]);
+  useEffect(() => {
+    if (platformPermissions !== null && routeTab !== activeTab) {
+      navigate(activeTab === 'overview' ? '/superadmin' : `/superadmin/${activeTab}`, { replace: true });
+    }
+  }, [activeTab, navigate, platformPermissions, routeTab]);
+  useEffect(() => {
+    const handler = event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); setCommandOpen(value => !value); } };
+    window.addEventListener('keydown', handler); return () => window.removeEventListener('keydown', handler);
+  }, []);
+  const navigateCommand = useCallback((tab, query = {}) => {
+    const params = new URLSearchParams(Object.entries(query).filter(([, value]) => value != null && value !== ''));
+    const path = tab === 'overview' ? '/superadmin' : `/superadmin/${tab}`;
+    navigate(`${path}${params.size ? `?${params}` : ''}`);
+  }, [navigate]);
 
   function updatePlan(path, value) { setPlanForm(prev => setDeep(prev, path, value)); }
   function updateTenant(path, value) {
@@ -384,6 +481,7 @@ export default function SuperAdminDashboard() {
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden">
+      <a href="#superadmin-main" className="fixed left-3 top-3 z-[11000] -translate-y-20 rounded-lg bg-indigo-700 px-4 py-2 text-sm font-bold text-white transition focus:translate-y-0">Skip to main content</a>
       {tenantDeletion && (
         <TenantDeletionDialog
           state={tenantDeletion}
@@ -392,13 +490,16 @@ export default function SuperAdminDashboard() {
           onDelete={permanentlyDeleteTenant}
         />
       )}
+      <CommandPalette open={commandOpen} onClose={()=>setCommandOpen(false)} tabs={visibleTabs} onNavigate={navigateCommand} notify={notify}/>
       {/* ── Mobile overlay ── */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/40 z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <button aria-label="Close navigation menu" className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* ── Sidebar ── */}
       <aside
+        id="superadmin-navigation"
+        aria-label="Control Center navigation"
         className={`fixed lg:static z-40 lg:z-auto inset-y-0 left-0 w-64 flex-shrink-0 transform transition-transform duration-200 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}
         style={{ background: '#0f172a' }}
       >
@@ -423,7 +524,7 @@ export default function SuperAdminDashboard() {
           </div>
 
           <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-            {TABS.map(tab => (
+            {visibleTabs.map(tab => (
               <button
                 key={tab.key}
                 onClick={() => { setActiveTab(tab.key); setSidebarOpen(false); }}
@@ -457,12 +558,69 @@ export default function SuperAdminDashboard() {
         {/* Header */}
         <header className="flex-shrink-0 h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-6">
           <div className="flex items-center gap-3">
-            <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 -ml-2 text-slate-500">
+            <button onClick={() => setSidebarOpen(true)} aria-label="Open navigation menu" aria-controls="superadmin-navigation" aria-expanded={sidebarOpen} className="lg:hidden p-2 -ml-2 text-slate-500">
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
             </button>
-            <h1 className="text-lg font-bold text-slate-900 capitalize">{TABS.find(t => t.key === activeTab)?.label}</h1>
+            <h1 className="text-lg font-bold text-slate-900 capitalize">{visibleTabs.find(t => t.key === activeTab)?.label}</h1>
           </div>
-          {loading && <span className="text-xs text-slate-400">Refreshing…</span>}
+          <div className="flex items-center gap-2">
+            {loading && <span className="text-xs text-slate-400">Refreshing…</span>}
+            {/* ── Notification Bell ── */}
+            <div className="relative" ref={notifRef}>
+              <button
+                onClick={() => setNotifOpen(value => !value)}
+                className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:border-indigo-300 hover:bg-white"
+                aria-label={`Notifications${unreadCount ? ` (${unreadCount} unread)` : ''}`}
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m2 4h2" />
+                </svg>
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white leading-none">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {notifOpen && (
+                <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 rounded-2xl border border-slate-200 bg-white shadow-2xl z-50 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                    <h3 className="text-sm font-bold text-slate-900">Notifications</h3>
+                    {unreadCount > 0 && (
+                      <button onClick={markAllRead} className="text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
+                    {notifications.length === 0 ? (
+                      <p className="px-4 py-8 text-center text-sm text-slate-400">No notifications yet</p>
+                    ) : (
+                      notifications.map(n => (
+                        <button
+                          key={n._id}
+                          onClick={() => { markRead(n._id); if (n.link) navigate(n.link); setNotifOpen(false); }}
+                          className={`w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors ${!n.isRead ? 'bg-indigo-50/50' : ''}`}
+                        >
+                          <div className="flex items-start gap-2">
+                            <span className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${!n.isRead ? 'bg-indigo-500' : 'bg-transparent'}`} />
+                            <div className="min-w-0">
+                              <p className={`text-sm ${!n.isRead ? 'font-bold text-slate-900' : 'font-medium text-slate-700'}`}>
+                                {n.title}
+                              </p>
+                              <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
+                              <p className="text-[10px] text-slate-400 mt-1">{new Date(n.createdAt).toLocaleString()}</p>
+                            </div>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button onClick={()=>setCommandOpen(true)} aria-label="Open global search" className="flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-600 hover:border-indigo-300 hover:bg-white"><svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m21 21-4.4-4.4m2.4-5.1a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z"/></svg><span className="hidden sm:inline">Search</span><kbd className="hidden rounded border bg-white px-1.5 py-0.5 text-[9px] text-slate-400 md:inline">⌘K</kbd></button></div>
         </header>
 
         {/* Toast */}
@@ -474,13 +632,15 @@ export default function SuperAdminDashboard() {
           </div>
         )}
 
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+        <main id="superadmin-main" tabIndex="-1" className="flex-1 overflow-y-auto p-4 lg:p-6">
+          <ModuleErrorBoundary resetKey={activeTab}><Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500" role="status">Loading Control Center module…</div>}>
           {activeTab === 'overview' && (
             <AdvancedOverview
               stats={stats}
               plans={plans}
               tenants={tenants}
               monitoring={monitoring}
+              deployments={recentDeployments}
               onTab={setActiveTab}
               onUpdate={updateTenantRecord}
               onResetPassword={resetAdminPassword}
@@ -733,6 +893,20 @@ export default function SuperAdminDashboard() {
           )}
 
           {activeTab === 'governance' && <FeatureGovernance data={featureGovernance} plans={plans} />}
+          {activeTab === 'access' && <SuperAdminAccessControl notify={notify} />}
+          {activeTab === 'audit' && <SuperAdminAudit notify={notify} />}
+          {activeTab === 'tenant-workspace' && <SuperAdminTenantWorkspace notify={notify} canEdit={platformPermissions?.includes('tenant.edit')} />}
+          {activeTab === 'security' && <SuperAdminSecurity notify={notify} />}
+          {activeTab === 'platform-settings' && <SuperAdminPlatformSettings notify={notify} />}
+          {activeTab === 'integrations' && <SuperAdminIntegrations notify={notify} />}
+          {activeTab === 'operations' && <SuperAdminOperations notify={notify} canManage={platformPermissions?.includes('monitoring.manage')} />}
+          {activeTab === 'platform-backups' && <SuperAdminBackups notify={notify} />}
+          {activeTab === 'runtime-flags' && <SuperAdminFeatureFlags notify={notify} />}
+          {activeTab === 'notifications-center' && <SuperAdminNotificationsCenter notify={notify} canManage={platformPermissions?.includes('notifications.manage')} canSend={platformPermissions?.includes('notifications.send')} />}
+          {activeTab === 'support-center' && <SuperAdminSupportCenter notify={notify} />}
+          {activeTab === 'platform-analytics' && <SuperAdminAnalytics notify={notify} canManage={platformPermissions?.includes('analytics.manage')} />}
+          {activeTab === 'developer-center' && <SuperAdminDeveloperCenter notify={notify} />}
+          </Suspense></ModuleErrorBoundary>
         </main>
       </div>
     </div>
@@ -773,7 +947,7 @@ function Stat({ label, value, icon, accent = 'text-indigo-600' }) {
   );
 }
 
-function AdvancedOverview({ stats, plans, tenants, monitoring, onTab, onUpdate, onResetPassword, onDelete }) {
+function AdvancedOverview({ stats, plans, tenants, monitoring, deployments = [], onTab, onUpdate, onResetPassword, onDelete }) {
   const totals = monitoring?.totals || {};
   const rows = monitoring?.tenants || [];
   const riskRows = rows.filter(t => t.alerts?.suspended || t.alerts?.pastDue || t.alerts?.paymentDueSoon || t.alerts?.hasNoDomain || t.alerts?.domainPending);
@@ -844,6 +1018,10 @@ function AdvancedOverview({ stats, plans, tenants, monitoring, onTab, onUpdate, 
           <UsageSummary label="Mapped domains" value={rows.reduce((sum, t) => sum + (t.domains?.length || 0), 0)} />
         </Panel>
       </div>
+
+      {deployments.length > 0 && <Panel title="Recent Deployments" action={<button onClick={() => onTab('operations')} className="text-xs font-bold text-indigo-600">Open operations</button>}>
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">{deployments.map(item => <div key={item._id} className="rounded-xl border border-slate-100 p-3"><div className="flex items-center justify-between gap-2"><strong className="truncate text-sm">{item.service}</strong><StatusPill status={item.status} /></div><p className="mt-2 truncate font-mono text-xs text-slate-500">{item.version || item.commitSha?.slice(0,12) || item.externalId}</p><p className="mt-1 text-[11px] text-slate-400">{item.provider} · {item.environment} · {shortDate(item.completedAt || item.createdAt)}</p></div>)}</div>
+      </Panel>}
 
       <Panel title="Tenant Health Monitor" action={<button onClick={() => onTab('tenants')} className="text-xs font-bold text-indigo-600">Manage all</button>}>
         <TenantMonitorGrid rows={rows.slice(0, 6)} onUpdate={onUpdate} onResetPassword={onResetPassword} onDelete={onDelete} />
@@ -1300,6 +1478,7 @@ function PlanCard({ plan, onSave }) {
 }
 
 function TenantDeletionDialog({ state, onConfirmationChange, onClose, onDelete }) {
+  const modalRef = useModalFocus(true, onClose);
   const expected = state.preview?.confirmationText || `DELETE ${state.tenant?.slug || ''}`;
   const counts = state.preview?.counts || {};
   const verified = state.confirmationText.trim() === expected;
@@ -1313,8 +1492,8 @@ function TenantDeletionDialog({ state, onConfirmationChange, onClose, onDelete }
   ];
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm p-4 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="delete-tenant-title">
-      <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl border border-red-200 overflow-hidden">
+    <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm p-4 flex items-center justify-center">
+      <div ref={modalRef} tabIndex="-1" className="w-full max-w-xl rounded-2xl bg-white shadow-2xl border border-red-200 overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="delete-tenant-title">
         <div className="px-6 py-5 bg-red-50 border-b border-red-200">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-red-100 text-red-700 flex items-center justify-center flex-shrink-0 font-black">!</div>

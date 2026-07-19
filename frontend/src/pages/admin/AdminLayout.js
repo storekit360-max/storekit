@@ -29,6 +29,7 @@ const NAV = [
   { path:'/admin/social-media', label:'Social Media', icon:'M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z' },
   { path:'/admin/automation',   label:'Automation Rules',           icon:'M13 10V3L4 14h7v7l9-11h-7z' },
   { path:'/admin/billing',      label:'Billing',                    icon:'M3 10h18M3 6h18a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V7a1 1 0 011-1zM7 15h4' },
+  { path:'/admin/support',      label:'StoreKit Support',           icon:'M18.4 5.6A9 9 0 105.6 18.4M8 10a4 4 0 118 0c0 2-2 2-2 4m-2 4h.01' },
 ];
 
 // Maps a sidebar item's path to the Plan.features key that must be enabled
@@ -235,6 +236,26 @@ export default function AdminLayout() {
   // Empty until loaded so restricted plan items do not flash before /tenant/my returns.
   const [planFeatures,  setPlanFeatures]  = useState({});
   const [planLoaded,    setPlanLoaded]     = useState(false);
+  const [runtimeFlags,  setRuntimeFlags]   = useState({});
+  const [impersonation] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('storekit:impersonation')); } catch { return null; }
+  });
+
+  const exitImpersonation = useCallback(() => {
+    const token = sessionStorage.getItem('storekit:platform-token');
+    const platformUser = sessionStorage.getItem('storekit:platform-user');
+    sessionStorage.removeItem('storekit:platform-token');
+    sessionStorage.removeItem('storekit:platform-user');
+    sessionStorage.removeItem('storekit:impersonation');
+    if (token && platformUser) {
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', platformUser);
+      window.location.assign('/superadmin/tenants');
+    } else {
+      logout();
+      window.location.assign('/superadmin/login');
+    }
+  }, [logout]);
 
   // navRef is attached to the <nav> element inside Sidebar.
   // Because Sidebar is a stable component (not redefined each render) the ref
@@ -265,6 +286,9 @@ export default function AdminLayout() {
         setPlanFeatures({});
         setPlanLoaded(true);
       });
+    API.get('/admin/runtime-flags?recordExposure=true', { skipCache: true })
+      .then(r => setRuntimeFlags(r.data?.flags || {}))
+      .catch(() => setRuntimeFlags({}));
     const id = setInterval(fetchNotifications, 30000);
     return () => clearInterval(id);
   }, [fetchNotifications]);
@@ -274,9 +298,11 @@ export default function AdminLayout() {
     return NAV.filter(item => {
       const featureKey = NAV_FEATURE_MAP[item.path];
       if (!featureKey) return true; // core item, not plan-gated
-      return !!planFeatures[featureKey];
+      if (!planFeatures[featureKey]) return false;
+      const runtimeDecision = runtimeFlags[`admin.nav.${featureKey}`];
+      return runtimeDecision ? runtimeDecision.enabled === true : true;
     });
-  }, [planFeatures, planLoaded]);
+  }, [planFeatures, planLoaded, runtimeFlags]);
 
   // Close mobile drawer on navigation
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
@@ -359,6 +385,8 @@ export default function AdminLayout() {
 
       {/* ── Main area ── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+        {impersonation && <div role="alert" className="flex flex-wrap items-center justify-between gap-2 bg-amber-400 px-4 py-2 text-sm font-bold text-slate-950"><span>Impersonation active: {impersonation.tenant?.storeName || 'tenant'} · expires {new Date(impersonation.expiresAt).toLocaleTimeString()}</span><button onClick={exitImpersonation} className="rounded-lg bg-slate-950 px-3 py-1.5 text-xs text-white">Exit impersonation</button></div>}
 
         {/* ── Top bar ── */}
         <header

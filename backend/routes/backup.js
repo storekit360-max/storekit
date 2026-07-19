@@ -38,7 +38,7 @@ const {
 // ─── Health ───────────────────────────────────────────────────────────────────
 router.get('/health', adminAuth, async (req, res) => {
   try {
-    const health = await getHealth();
+    const health = await getHealth({ tenantId: req.user.tenantId });
     res.json(health);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -47,69 +47,25 @@ router.get('/health', adminAuth, async (req, res) => {
 
 // ─── OAuth: get auth URL ──────────────────────────────────────────────────────
 router.get('/oauth/url', adminAuth, async (req, res) => {
-  try {
-    const url = getAuthUrl();
-    res.json({ url });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
+  res.status(403).json({ message: 'Backup storage credentials are managed by platform security administrators' });
 });
 
 // ─── OAuth: callback (Google redirects here) ──────────────────────────────────
 // No adminAuth — Google redirects the browser here after consent
 router.get('/oauth/callback', async (req, res) => {
-  const { code, error } = req.query;
-  if (error) {
-    return res.send(`<html><body><h2>❌ Google auth denied: ${error}</h2><p>Close this tab and try again.</p></body></html>`);
-  }
-  if (!code) {
-    return res.status(400).send('<html><body><h2>Missing auth code</h2></body></html>');
-  }
-  try {
-    const tokens = await handleOAuthCallback(code);
-    // Re-fetch email from settings to show in success page
-    const settings = await getSettings();
-    const email = settings.oauthEmail || 'your Google account';
-    res.send(`
-      <html>
-        <body style="font-family:sans-serif;max-width:480px;margin:80px auto;text-align:center">
-          <h2 style="color:#22c55e">✅ Google Drive Connected!</h2>
-          <p>Signed in as <b>${email}</b></p>
-          <p>Backups will now be saved to your Google Drive.</p>
-          <p style="color:#6b7280;font-size:13px">You can close this tab and return to StoreKit.</p>
-        </body>
-      </html>
-    `);
-  } catch (err) {
-    console.error('[Backup OAuth] Callback error:', err.message);
-    res.status(500).send(`<html><body><h2>❌ Error: ${err.message}</h2><p>Close this tab and try again.</p></body></html>`);
-  }
+  res.status(404).send('<html><body><h2>Backup authorization flow unavailable</h2></body></html>');
 });
 
 // ─── OAuth: disconnect ────────────────────────────────────────────────────────
 router.delete('/oauth/disconnect', adminAuth, async (req, res) => {
-  try {
-    await BackupSettings.findByIdAndUpdate('backup_settings', {
-      $unset: {
-        oauthRefreshToken: '',
-        oauthAccessToken:  '',
-        oauthTokenExpiry:  '',
-        oauthEmail:        '',
-        oauthConnectedAt:  '',
-        driveFolderId:     '',
-      },
-    });
-    res.json({ message: 'Google Drive disconnected' });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
+  res.status(403).json({ message: 'Backup storage credentials are managed by platform security administrators' });
 });
 
 // ─── Drive storage ────────────────────────────────────────────────────────────
 router.get('/drive-storage', adminAuth, async (req, res) => {
   try {
-    const info = await driveStorageInfo();
-    res.json(info);
+    const rows = await Backup.aggregate([{ $match: { tenantId: req.user.tenantId, scope: 'tenant', status: { $in: ['completed', 'verified'] } } }, { $group: { _id: null, backupBytes: { $sum: '$sizeBytes' }, fileCount: { $sum: 1 } } }]);
+    res.json({ configured: Boolean((await getSettings()).oauthRefreshToken), managedByPlatform: true, backupBytes: rows[0]?.backupBytes || 0, fileCount: rows[0]?.fileCount || 0 });
   } catch (err) {
     const settings = await getSettings().catch(() => ({}));
     if (!settings.oauthRefreshToken) {
@@ -126,38 +82,21 @@ router.get('/drive-storage', adminAuth, async (req, res) => {
 router.get('/settings', adminAuth, async (req, res) => {
   try {
     const s = await getSettings();
-    res.json(s);
+    res.json({ enabled: Boolean(s.enabled && s.oauthRefreshToken), managedByPlatform: true, driveFolder: 'Managed StoreKit recovery storage', retainDaily: s.retainDaily, retainWeekly: s.retainWeekly, retainMonthly: s.retainMonthly });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
 router.put('/settings', adminAuth, async (req, res) => {
-  try {
-    const allowed = [
-      'enabled', 'dailyHour', 'weeklyDay', 'weeklyHour',
-      'monthlyDay', 'monthlyHour', 'retainDaily', 'retainWeekly',
-      'retainMonthly', 'driveFolder', 'alertOnFailure', 'alertEmail',
-    ];
-    const update = {};
-    allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k]; });
-
-    const s = await BackupSettings.findByIdAndUpdate(
-      'backup_settings',
-      update,
-      { upsert: true, new: true }
-    );
-    res.json(s);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
+  res.status(403).json({ message: 'Backup schedules and storage are managed by platform administrators' });
 });
 
 // ─── List backups ─────────────────────────────────────────────────────────────
 router.get('/', adminAuth, async (req, res) => {
   try {
     const { type, status, page = 1, limit = 20 } = req.query;
-    const filter = {};
+    const filter = { scope: 'tenant', tenantId: req.user.tenantId };
     if (type)   filter.type   = type;
     if (status) filter.status = status;
 
@@ -179,15 +118,18 @@ router.post('/', adminAuth, async (req, res) => {
       message: 'Google Drive not connected. Go to Backup Center → Settings → Connect Google Drive.',
     });
   }
+  const health = await getHealth({ tenantId: req.user.tenantId }).catch(() => ({}));
+  if (!health.encryptionConfigured) return res.status(503).json({ message: 'Encrypted backup storage is not configured by the platform operator' });
   res.status(202).json({ message: 'Backup started', status: 'running' });
   const label = req.body.label || 'Manual backup';
-  createBackup({ type: 'manual', label, triggeredBy: req.user?.email || 'admin' })
+  createBackup({ type: 'manual', label, triggeredBy: req.user?.email || 'admin', tenantId: req.user.tenantId })
     .catch(e => console.error('[Backup Route] Manual backup error:', e.message));
 });
 
 // ─── Verify backup ────────────────────────────────────────────────────────────
 router.post('/:id/verify', adminAuth, async (req, res) => {
   try {
+    if (!(await Backup.exists({ _id: req.params.id, scope: 'tenant', tenantId: req.user.tenantId }))) return res.status(404).json({ message: 'Backup not found' });
     const result = await verifyBackup(req.params.id);
     res.json(result);
   } catch (err) {
@@ -198,11 +140,13 @@ router.post('/:id/verify', adminAuth, async (req, res) => {
 // ─── Restore ──────────────────────────────────────────────────────────────────
 router.post('/:id/restore', adminAuth, async (req, res) => {
   try {
-    console.log('[Backup] Creating emergency backup before restore…');
-    createBackup({ type: 'manual', label: 'Emergency pre-restore backup', triggeredBy: req.user?.email || 'admin' })
-      .catch(e => console.error('[Backup] Emergency backup failed:', e.message));
+    if (!(await Backup.exists({ _id: req.params.id, scope: 'tenant', tenantId: req.user.tenantId }))) return res.status(404).json({ message: 'Backup not found' });
+    const expected = `RESTORE TENANT ${req.params.id}`;
+    if (String(req.body?.confirmation || '').trim() !== expected) return res.status(400).json({ message: `Type ${expected} to confirm this tenant restore` });
+    console.log('[Backup] Creating emergency tenant backup before restore…');
+    await createBackup({ type: 'manual', label: 'Emergency pre-restore backup', triggeredBy: req.user?.email || 'admin', tenantId: req.user.tenantId });
 
-    const result = await restoreBackup(req.params.id);
+    const result = await restoreBackup(req.params.id, { tenantId: req.user.tenantId });
     res.json({ message: 'Restore completed', ...result });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -212,7 +156,7 @@ router.post('/:id/restore', adminAuth, async (req, res) => {
 // ─── Delete backup ────────────────────────────────────────────────────────────
 router.delete('/:id', adminAuth, async (req, res) => {
   try {
-    const record = await Backup.findById(req.params.id);
+    const record = await Backup.findOne({ _id: req.params.id, scope: 'tenant', tenantId: req.user.tenantId });
     if (!record) return res.status(404).json({ message: 'Backup not found' });
 
     if (record.driveFileId) {

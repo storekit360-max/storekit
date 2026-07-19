@@ -39,12 +39,8 @@
     <link rel="preconnect"   href="https://fonts.googleapis.com"/>
     <link rel="preconnect"   href="https://fonts.gstatic.com" crossorigin/>
     <link rel="dns-prefetch" href="https://res.cloudinary.com"/>
-    <link rel="dns-prefetch" href="https://www.googletagmanager.com"/>
-    <link rel="dns-prefetch" href="https://connect.facebook.net"/>
-
-    <!-- Meta Pixel STUB — loads the fbq() function as a native queue so that
-         any event fired before fbevents.js loads is buffered by Meta's own
-         queue mechanism (f.queue), not our custom __fbQueue polyfill.
+    <!-- Meta Pixel queue only. No Meta resource is downloaded until the
+         customer explicitly accepts analytics cookies.
          IMPORTANT: fbq('init', pixelId) and fbq('track','PageView') are NOT
          called here — that is done by useAnalytics.js (bootstrapAnalytics)
          once the Pixel ID is fetched from admin Settings → SEO panel.
@@ -52,18 +48,13 @@
          AddToCart / InitiateCheckout / Purchase events queued early are never
          lost even when trackPurchase() fires right before navigate(). -->
     <script>
-      !function(f,b,e,v,n,t,s){
+      !function(f,n){
         if(f.fbq)return;
         n=f.fbq=function(){n.callMethod?
           n.callMethod.apply(n,arguments):n.queue.push(arguments)};
         if(!f._fbq)f._fbq=n;
         n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];
-        t=b.createElement(e);t.async=!0;
-        t.src=v;s=b.getElementsByTagName(e)[0];
-        s.parentNode.insertBefore(t,s)
-      }(window,document,'script',
-      'https://connect.facebook.net/en_US/fbevents.js');
-      // ⚠️  Do NOT call fbq('init') here — useAnalytics.js handles that.
+      }(window);
     </script>
 
     <style id="tenant-first-paint-guard">

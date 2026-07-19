@@ -21,6 +21,16 @@ const { bootstrapTenantStore } = require('../utils/tenantBootstrap');
 const { normalizeWhatsappNumber } = require('../utils/whatsappConfig');
 const { generateStarterKit, normalizeStarterKit, sanitizeBrief } = require('../services/tenantStarterKit');
 const featureRegistry = require('../config/featureRegistry');
+const { revokeAllUserSessions } = require('../services/authSessionService');
+const { requireRecentStepUp } = require('../middleware/stepUp');
+const PlatformPermission = require('../models/PlatformPermission');
+const PlatformRole = require('../models/PlatformRole');
+const platformPermissionRegistry = require('../config/platformPermissions');
+const {
+  attachPlatformPermissions,
+  requirePlatformPermission,
+  synchronizePermissionRegistry,
+} = require('../services/platformAuthorizationService');
 
 const router = express.Router();
 
@@ -49,9 +59,74 @@ function superAdminOnly(req, res, next) {
   next();
 }
 
-router.use(auth, superAdminOnly);
+router.use(auth, superAdminOnly, attachPlatformPermissions);
+router.use((req, res, next) => req.user.mfaEnrollmentRequired === true ? res.status(403).json({ code: 'MFA_ENROLLMENT_REQUIRED', message: 'Complete multi-factor enrollment before accessing the Control Center' }) : next());
+router.use('/audit', require('./superadmin/audit'));
+router.use('/access', require('./superadmin/access'));
+router.use('/tenant-workspace', require('./superadmin/tenantWorkspace'));
+router.use('/security', require('./superadmin/security'));
+router.use('/platform-settings', require('./superadmin/platformSettings'));
+router.use('/integrations', require('./superadmin/integrations'));
+router.use('/operations', require('./superadmin/operations'));
+router.use('/platform-backups', require('./superadmin/platformBackups'));
+router.use('/billing', require('./superadmin/billingLifecycle'));
+router.use('/runtime-flags', require('./superadmin/featureFlags'));
+router.use('/notifications-center', require('./superadmin/notificationsCenter'));
+router.use('/support', require('./superadmin/support'));
+router.use('/analytics', require('./superadmin/analytics'));
+router.use('/developer', require('./superadmin/developer'));
+router.use('/search', require('./superadmin/search'));
+router.use('/notifications', require('./superadmin/notifications'));
 
-router.get('/feature-registry', async (_req, res, next) => {
+router.get('/permissions', requirePlatformPermission('roles.view'), async (_req, res, next) => {
+  try {
+    await synchronizePermissionRegistry();
+    const permissions = await PlatformPermission.find({ active: true }).sort({ group: 1, action: 1 }).lean();
+    res.json({ permissions, groups: platformPermissionRegistry.groups });
+  } catch (error) { next(error); }
+});
+
+router.get('/roles', requirePlatformPermission('roles.view'), async (_req, res, next) => {
+  try { res.json(await PlatformRole.find().sort({ system: -1, name: 1 }).lean()); }
+  catch (error) { next(error); }
+});
+
+router.post('/roles', requirePlatformPermission('roles.manage'), requireRecentStepUp(), async (req, res, next) => {
+  try {
+    const name = String(req.body?.name || '').trim();
+    const slug = String(req.body?.slug || name).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const permissions = Array.from(new Set((req.body?.permissions || []).map(value => String(value).toLowerCase().trim())));
+    if (!name || !slug) return res.status(400).json({ message: 'Role name is required' });
+    const invalid = permissions.filter(permission => !platformPermissionRegistry.keys.includes(permission));
+    if (invalid.length) return res.status(400).json({ message: 'Role contains unknown permissions', permissions: invalid });
+    const role = await PlatformRole.create({ name, slug, description: String(req.body?.description || '').trim(), permissions });
+    req.audit.set({ action: 'role.create', resource: 'role', resourceId: String(role._id), changes: { newValue: role.toObject() } });
+    res.status(201).json(role);
+  } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ message: 'A role with this slug already exists' });
+    next(error);
+  }
+});
+
+router.put('/roles/:id', requirePlatformPermission('roles.manage'), requireRecentStepUp(), async (req, res, next) => {
+  try {
+    const existing = await PlatformRole.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: 'Role not found' });
+    const permissions = Array.from(new Set((req.body?.permissions || []).map(value => String(value).toLowerCase().trim())));
+    const invalid = permissions.filter(permission => !platformPermissionRegistry.keys.includes(permission));
+    if (invalid.length) return res.status(400).json({ message: 'Role contains unknown permissions', permissions: invalid });
+    const oldValue = existing.toObject();
+    existing.name = String(req.body?.name || existing.name).trim();
+    existing.description = String(req.body?.description ?? existing.description).trim();
+    existing.permissions = permissions;
+    existing.active = req.body?.active !== false;
+    await existing.save();
+    req.audit.set({ action: 'role.update', resource: 'role', resourceId: String(existing._id), changes: { oldValue, newValue: existing.toObject() } });
+    res.json(existing);
+  } catch (error) { next(error); }
+});
+
+router.get('/feature-registry', requirePlatformPermission('featureflags.view'), async (_req, res, next) => {
   try {
     const [plans, tenantCounts] = await Promise.all([
       Plan.find().select('name slug active features').sort({ name: 1 }).lean(),
@@ -72,7 +147,7 @@ router.get('/feature-registry', async (_req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.post('/tenant-starter-kit/preview', async (req, res, next) => {
+router.post('/tenant-starter-kit/preview', requirePlatformPermission('tenant.create'), async (req, res, next) => {
   try {
     const brief = sanitizeBrief(req.body || {});
     if (!brief.storeName || brief.storeName === 'New Store') {
@@ -93,7 +168,7 @@ async function cleanupFailedTenantCreation(tenantId) {
   }
 }
 
-router.get('/stats', async (_req, res, next) => {
+router.get('/stats', requirePlatformPermission('platform.view'), async (_req, res, next) => {
   try {
     const [tenants, activeTenants, plans, admins] = await Promise.all([
       Tenant.countDocuments(),
@@ -105,7 +180,7 @@ router.get('/stats', async (_req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/monitoring', async (_req, res, next) => {
+router.get('/monitoring', requirePlatformPermission('monitoring.view'), async (_req, res, next) => {
   try {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -253,12 +328,12 @@ router.get('/monitoring', async (_req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/plans', async (_req, res, next) => {
+router.get('/plans', requirePlatformPermission('billing.view'), async (_req, res, next) => {
   try { res.json(await Plan.find().sort({ price: 1, name: 1 })); }
   catch (err) { next(err); }
 });
 
-router.post('/plans', async (req, res, next) => {
+router.post('/plans', requirePlatformPermission('billing.update'), async (req, res, next) => {
   try {
     const body = { ...req.body };
     if (!body.name) return res.status(400).json({ message: 'Plan name is required' });
@@ -274,7 +349,7 @@ router.post('/plans', async (req, res, next) => {
   }
 });
 
-router.put('/plans/:id', async (req, res, next) => {
+router.put('/plans/:id', requirePlatformPermission('billing.update'), async (req, res, next) => {
   try {
     const body = { ...req.body };
     if (body.name && !body.slug) body.slug = await generateUniqueSlug(body.name, req.params.id);
@@ -288,7 +363,7 @@ router.put('/plans/:id', async (req, res, next) => {
   }
 });
 
-router.delete('/plans/:id', async (req, res, next) => {
+router.delete('/plans/:id', requirePlatformPermission('billing.update'), async (req, res, next) => {
   try {
     const used = await Tenant.countDocuments({ plan: req.params.id });
     if (used) return res.status(400).json({ message: 'Cannot delete a plan assigned to tenants' });
@@ -297,14 +372,14 @@ router.delete('/plans/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/tenants', async (_req, res, next) => {
+router.get('/tenants', requirePlatformPermission('tenant.view'), async (_req, res, next) => {
   try {
     const tenants = await Tenant.find().populate('plan').populate('owner', 'firstName lastName email username role').sort({ createdAt: -1 });
     res.json(tenants);
   } catch (err) { next(err); }
 });
 
-router.get('/tenants/:id/deletion-preview', async (req, res, next) => {
+router.get('/tenants/:id/deletion-preview', requirePlatformPermission('tenant.delete'), async (req, res, next) => {
   try {
     const tenant = await Tenant.findById(req.params.id).select('storeName slug status deletion').lean();
     if (!tenant) return res.status(404).json({ message: 'Tenant not found' });
@@ -320,7 +395,7 @@ router.get('/tenants/:id/deletion-preview', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.delete('/tenants/:id', async (req, res, next) => {
+router.delete('/tenants/:id', requirePlatformPermission('tenant.delete'), requireRecentStepUp(), async (req, res, next) => {
   let claimedTenant = null;
   try {
     const tenant = await Tenant.findById(req.params.id).select('storeName slug status deletion');
@@ -386,7 +461,7 @@ router.delete('/tenants/:id', async (req, res, next) => {
   }
 });
 
-router.post('/tenants', async (req, res, next) => {
+router.post('/tenants', requirePlatformPermission('tenant.create'), async (req, res, next) => {
   let createdTenantId = null;
   try {
     const {
@@ -520,7 +595,7 @@ router.post('/tenants', async (req, res, next) => {
   }
 });
 
-router.put('/tenants/:id', async (req, res, next) => {
+router.put('/tenants/:id', requirePlatformPermission('tenant.edit'), async (req, res, next) => {
   try {
     const allowed = ['storeName', 'plan', 'status', 'settings', 'theme', 'domains'];
     const patch = {};
@@ -577,13 +652,13 @@ router.put('/tenants/:id', async (req, res, next) => {
 });
 
 // ── Billing dashboard — income, pending payments, upcoming payments ───────
-router.get('/billing/overview', async (_req, res, next) => {
+router.get('/billing/overview', requirePlatformPermission('billing.view'), async (_req, res, next) => {
   try { res.json(await subscriptionService.getOverview()); }
   catch (err) { next(err); }
 });
 
 // ── Billing — list submitted tenant payments (optionally filter by status) ─
-router.get('/billing/payments', async (req, res, next) => {
+router.get('/billing/payments', requirePlatformPermission('billing.view'), async (req, res, next) => {
   try {
     const filter = {};
     if (req.query.status) filter.status = req.query.status;
@@ -598,10 +673,11 @@ router.get('/billing/payments', async (req, res, next) => {
 
 // ── Billing — approve a payment: this is the one manual step that reactivates
 //    / renews the plan after the admin has actually paid ──────────────────
-router.post('/billing/payments/:id/approve', async (req, res, next) => {
+router.post('/billing/payments/:id/approve', requirePlatformPermission('billing.update'), async (req, res, next) => {
   try {
-    const payment = await subscriptionService.approvePayment(req.params.id, req.user._id);
-    res.json(payment);
+    const result = await require('../services/billingLifecycleService').approveManualPayment(req.params.id, req.user._id);
+    req.audit.set({ action: 'billing.payment.approve', resource: 'tenant-payment', resourceId: req.params.id, changes: { newValue: { status: result.payment.status, invoiceId: result.invoice._id } } });
+    res.json(result.payment);
   } catch (err) {
     if (err.message === 'Payment not found') return res.status(404).json({ message: err.message });
     if (err.message === 'Payment already reviewed') return res.status(400).json({ message: err.message });
@@ -609,10 +685,11 @@ router.post('/billing/payments/:id/approve', async (req, res, next) => {
   }
 });
 
-router.post('/billing/payments/:id/reject', async (req, res, next) => {
+router.post('/billing/payments/:id/reject', requirePlatformPermission('billing.update'), async (req, res, next) => {
   try {
-    const payment = await subscriptionService.rejectPayment(req.params.id, req.user._id, req.body.reason);
-    res.json(payment);
+    const result = await require('../services/billingLifecycleService').rejectManualPayment(req.params.id, req.user._id, req.body.reason);
+    req.audit.set({ action: 'billing.payment.reject', resource: 'tenant-payment', resourceId: req.params.id, changes: { newValue: { status: result.payment.status } } });
+    res.json(result.payment);
   } catch (err) {
     if (err.message === 'Payment not found') return res.status(404).json({ message: err.message });
     if (err.message === 'Payment already reviewed') return res.status(400).json({ message: err.message });
@@ -623,7 +700,7 @@ router.post('/billing/payments/:id/reject', async (req, res, next) => {
 // ── Manual "stop the business" / manual reactivate, as explicit endpoints
 //    too (in addition to the status dropdown above), for a dedicated Billing
 //    tab UI that doesn't want to touch the general tenant-edit form ────────
-router.post('/tenants/:id/deactivate', async (req, res, next) => {
+router.post('/tenants/:id/deactivate', requirePlatformPermission('tenant.suspend'), async (req, res, next) => {
   try {
     const tenant = await subscriptionService.deactivateTenant(req.params.id, req.body.reason, 'superadmin');
     if (!tenant) return res.status(404).json({ message: 'Tenant not found' });
@@ -631,7 +708,7 @@ router.post('/tenants/:id/deactivate', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/tenants/:id/reactivate', async (req, res, next) => {
+router.post('/tenants/:id/reactivate', requirePlatformPermission('tenant.suspend'), async (req, res, next) => {
   try {
     const tenant = await subscriptionService.reactivateTenant(req.params.id);
     res.json(await Tenant.findById(tenant._id).populate('plan').populate('owner', 'firstName lastName email username role'));
@@ -641,7 +718,7 @@ router.post('/tenants/:id/reactivate', async (req, res, next) => {
   }
 });
 
-router.post('/tenants/:id/domains', async (req, res, next) => {
+router.post('/tenants/:id/domains', requirePlatformPermission('tenant.edit'), async (req, res, next) => {
   try {
     const domain = normalizeDomain(req.body.domain);
     if (!domain) return res.status(400).json({ message: 'Domain is required' });
@@ -671,7 +748,7 @@ router.post('/tenants/:id/domains', async (req, res, next) => {
   }
 });
 
-router.delete('/tenants/:id/domains/:domain', async (req, res, next) => {
+router.delete('/tenants/:id/domains/:domain', requirePlatformPermission('tenant.edit'), async (req, res, next) => {
   try {
     const tenant = await Tenant.findById(req.params.id);
     if (!tenant) return res.status(404).json({ message: 'Tenant not found' });
@@ -682,7 +759,7 @@ router.delete('/tenants/:id/domains/:domain', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/tenants/:id/reset-admin-password', async (req, res, next) => {
+router.post('/tenants/:id/reset-admin-password', requirePlatformPermission('tenant.edit'), async (req, res, next) => {
   try {
     const tenant = await Tenant.findById(req.params.id);
     if (!tenant) return res.status(404).json({ message: 'Tenant not found' });
@@ -691,10 +768,13 @@ router.post('/tenants/:id/reset-admin-password', async (req, res, next) => {
       return res.status(400).json({ message: 'Password must contain at least 12 characters' });
     }
     const password = suppliedPassword || `${crypto.randomBytes(12).toString('base64url')}!9a`;
-    const admin = await User.findOne({ tenantId: tenant._id, role: 'admin' });
+    const admin = await User.findOne({ tenantId: tenant._id, role: 'admin' }).select('+tokenVersion');
     if (!admin) return res.status(404).json({ message: 'Tenant admin not found' });
     admin.password = password;
+    admin.tokenVersion = Number(admin.tokenVersion || 0) + 1;
     await admin.save();
+    const revoked = await revokeAllUserSessions(admin._id, req.user._id, 'Tenant administrator password reset');
+    req.audit.set({ action: 'tenant.admin.password-reset', resource: 'tenant', resourceId: req.params.id, metadata: { adminId: String(admin._id), revokedSessions: revoked.modifiedCount } });
     res.json({ message: 'Password reset', email: admin.email, password });
   } catch (err) { next(err); }
 });

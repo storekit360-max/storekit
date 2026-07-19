@@ -2,6 +2,7 @@ const { Resend } = require('resend');
 const nodemailer = require('nodemailer');
 const Tenant = require('../models/Tenant');
 const { currentTenantId, withoutTenantScope } = require('../middleware/tenantContext');
+const { resolvedIntegration } = require('../services/platformIntegrationService');
 
 // ── Resend client ─────────────────────────────────────────────────────────────
 const getResendClient = (overrideApiKey = '') => {
@@ -15,10 +16,10 @@ const looksUnset = (value) => {
   return !v || v.includes('your_') || v.includes('change_this') || v.includes('example');
 };
 
-const hasSmtpConfig = () => (
-  !looksUnset(process.env.EMAIL_HOST)
-  && !looksUnset(process.env.EMAIL_USER)
-  && !looksUnset(process.env.EMAIL_PASS)
+const hasSmtpConfig = (config = {}) => (
+  !looksUnset(config.host || process.env.EMAIL_HOST)
+  && !looksUnset(config.username || process.env.EMAIL_USER)
+  && !looksUnset(config.password || process.env.EMAIL_PASS)
 );
 
 const freeEmailProviders = ['@gmail.', '@yahoo.', '@hotmail.', '@outlook.', '@live.', '@icloud.'];
@@ -43,26 +44,29 @@ const sanitizeFromName = (value) => (
 
 const formatAddress = (name, email) => `${sanitizeFromName(name)} <${extractEmailAddress(email)}>`;
 
-const createSmtpTransport = () => nodemailer.createTransport({
-  host: process.env.EMAIL_HOST,
-  port: Number(process.env.EMAIL_PORT || 587),
-  secure: String(process.env.EMAIL_PORT || '') === '465',
+const createSmtpTransport = (config = {}) => nodemailer.createTransport({
+  host: config.host || process.env.EMAIL_HOST,
+  port: Number(config.port || process.env.EMAIL_PORT || 587),
+  secure: config.secure === true || String(config.secure ?? process.env.EMAIL_PORT ?? '') === '465',
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    user: config.username || process.env.EMAIL_USER,
+    pass: config.password || process.env.EMAIL_PASS,
   },
 });
 
 // ── SMTP connection verification (called once at startup) ─────────────────────
 const verifySmtp = async () => {
   try {
-    if (hasSmtpConfig()) {
-      await createSmtpTransport().verify();
+    const smtp = await resolvedIntegration('smtp').catch(() => null);
+    const smtpConfig = smtp ? { ...smtp.config, ...smtp.secrets } : {};
+    if (smtp?.enabled !== false && hasSmtpConfig(smtpConfig)) {
+      await createSmtpTransport(smtpConfig).verify();
       console.log('[MAIL] ✅ SMTP verified — emails will work');
       return;
     }
 
-    const resend = getResendClient();
+    const resendConfig = await resolvedIntegration('resend').catch(() => null);
+    const resend = getResendClient(resendConfig?.secrets?.apiKey);
     await resend.emails.send({
       from: 'onboarding@resend.dev',
       to: 'delivered@resend.dev',
@@ -101,12 +105,12 @@ const getFromAddress = async (theme) => {
   return `${storeName} <onboarding@resend.dev>`;
 };
 
-const getSmtpFromAddress = (theme) => (
+const getSmtpFromAddress = (theme, config = {}) => (
   theme?.emailFromAddress && !looksUnset(theme.emailFromAddress)
     ? formatAddress(theme.emailFromName || theme.storeName, theme.emailFromAddress)
-    : process.env.EMAIL_FROM && !looksUnset(process.env.EMAIL_FROM)
-      ? formatAddress(theme?.emailFromName || theme?.storeName || 'StoreKit', process.env.EMAIL_FROM)
-      : formatAddress(theme?.emailFromName || theme?.storeName || 'StoreKit', process.env.EMAIL_USER)
+    : (config.fromAddress || process.env.EMAIL_FROM) && !looksUnset(config.fromAddress || process.env.EMAIL_FROM)
+      ? formatAddress(theme?.emailFromName || theme?.storeName || 'StoreKit', config.fromAddress || process.env.EMAIL_FROM)
+      : formatAddress(theme?.emailFromName || theme?.storeName || 'StoreKit', config.username || process.env.EMAIL_USER)
 );
 
 // ── sendMail ──────────────────────────────────────────────────────────────────
@@ -117,19 +121,22 @@ const sendMail = async ({ to, subject, html, tenantId, tenant }) => {
       return { skipped: true, reason: 'staging_disabled' };
     }
     const theme = await getTheme({ tenantId, tenant }).catch(() => ({ storeName: 'StoreKit', primary: '#15803d' }));
+    const smtp = await resolvedIntegration('smtp').catch(() => null);
+    const smtpConfig = smtp ? { ...smtp.config, ...smtp.secrets } : {};
 
-    if (hasSmtpConfig()) {
-      const from = getSmtpFromAddress(theme);
+    if (smtp?.enabled !== false && hasSmtpConfig(smtpConfig)) {
+      const from = getSmtpFromAddress(theme, smtpConfig);
       const replyTo = theme.emailReplyTo || theme.storeEmail || undefined;
       if (process.env.NODE_ENV !== 'production') {
         console.log(`[MAIL] Sending via SMTP | from:${from} → to:${to}`);
       }
-      const info = await createSmtpTransport().sendMail({ from, to, subject, html, replyTo });
+      const info = await createSmtpTransport(smtpConfig).sendMail({ from, to, subject, html, replyTo });
       console.log(`[MAIL SENT] To:${to} | ${subject} | id:${info?.messageId}`);
       return info;
     }
 
-    const resend = getResendClient(theme.resendApiKey);
+    const resendConfig = await resolvedIntegration('resend').catch(() => null);
+    const resend = getResendClient(theme.resendApiKey || (resendConfig?.enabled !== false ? resendConfig?.secrets?.apiKey : ''));
     const from = await getFromAddress(theme);
     const replyTo = theme.emailReplyTo || theme.storeEmail || undefined;
 

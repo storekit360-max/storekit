@@ -13,6 +13,7 @@ const PANEL_TYPES = [
   'cancel_request',
   'return_request',
   'gift_card',   // gift card purchases, slip uploads, activations, rejections
+  'system',      // platform announcements and maintenance notices
 ];
 
 // ── Helper: get which types are enabled in Settings ───────────────────────────

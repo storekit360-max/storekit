@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import API from '../../utils/api';
+import SuperAdminBillingCommercial from './SuperAdminBillingCommercial';
 
 const STATUS_META = {
   trial:     { label: 'Trial',      color: '#2563eb', bg: '#eff6ff' },
@@ -31,6 +32,7 @@ function StatusBadge({ status }) {
 export default function SuperAdminBilling({ notify }) {
   const [overview, setOverview] = useState(null);
   const [payments, setPayments] = useState([]);
+  const [lifecycle, setLifecycle] = useState({ metrics: {}, invoices: [], refunds: [], attempts: [], dunningEvents: [] });
   const [filter, setFilter] = useState('pending');
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
@@ -43,12 +45,14 @@ export default function SuperAdminBilling({ notify }) {
   const loadAll = useCallback(async function loadAll() {
     setLoading(true);
     try {
-      const [overviewRes, paymentsRes] = await Promise.all([
+      const [overviewRes, paymentsRes, lifecycleRes] = await Promise.all([
         API.get('/superadmin/billing/overview'),
         API.get('/superadmin/billing/payments', { params: filter ? { status: filter } : {} }),
+        API.get('/superadmin/billing/lifecycle', { skipCache: true }),
       ]);
       setOverview(overviewRes.data);
       setPayments(paymentsRes.data);
+      setLifecycle(lifecycleRes.data);
     } catch (err) {
       toast('error', err.response?.data?.message || 'Could not load billing data');
     } finally {
@@ -102,6 +106,51 @@ export default function SuperAdminBilling({ notify }) {
     } catch (err) {
       toast('error', err.response?.data?.message || 'Could not reactivate tenant');
     } finally { setBusyId(null); }
+  }
+
+  async function refundPayment(payment) {
+    const remaining = Number(payment.amount || 0) - Number(payment.refundedAmount || 0);
+    const raw = window.prompt(`Refund amount (maximum ${fmtMoney(remaining, payment.currency)}). Manual refunds remain pending until you confirm the external transfer:`, remaining.toFixed(2));
+    if (raw === null) return;
+    const note = window.prompt('Refund note or external transfer reference:') || '';
+    setBusyId(payment._id);
+    try {
+      await API.post('/superadmin/billing/refunds', { paymentId: payment._id, amount: Number(raw), reason: 'requested_by_customer', note }, { headers: { 'Idempotency-Key': `${payment._id}-${Date.now()}` } });
+      toast('success', payment.provider === 'stripe' ? 'Stripe refund submitted' : 'Manual refund recorded; confirm it after transferring funds');
+      await loadAll();
+    } catch (err) { toast('error', err.response?.data?.message || 'Could not create refund'); }
+    finally { setBusyId(null); }
+  }
+
+  async function confirmRefund(refund) {
+    if (!window.confirm(`Confirm that ${fmtMoney(refund.amount, refund.currency)} was returned outside StoreKit?`)) return;
+    setBusyId(refund._id);
+    try { await API.post(`/superadmin/billing/refunds/${refund._id}/confirm-manual`); toast('success', 'Manual refund confirmed'); await loadAll(); }
+    catch (err) { toast('error', err.response?.data?.message || 'Could not confirm refund'); }
+    finally { setBusyId(null); }
+  }
+
+  async function configureStripe(tenant) {
+    const customerId = window.prompt('Stripe customer ID (cus_…):', tenant.billing?.stripeCustomerId || ''); if (customerId === null) return;
+    const subscriptionId = window.prompt('Stripe subscription ID (sub_…, optional):', tenant.billing?.stripeSubscriptionId || ''); if (subscriptionId === null) return;
+    setBusyId(tenant._id);
+    try { await API.put(`/superadmin/billing/stripe/tenants/${tenant._id}`, { customerId, subscriptionId }); toast('success', 'Stripe mapping saved'); await loadAll(); }
+    catch (err) { toast('error', err.response?.data?.message || 'Could not configure Stripe mapping'); }
+    finally { setBusyId(null); }
+  }
+
+  async function syncStripe(tenant) {
+    setBusyId(tenant._id);
+    try { const { data } = await API.post(`/superadmin/billing/stripe/tenants/${tenant._id}/sync`); toast('success', `Stripe synchronized: ${data.invoicesImported} invoices`); await loadAll(); }
+    catch (err) { toast('error', err.response?.data?.message || 'Could not synchronize Stripe'); }
+    finally { setBusyId(null); }
+  }
+
+  async function openBillingPortal(tenant) {
+    setBusyId(tenant._id);
+    try { const { data } = await API.post(`/superadmin/billing/stripe/tenants/${tenant._id}/portal`); window.open(data.url, '_blank', 'noopener,noreferrer'); toast('success', 'Secure Stripe billing portal opened'); }
+    catch (err) { toast('error', err.response?.data?.message || 'Could not open Stripe billing portal'); }
+    finally { setBusyId(null); }
   }
 
   return (
@@ -178,7 +227,7 @@ export default function SuperAdminBilling({ notify }) {
                       <div className="text-xs text-slate-400">Grace {fmtDate(t.billing?.gracePeriodEndsAt)}</div>
                     </td>
                     <td className="py-3 pr-3">
-                      {t.status === 'suspended' || t.billing?.subscriptionStatus === 'cancelled' ? (
+                      <div className="flex flex-wrap gap-2">{t.status === 'suspended' || t.billing?.subscriptionStatus === 'cancelled' ? (
                         <button disabled={busyId === t._id} onClick={() => reactivateTenant(t._id)} className="h-8 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-xs font-semibold">
                           Reactivate
                         </button>
@@ -186,7 +235,7 @@ export default function SuperAdminBilling({ notify }) {
                         <button disabled={busyId === t._id} onClick={() => deactivateTenant(t._id)} className="h-8 px-3 rounded-lg bg-red-50 hover:bg-red-100 disabled:opacity-60 text-red-600 text-xs font-semibold">
                           Deactivate
                         </button>
-                      )}
+                      )}<button disabled={busyId === t._id} onClick={() => configureStripe(t)} className="h-8 rounded-lg border px-2 text-xs font-semibold text-slate-600">Stripe ID</button>{t.billing?.stripeCustomerId && <><button disabled={busyId === t._id} onClick={() => syncStripe(t)} className="h-8 rounded-lg bg-violet-50 px-2 text-xs font-semibold text-violet-700">Sync</button><button disabled={busyId === t._id} onClick={() => openBillingPortal(t)} className="h-8 rounded-lg bg-blue-50 px-2 text-xs font-semibold text-blue-700">Portal</button></>}</div>
                     </td>
                   </tr>
                 ))}
@@ -315,9 +364,9 @@ export default function SuperAdminBilling({ notify }) {
                           </button>
                         </div>
                       ) : (
-                        <span className="text-xs text-slate-400">
+                        <div className="flex items-center gap-2"><span className="text-xs text-slate-400">
                           {p.reviewedBy ? `by ${p.reviewedBy.firstName || ''} ${p.reviewedBy.lastName || ''}`.trim() : '-'}
-                        </span>
+                        </span>{['approved', 'partially_refunded'].includes(p.status) && Number(p.refundedAmount || 0) < Number(p.amount) && <button disabled={busyId === p._id} onClick={() => refundPayment(p)} className="rounded bg-violet-50 px-2 py-1 text-xs font-bold text-violet-700">Refund</button>}</div>
                       )}
                     </td>
                   </tr>
@@ -327,6 +376,15 @@ export default function SuperAdminBilling({ notify }) {
           </div>
         )}
       </div>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="border-b border-slate-100 p-5"><h2 className="font-bold text-slate-900">Invoice ledger</h2><p className="mt-1 text-xs text-slate-500">Invoices are linked to approved subscription payments and retained independently.</p></div><div className="max-h-96 divide-y overflow-auto">{lifecycle.invoices.map(invoice => <div key={invoice._id} className="flex items-center justify-between gap-4 p-4 text-sm"><div><strong className="block text-slate-900">{invoice.invoiceNumber}</strong><span className="text-xs text-slate-500">{invoice.tenantId?.storeName || 'Deleted tenant'} · {fmtDate(invoice.createdAt)}</span></div><div className="text-right"><strong>{fmtMoney(invoice.amount, invoice.currency)}</strong><span className="block text-xs capitalize text-slate-500">{invoice.status.replace('_', ' ')}</span></div></div>)}</div>{!lifecycle.invoices.length && <p className="p-8 text-center text-sm text-slate-400">No subscription invoices yet.</p>}</section>
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="border-b border-slate-100 p-5"><h2 className="font-bold text-slate-900">Refund ledger</h2><p className="mt-1 text-xs text-slate-500">Stripe refunds are provider-confirmed; manual transfers require explicit confirmation.</p></div><div className="max-h-96 divide-y overflow-auto">{lifecycle.refunds.map(refund => <div key={refund._id} className="flex items-center justify-between gap-4 p-4 text-sm"><div><strong className="block">{refund.tenantId?.storeName || 'Deleted tenant'}</strong><span className="text-xs text-slate-500">{refund.provider} · {fmtDate(refund.createdAt)} · {refund.note || 'No note'}</span></div><div className="text-right"><strong>{fmtMoney(refund.amount, refund.currency)}</strong>{refund.provider === 'manual' && refund.status === 'pending' ? <button disabled={busyId === refund._id} onClick={() => confirmRefund(refund)} className="mt-1 block rounded bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">Confirm transfer</button> : <span className="block text-xs capitalize text-slate-500">{refund.status}</span>}</div></div>)}</div>{!lifecycle.refunds.length && <p className="p-8 text-center text-sm text-slate-400">No refunds recorded.</p>}</section>
+      </div>
+
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="border-b border-slate-100 p-5"><h2 className="font-bold text-slate-900">Payment attempts</h2><p className="mt-1 text-xs text-slate-500">Every approval attempt records its own success or failure without changing historical entries.</p></div><div className="overflow-x-auto"><table className="min-w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Tenant</th><th className="p-3">Provider</th><th className="p-3">Amount</th><th className="p-3">Status</th><th className="p-3">Time</th><th className="p-3">Failure</th></tr></thead><tbody className="divide-y">{lifecycle.attempts.map(attempt => <tr key={attempt._id}><td className="p-3 font-semibold">{attempt.tenantId?.storeName || 'Deleted tenant'}</td><td className="p-3 capitalize">{attempt.provider}</td><td className="p-3">{fmtMoney(attempt.amount, attempt.currency)}</td><td className="p-3 capitalize">{attempt.status.replace('_', ' ')}</td><td className="p-3 text-xs text-slate-500">{fmtDate(attempt.occurredAt)}</td><td className="p-3 text-xs text-red-600">{attempt.failureMessage || '—'}</td></tr>)}</tbody></table></div>{!lifecycle.attempts.length && <p className="p-8 text-center text-sm text-slate-400">No payment attempts recorded.</p>}</section>
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="border-b border-slate-100 p-5"><h2 className="font-bold text-slate-900">Dunning timeline</h2><p className="mt-1 text-xs text-slate-500">Due dates, grace starts, retries, recovery, and automatic suspension are durable events.</p></div><div className="divide-y">{lifecycle.dunningEvents.map(event => <div key={event._id} className="grid gap-2 p-4 text-sm md:grid-cols-[1fr_180px_120px]"><div><strong>{event.tenantId?.storeName || 'Deleted tenant'}</strong><p className="text-xs text-slate-500">{event.message}</p></div><span className="text-xs text-slate-500">{fmtDate(event.occurredAt)}<br />Deadline {fmtDate(event.scheduledFor)}</span><span className="self-start rounded bg-amber-50 px-2 py-1 text-center text-xs font-bold capitalize text-amber-700">{event.event.replace('_', ' ')}</span></div>)}</div>{!lifecycle.dunningEvents.length && <p className="p-8 text-center text-sm text-slate-400">No dunning events recorded.</p>}</section>
+      <SuperAdminBillingCommercial notify={toast} tenants={overview?.tenants || []} />
     </div>
   );
 }

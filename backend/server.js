@@ -201,6 +201,7 @@ app.use(compression({
   threshold: 1024,
   filter: (req, res) => {
     if (req.headers['x-no-compression']) return false;
+    if (String(req.headers.accept || '').includes('text/event-stream')) return false;
     return compression.filter(req, res);
   },
 }));
@@ -209,6 +210,9 @@ app.use(compression({
 // Keep ordinary API payloads bounded. File uploads use multipart parsing and
 // route-specific limits, so they are unaffected by this JSON limit.
 const jsonParser = express.json({ limit: '15mb' });
+const { requestContext } = require('./middleware/requestContext');
+app.use(requestContext);
+app.use(require('./services/platformFirewallService').platformFirewall);
 app.use((req, res, next) => {
   // Stripe requires the exact raw bytes for cryptographic signature checks.
   if (req.originalUrl?.split('?')[0] === '/api/payments/stripe/webhook') return next();
@@ -247,6 +251,10 @@ app.use('/api', (req, res, next) => {
 const { monitoringMiddleware } = require('./middleware/monitoring');
 app.use(monitoringMiddleware);
 
+// Database-backed platform maintenance and public access policy. This fails
+// open on configuration read errors and exempts health and Super Admin recovery.
+app.use(require('./middleware/platformPolicy').platformPolicy);
+
 // ─── Static uploads ───────────────────────────────────────────────────────────
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -260,6 +268,7 @@ app.use((req, _res, next) => {
 
 // ─── Health check ─────────────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', time: new Date() }));
+app.get('/api/platform-settings/public', require('./middleware/platformPolicy').publicPlatformSettings);
 
 // ─── DIAGNOSTIC GUARD ─────────────────────────────────────────────────────────
 // Wraps app.use for route-module mounts so that if any routes/*.js file's
@@ -284,9 +293,11 @@ function safeMount(mountPath, routeModule, ...extraMiddleware) {
 //           credential-stuffing attacks independently of the global limiter.
 app.use('/api/auth/login', loginLimiter);
 app.use('/api/auth/superadmin/google', loginLimiter);
+app.use('/api/auth/mfa/challenge', loginLimiter);
 safeMount('/api/auth',          require('./routes/auth'));
+safeMount('/api/platform-account', require('./routes/platformAccount'));
 safeMount('/api/tenant',        require('./routes/tenant'));
-safeMount('/api/superadmin',    require('./routes/superadmin'));
+safeMount('/api/superadmin',    require('./routes/superadmin'), require('./middleware/platformAudit').platformAudit);
 
 // ─── Public routes ────────────────────────────────────────────────────────────
 safeMount('/api/products',      require('./routes/products'), tenantScope);
@@ -312,6 +323,9 @@ safeMount('/api/subscribers',   require('./routes/subscribers'), tenantScope);
 const seoRoutes = require('./routes/seo');
 safeMount('/api/seo',           seoRoutes, tenantScope);
 safeMount('/api/meta',          require('./routes/meta'), tenantScope);   // Meta CAPI relay
+safeMount('/api/runtime-flags', require('./routes/runtimeFeatureFlags'), tenantScope);
+safeMount('/api/platform/v1',   require('./routes/platformApi'));
+safeMount('/api/support',       require('./routes/support'), tenantScope);
 
 // ─── SEO aliases ──────────────────────────────────────────────────────────────
 function serveSeoAlias(pathname) {
@@ -334,6 +348,7 @@ app.get('/robots.txt',              serveSeoAlias('/robots.txt'));
 //           admin action (POST/PUT/PATCH/DELETE).  This is additive — all
 //           responses are identical to before.
 safeMount('/api/admin/billing', require('./routes/adminBilling'), tenantScope, auditLog);
+safeMount('/api/admin/runtime-flags', require('./routes/adminRuntimeFlags'), tenantContextOnly);
 safeMount('/api/admin', require('./routes/admin'), tenantScope, auditLog);
 safeMount('/api/admin/reset', require('./routes/reset'));
 safeMount('/api/billing', require('./routes/billing'), tenantScope);
@@ -385,6 +400,8 @@ async function startServer() {
     });
     console.log('✅ MongoDB Connected');
 
+    require('./services/deploymentService').recordRuntimeDeployment().catch(error => console.error('[DEPLOYMENT_DISCOVERY_FAILED]', error.message));
+
     const { startTokenRefreshScheduler } = require('./services/tokenRefreshScheduler');
     startTokenRefreshScheduler();
 
@@ -394,11 +411,19 @@ async function startServer() {
     const { startSubscriptionScheduler } = require('./services/subscriptionScheduler');
     startSubscriptionScheduler();
 
+    const { startAcquisitionSyncScheduler } = require('./services/acquisitionSyncScheduler');
+    startAcquisitionSyncScheduler();
+
     const { startCurfoxScheduler } = require('./services/curfoxScheduler');
     startCurfoxScheduler();
 
     const { startSocialScheduler } = require('./services/socialScheduler');
     startSocialScheduler();
+    const { startNotificationWorker } = require('./services/platformNotificationService');
+    startNotificationWorker();
+
+    const { startOperationsMonitoring } = require('./services/operationsService');
+    startOperationsMonitoring();
 
     const PORT = process.env.PORT || 5001;
     app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

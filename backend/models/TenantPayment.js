@@ -12,6 +12,9 @@ const tenantPaymentSchema = new mongoose.Schema({
   plan:   { type: mongoose.Schema.Types.ObjectId, ref: 'Plan', required: true },
 
   amount:   { type: Number, required: true, min: 0 },
+  subtotal: { type: Number, required: true, min: 0, default: 0 },
+  discountAmount: { type: Number, min: 0, default: 0 },
+  taxAmount: { type: Number, min: 0, default: 0 },
   currency: { type: String, default: 'LKR' },
   billingCycle: { type: String, enum: ['monthly', 'yearly'], default: 'monthly' },
 
@@ -28,11 +31,22 @@ const tenantPaymentSchema = new mongoose.Schema({
   proofUrl:  { type: String, default: '', trim: true },
   note:      { type: String, default: '', trim: true },
 
-  status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending', index: true },
+  status: { type: String, enum: ['pending', 'processing', 'approved', 'rejected', 'failed', 'refunded', 'partially_refunded'], default: 'pending', index: true },
+  provider: { type: String, enum: ['manual', 'stripe'], default: 'manual', index: true },
+  providerPaymentId: { type: String, default: undefined, trim: true },
+  idempotencyKey: { type: String, default: undefined, trim: true },
+  invoice: { type: mongoose.Schema.Types.ObjectId, ref: 'SubscriptionInvoice', default: null },
+  couponCode: { type: String, default: '', uppercase: true, trim: true },
+  quoteSnapshot: { type: mongoose.Schema.Types.Mixed, default: {} },
+  refundedAmount: { type: Number, default: 0, min: 0 },
   submittedAt: { type: Date, default: Date.now },
   reviewedAt:  { type: Date, default: null },
   reviewedBy:  { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   rejectionReason: { type: String, default: '' },
 }, { timestamps: true });
+
+tenantPaymentSchema.index({ provider: 1, providerPaymentId: 1 }, { unique: true, sparse: true });
+tenantPaymentSchema.index({ tenant: 1, createdAt: -1 });
+tenantPaymentSchema.index({ idempotencyKey: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model('TenantPayment', tenantPaymentSchema);

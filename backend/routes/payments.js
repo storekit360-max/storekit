@@ -3,7 +3,12 @@ const router   = express.Router();
 const crypto   = require('crypto');
 const rateLimit = require('express-rate-limit');
 const { PaymentGateway } = require('../models/index');
-const { adminAuth } = require('../middleware/auth');
+const { auth, adminAuth } = require('../middleware/auth');
+const webhookEvents = require('../services/webhookEventService');
+
+function recordWebhookSafely(input) {
+  return webhookEvents.record(input).catch(error => console.error('[WEBHOOK_LOG_FAILED]', error.message));
+}
 
 function tenantIdForRequest(req) {
   return req.user?.tenantId || req.tenantId || null;
@@ -55,20 +60,6 @@ function sanitise(str, maxLen = 100) {
 }
 
 // Verify the request comes from an authenticated user (not just any visitor)
-function requireAuth(req, res, next) {
-  const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) {
-    return res.status(401).json({ message: 'Authentication required to initiate payment' });
-  }
-  try {
-    const jwt = require('jsonwebtoken');
-    req.user = jwt.verify(auth.replace('Bearer ', ''), process.env.JWT_SECRET);
-    next();
-  } catch {
-    return res.status(401).json({ message: 'Invalid or expired session. Please log in again.' });
-  }
-}
-
 // ── Public: get enabled gateways (no secrets ever exposed) ───────────────────
 router.get('/gateways', async (req, res) => {
   try {
@@ -156,7 +147,7 @@ function buildPayHereHash(merchantId, orderId, amount, currency, merchantSecret)
 // ── PayHere Preflight ─────────────────────────────────────────────────────────
 // Generates hash only. No order created. Requires authentication.
 // Rate limited to prevent hash-fishing attacks.
-router.post('/payhere/preflight', requireAuth, paymentInitLimiter, async (req, res) => {
+router.post('/payhere/preflight', auth, paymentInitLimiter, async (req, res) => {
   try {
     const tenantId = tenantIdForRequest(req);
     const gw = await PaymentGateway.findOne({ tenantId, gateway: 'payhere', isEnabled: true });
@@ -260,6 +251,7 @@ router.post('/payhere/notify', webhookLimiter, async (req, res) => {
     // Constant-time comparison — prevents timing attacks
     if (!safeEqual(localMd5, (md5sig || '').toUpperCase())) {
       console.warn('[PayHere notify] Signature mismatch for order:', order_id);
+      await recordWebhookSafely({ direction: 'inbound', provider: 'payhere', eventId: String(payment_id || order_id), eventType: 'payment.status', tenantId: gw.tenantId, status: 'rejected', httpStatus: 400, processedAt: new Date(), payload: req.body, error: 'Signature verification failed' });
       return res.sendStatus(400);
     }
 
@@ -310,6 +302,7 @@ router.post('/payhere/notify', webhookLimiter, async (req, res) => {
       );
     }
 
+    await recordWebhookSafely({ direction: 'inbound', provider: 'payhere', eventId: String(payment_id || order_id), eventType: 'payment.status', tenantId: gw.tenantId, status: 'succeeded', httpStatus: 200, processedAt: new Date(), payload: req.body });
     // Always respond 200 to PayHere — otherwise they retry indefinitely
     res.sendStatus(200);
   } catch (err) {
@@ -320,7 +313,7 @@ router.post('/payhere/notify', webhookLimiter, async (req, res) => {
 
 // ── Stripe: create payment intent ─────────────────────────────────────────────
 // Requires auth — prevents anonymous users from creating intents
-router.post('/stripe/create-intent', requireAuth, paymentInitLimiter, async (req, res) => {
+router.post('/stripe/create-intent', auth, paymentInitLimiter, async (req, res) => {
   try {
     const tenantId = tenantIdForRequest(req);
     const gw = await PaymentGateway.findOne({ tenantId, gateway: 'stripe', isEnabled: true });
@@ -376,6 +369,8 @@ router.post('/stripe/webhook', express.raw({ type: 'application/json' }), webhoo
       return res.status(400).send('Webhook signature verification failed');
     }
 
+    const webhookStartedAt = Date.now();
+
     if (event.type === 'payment_intent.succeeded') {
       const orderId = event.data.object.metadata?.orderId;
       if (orderId) {
@@ -407,6 +402,7 @@ router.post('/stripe/webhook', express.raw({ type: 'application/json' }), webhoo
       }
     }
 
+    await recordWebhookSafely({ direction: 'inbound', provider: 'stripe', eventId: event.id, eventType: event.type, tenantId: gw.tenantId, status: 'succeeded', httpStatus: 200, durationMs: Date.now() - webhookStartedAt, processedAt: new Date(), payload: req.body });
     res.json({ received: true });
   } catch (err) {
     console.error('[Stripe webhook]', err.message);
@@ -417,7 +413,7 @@ router.post('/stripe/webhook', express.raw({ type: 'application/json' }), webhoo
 // ── PayPal: server-side capture verification ──────────────────────────────────
 // Verifies the capture with PayPal's API before trusting it.
 // Requires auth — only the paying customer can trigger this.
-router.post('/paypal/capture', requireAuth, paymentInitLimiter, async (req, res) => {
+router.post('/paypal/capture', auth, paymentInitLimiter, async (req, res) => {
   try {
     const Order            = require('../models/Order');
     const { Notification } = require('../models/index');

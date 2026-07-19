@@ -3,7 +3,7 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const Plan = require('../models/Plan');
 const Tenant = require('../models/Tenant');
-const { initializeTenantSubscription, runMaintenance } = require('../services/subscriptionBillingService');
+const { startSubscription, tick } = require('../services/subscriptionService');
 function slugify(v){ return String(v||'plan').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || 'plan'; }
 (async()=>{
   await mongoose.connect(process.env.MONGODB_URI);
@@ -16,7 +16,11 @@ function slugify(v){ return String(v||'plan').toLowerCase().trim().replace(/[^a-
     console.log('Plan billing ready:', plan.name);
   }
   const tenants = await Tenant.find({}).populate('plan');
-  for (const tenant of tenants) if (!tenant.subscription || !tenant.subscription.status) await initializeTenantSubscription(tenant, tenant.plan);
-  console.log('Billing maintenance:', await runMaintenance());
+  for (const tenant of tenants) {
+    if (!tenant.plan) continue;
+    const hasLifecycleDates = tenant.billing?.currentPeriodStart || tenant.billing?.trialEndsAt || tenant.billing?.nextPaymentDate;
+    if (!hasLifecycleDates) await startSubscription(tenant, tenant.plan, tenant.billing?.billingCycle || tenant.plan.billingCycle);
+  }
+  console.log('Billing maintenance:', await tick());
   await mongoose.disconnect();
 })().catch(async err=>{ console.error(err); await mongoose.disconnect().catch(()=>{}); process.exit(1); });

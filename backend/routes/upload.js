@@ -36,6 +36,7 @@ const sharp    = require('sharp');      // npm install sharp — local image pro
 const Product  = require('../models/Product');
 const { adminAuth } = require('../middleware/auth');
 const { Settings } = require('../models/index');
+const { getSetting } = require('../services/platformSettingsService');
 
 // ─── IMAGE PROCESSING: Admin-configurable settings ───────────────────────────
 // Settings are stored in the existing generic `Settings` key→value collection
@@ -335,7 +336,7 @@ if (USE_CLOUDINARY) {
       public_id:        `${Date.now()}-${Math.round(Math.random() * 1e9)}`,
     }),
   });
-  upload = multer({ storage, fileFilter, limits: { fileSize: 10 * 1024 * 1024 } });
+  upload = multer({ storage, fileFilter, limits: { fileSize: 50 * 1024 * 1024 } });
 } else {
   const uploadsDir = path.join(__dirname, '../uploads');
   if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -349,7 +350,25 @@ if (USE_CLOUDINARY) {
       cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}-${safe}${path.extname(file.originalname).toLowerCase()}`);
     },
   });
-  upload = multer({ storage, fileFilter, limits: { fileSize: 10 * 1024 * 1024 } });
+  upload = multer({ storage, fileFilter, limits: { fileSize: 50 * 1024 * 1024 } });
+}
+
+async function discardUploadedFile(file) {
+  if (!file) return;
+  try {
+    if (USE_CLOUDINARY && file.filename) await cloudinary.uploader.destroy(file.filename, { invalidate: true });
+    else if (file.path) await fs.promises.unlink(file.path);
+  } catch (error) { console.error('[UPLOAD_POLICY_CLEANUP_FAILED]', error.message); }
+}
+
+async function enforcePlatformImageLimit(files) {
+  const maxMb = Number(await getSetting('uploads.imageMaxMb').catch(() => 10)) || 10;
+  const maxBytes = maxMb * 1024 * 1024;
+  const rejected = (Array.isArray(files) ? files : [files]).filter(file => Number(file?.size || file?.bytes || 0) > maxBytes);
+  if (rejected.length) {
+    await Promise.all((Array.isArray(files) ? files : [files]).map(discardUploadedFile));
+    const error = new Error(`Image exceeds the platform limit of ${maxMb} MB`); error.statusCode = 413; throw error;
+  }
 }
 
 // ─── URL helper ───────────────────────────────────────────────────────────────
@@ -376,6 +395,7 @@ function localUrl(req, filename) {
 router.post('/', adminAuth, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+    await enforcePlatformImageLimit(req.file);
 
     // SECURITY: Sanitise SVG after upload (before returning URL to client).
     await sanitizeSVGIfNeeded(req.file, !!USE_CLOUDINARY);
@@ -383,7 +403,7 @@ router.post('/', adminAuth, upload.single('image'), async (req, res) => {
     const url = USE_CLOUDINARY ? req.file.path : localUrl(req, req.file.filename);
     res.json({ url, filename: req.file.filename });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.statusCode || 500).json({ message: err.message });
   }
 });
 
@@ -391,6 +411,7 @@ router.post('/', adminAuth, upload.single('image'), async (req, res) => {
 router.post('/multiple', adminAuth, upload.array('images', 10), async (req, res) => {
   try {
     if (!req.files || !req.files.length) return res.status(400).json({ message: 'No files uploaded' });
+    await enforcePlatformImageLimit(req.files);
 
     // SECURITY: Sanitise each SVG in the batch.
     for (const file of req.files) {
@@ -403,7 +424,7 @@ router.post('/multiple', adminAuth, upload.array('images', 10), async (req, res)
     }));
     res.json({ urls });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.statusCode || 500).json({ message: err.message });
   }
 });
 
@@ -481,7 +502,7 @@ router.put('/image-processing-settings', adminAuth, async (req, res) => {
 const skuZipStorage = multer.memoryStorage();
 const skuZipUpload  = multer({
   storage: skuZipStorage,
-  limits:  { fileSize: 200 * 1024 * 1024 }, // 200 MB zip ceiling
+  limits:  { fileSize: 500 * 1024 * 1024 }, // hard ceiling; typed platform policy is enforced below
   fileFilter: (req, file, cb) => {
     const ok = /\.zip$/i.test(file.originalname) || file.mimetype === 'application/zip' ||
                file.mimetype === 'application/x-zip-compressed';
@@ -492,6 +513,8 @@ const skuZipUpload  = multer({
 
 router.post('/sku-images', adminAuth, skuZipUpload.single('zipfile'), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'No zip file uploaded' });
+  const archiveMaxMb = Number(await getSetting('uploads.bulkArchiveMaxMb').catch(() => 200)) || 200;
+  if (req.file.size > archiveMaxMb * 1024 * 1024) return res.status(413).json({ message: `Bulk archive exceeds the platform limit of ${archiveMaxMb} MB` });
 
   // Load admin-configurable image-processing settings once per request.
   const imgSettings = await getImageProcessingSettings();
