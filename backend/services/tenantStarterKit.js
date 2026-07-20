@@ -354,7 +354,7 @@ function aiPrompt(brief) {
   ].filter(Boolean).join('\n');
 }
 
-async function fetchWithTimeout(url, options, timeoutMs = 25000) {
+async function fetchWithTimeout(url, options, timeoutMs = 15000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {

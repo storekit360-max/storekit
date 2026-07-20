@@ -56,7 +56,7 @@ function normalizePexelsPhotos(payload = {}) {
 
 async function searchPexels(apiKey, query) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
+  const timer = setTimeout(() => controller.abort(), 5000);
   try {
     const params = new URLSearchParams({
       query,
@@ -89,11 +89,17 @@ async function fetchPexelsPhotos(brief, products, count = 12) {
   const images = new Array(selectedProducts.length).fill(null);
   const usedSources = new Set();
   let cursor = 0;
+  // Hard overall budget for this whole stage. Individual Pexels calls already
+  // time out at 5s each, but with many products a run of slow/failing calls
+  // could still stack up past the frontend's request timeout. Once the
+  // budget is spent, stop searching and let the rest fall back to the
+  // placeholder image instead of dragging the whole tenant-creation request out.
+  const stageDeadline = Date.now() + 12000;
   try {
     // Search each item independently. A broad catalogue query can return a
     // beautiful set but associate the wrong object with individual products.
     const worker = async () => {
-      while (cursor < selectedProducts.length) {
+      while (cursor < selectedProducts.length && Date.now() < stageDeadline) {
         const index = cursor;
         cursor += 1;
         const query = buildProductSearchQuery(brief, selectedProducts[index]);

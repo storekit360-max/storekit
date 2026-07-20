@@ -321,7 +321,7 @@ export default function SuperAdminDashboard() {
       storeName: tenantForm.storeName,
       ...tenantForm.onboarding,
       currency: tenantForm.settings.currency,
-    });
+    }, { timeout: 90000 });
     setStarterKitPreview(data.starterKit);
     setStarterKitWarnings(data.warnings || []);
     setTenantForm(prev => ({
@@ -397,7 +397,7 @@ export default function SuperAdminDashboard() {
         darkColor: tenantForm.theme.darkColor === emptyTenant.theme.darkColor ? starterKit.theme.darkColor : tenantForm.theme.darkColor,
         fontFamily: tenantForm.theme.fontFamily === emptyTenant.theme.fontFamily ? starterKit.theme.fontFamily : tenantForm.theme.fontFamily,
       } : tenantForm.theme;
-      const { data } = await API.post('/superadmin/tenants', { ...tenantForm, theme: resolvedTheme, starterKit });
+      const { data } = await API.post('/superadmin/tenants', { ...tenantForm, theme: resolvedTheme, starterKit }, { timeout: 90000 });
       setLastCreatedStore({
         name: data.storeName,
         source: data.starterKitResult?.source,
