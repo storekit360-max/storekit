@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import CommandPalette from '../../components/superadmin/CommandPalette';
 import useModalFocus from '../../hooks/useModalFocus';
 import ModuleErrorBoundary from '../../components/superadmin/ModuleErrorBoundary';
+import { superAdminNotificationDestination } from '../../utils/notificationLinks';
 
 const SuperAdminBilling = lazy(() => import('./SuperAdminBilling'));
 const SuperAdminAccessControl = lazy(() => import('./SuperAdminAccessControl'));
@@ -599,7 +600,7 @@ export default function SuperAdminDashboard() {
                       notifications.map(n => (
                         <button
                           key={n._id}
-                          onClick={() => { markRead(n._id); if (n.link) navigate(n.link); setNotifOpen(false); }}
+                          onClick={() => { markRead(n._id); const destination = superAdminNotificationDestination(n); if (destination) navigate(destination); setNotifOpen(false); }}
                           className={`w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors ${!n.isRead ? 'bg-indigo-50/50' : ''}`}
                         >
                           <div className="flex items-start gap-2">

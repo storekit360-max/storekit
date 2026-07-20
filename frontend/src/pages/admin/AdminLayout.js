@@ -3,6 +3,7 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import API from '../../utils/api';
+import { adminNotificationDestination } from '../../utils/notificationLinks';
 import StoreAssistant from '../../components/admin/StoreAssistant';
 
 const NAV = [
@@ -345,7 +346,9 @@ export default function AdminLayout() {
       setUnreadCount(prev => Math.max(0, prev - 1));
       setNotifications(prev => prev.map(n => n._id === notif._id ? { ...n, isRead: true } : n));
     }
-    if (notif.link) { navigate(notif.link); setNotifOpen(false); }
+    const destination = adminNotificationDestination(notif);
+    if (destination) navigate(destination);
+    setNotifOpen(false);
   };
 
   const currentPage = NAV.find(n => isActive(n.path, n.exact))?.label || 'Admin';

@@ -126,7 +126,21 @@ const notificationSchema = new mongoose.Schema({
     ],
     required: true,
   },
-  title: String, message: String, link: String,
+  title: String,
+  message: String,
+  link: {
+    type: String,
+    default: '',
+    maxlength: 2000,
+    validate: {
+      validator(value) {
+        if (!value) return true;
+        const audiencePath = this.tenantId ? /^\/admin(?:[/?#]|$)/i : /^\/superadmin(?:[/?#]|$)/i;
+        return audiencePath.test(String(value));
+      },
+      message: 'Notification link does not match its audience',
+    },
+  },
   isRead: { type: Boolean, default: false },
   data: mongoose.Schema.Types.Mixed,
   createdAt: { type: Date, default: Date.now }

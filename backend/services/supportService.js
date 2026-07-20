@@ -9,6 +9,22 @@ const SLA = { low: [24, 120], normal: [8, 72], high: [2, 24], urgent: [1, 8] };
 function deadlines(priority, now = new Date()) { const [responseHours, resolutionHours] = SLA[priority] || SLA.normal; return { firstResponseDueAt: new Date(now.getTime() + responseHours * 3600000), resolutionDueAt: new Date(now.getTime() + resolutionHours * 3600000) }; }
 function ticketNumber() { return `SK-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`; }
 
+function tenantTicketView(ticket) {
+  const row = ticket?.toObject ? ticket.toObject() : { ...ticket };
+  delete row.assignee;
+  return row;
+}
+
+function tenantMessageView(message, tenantAuthors = new Map()) {
+  const row = message?.toObject ? message.toObject() : { ...message };
+  const authorId = String(row.author?._id || row.author || '');
+  const tenantAuthor = tenantAuthors.get(authorId);
+  row.author = tenantAuthor
+    ? { firstName: tenantAuthor.firstName || 'Store', lastName: tenantAuthor.lastName || 'Admin', role: 'admin' }
+    : { firstName: 'StoreKit', lastName: 'Support', role: 'support' };
+  return row;
+}
+
 async function createTicket({ tenant, requester, subject, category, priority = 'normal', body }) {
   const now = new Date(); const due = deadlines(priority, now);
   const ticket = await SupportTicket.create({ number: ticketNumber(), tenant, requester, subject, category, priority, ...due, lastMessageAt: now, messageCount: 1 });
@@ -38,7 +54,6 @@ async function createTicket({ tenant, requester, subject, category, priority = '
     const Notification = require('../models/index').Notification;
     const User = require('../models/User');
     const requesterUser = await User.findById(requester).select('firstName lastName email').lean();
-    const tenantDoc = await require('../models/Tenant').findById(tenant).select('storeName').lean();
     await Notification.create({
       tenantId: tenant, // tenant-level notification
       type: 'support_ticket',
@@ -65,16 +80,13 @@ async function addMessage(ticket, { author, body, kind = 'reply', platformAgent 
   if (platformAgent && kind === 'reply') {
     try {
       const Notification = require('../models/index').Notification;
-      const User = require('../models/User');
-      const adminUser = await User.findById(author).select('firstName lastName').lean();
-      const tenantDoc = await require('../models/Tenant').findById(ticket.tenant).select('storeName').lean();
       await Notification.create({
         tenantId: ticket.tenant, // tenant-level notification
         type: 'support_reply',
         title: `Support Reply: ${ticket.subject}`,
-        message: `${adminUser?.firstName} ${adminUser?.lastName} replied to ticket #${ticket.number}`,
+        message: `StoreKit Support replied to ticket #${ticket.number}`,
         link: `/admin/support?ticket=${ticket._id}`,
-        data: { ticketId: String(ticket._id), superAdminId: String(author) },
+        data: { ticketId: String(ticket._id), ticketNumber: ticket.number },
       });
     } catch (error) {
       console.error('[SUPPORT_REPLY_TENANT_NOTIFICATION_FAILED]', error.message);
@@ -104,4 +116,4 @@ async function addMessage(ticket, { author, body, kind = 'reply', platformAgent 
   return message;
 }
 
-module.exports = { SLA, deadlines, createTicket, addMessage };
+module.exports = { SLA, deadlines, createTicket, addMessage, tenantTicketView, tenantMessageView };

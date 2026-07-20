@@ -159,9 +159,17 @@ const AdminRoute = ({ children }) => {
 
 const SuperAdminRoute = ({ children }) => {
   const { user } = useAuth();
-  if (!user || user.role !== 'superadmin') return <Navigate to="/superadmin/login" replace/>;
+  if (!user) return <Navigate to="/superadmin/login" replace/>;
+  if (user.role !== 'superadmin') return <Navigate to={user.role === 'admin' ? '/admin' : '/'} replace/>;
   if (user.mfaEnrollmentRequired) return <SuperAdminMfaEnrollment/>;
   return children;
+};
+
+const SuperAdminLoginRoute = () => {
+  const { user } = useAuth();
+  if (!user) return <SuperAdminLogin/>;
+  if (user.role === 'superadmin') return <Navigate to="/superadmin" replace/>;
+  return <Navigate to={user.role === 'admin' ? '/admin' : '/'} replace/>;
 };
 
 const ProtectedRoute = ({ children }) => {
@@ -188,7 +196,6 @@ export default function App() {
               <BrowserRouter>
                 <ScrollToTop/>
                 <AnalyticsBootstrap />
-                <CookieConsent />
                 <Toaster
                   position="bottom-right"
                   toastOptions={{
@@ -235,7 +242,7 @@ export default function App() {
                     <Route path="/google-auth-bridge" element={<GoogleAuthBridge/>}/>
                     <Route path="/platform-account/:token" element={<PlatformAccount/>}/>
 
-                    <Route path="/superadmin/login" element={<SuperAdminLogin/>}/>
+                    <Route path="/superadmin/login" element={<SuperAdminLoginRoute/>}/>
                     <Route path="/superadmin/*" element={<SuperAdminRoute><SuperAdminDashboard/></SuperAdminRoute>}/>
 
                     <Route path="/admin" element={<AdminRoute><AdminLayout/></AdminRoute>}>

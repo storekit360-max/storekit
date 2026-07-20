@@ -5,18 +5,25 @@ const { Notification } = require('../../models/index');
 const { requirePlatformPermission } = require('../../services/platformAuthorizationService');
 
 const router = express.Router();
+const TENANT_ADMIN_NOTIFICATION_LINK = /^\/admin(?:[/?#]|$)/i;
+const platformNotificationFilter = extra => ({
+  ...extra,
+  tenantId: null,
+  $nor: [{ link: TENANT_ADMIN_NOTIFICATION_LINK }],
+});
 
 // ── GET /superadmin/notifications — platform-level notifications (tenantId: null) ──
 router.get('/', requirePlatformPermission('notifications.view'), async (req, res, next) => {
   try {
     const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
     const [notifications, unreadCount] = await Promise.all([
-      Notification.find({ tenantId: null })
+      Notification.find(platformNotificationFilter())
         .sort({ createdAt: -1 })
         .limit(limit)
         .lean(),
-      Notification.countDocuments({ tenantId: null, isRead: false }),
+      Notification.countDocuments(platformNotificationFilter({ isRead: false })),
     ]);
+    res.set('Cache-Control', 'private, no-store');
     res.json({ notifications, unreadCount });
   } catch (error) { next(error); }
 });
@@ -24,7 +31,7 @@ router.get('/', requirePlatformPermission('notifications.view'), async (req, res
 // ── PUT /superadmin/notifications/read-all ──
 router.put('/read-all', requirePlatformPermission('notifications.view'), async (req, res, next) => {
   try {
-    await Notification.updateMany({ tenantId: null }, { isRead: true });
+    await Notification.updateMany(platformNotificationFilter(), { isRead: true });
     res.json({ success: true });
   } catch (error) { next(error); }
 });
@@ -33,7 +40,7 @@ router.put('/read-all', requirePlatformPermission('notifications.view'), async (
 router.put('/:id/read', requirePlatformPermission('notifications.view'), async (req, res, next) => {
   try {
     const notif = await Notification.findOneAndUpdate(
-      { _id: req.params.id, tenantId: null },
+      platformNotificationFilter({ _id: req.params.id }),
       { isRead: true },
       { new: true }
     );
@@ -45,7 +52,7 @@ router.put('/:id/read', requirePlatformPermission('notifications.view'), async (
 // ── DELETE /superadmin/notifications/clear-read ──
 router.delete('/clear-read', requirePlatformPermission('notifications.view'), async (req, res, next) => {
   try {
-    const result = await Notification.deleteMany({ tenantId: null, isRead: true });
+    const result = await Notification.deleteMany(platformNotificationFilter({ isRead: true }));
     res.json({ success: true, deleted: result.deletedCount });
   } catch (error) { next(error); }
 });
@@ -53,7 +60,7 @@ router.delete('/clear-read', requirePlatformPermission('notifications.view'), as
 // ── DELETE /superadmin/notifications/clear-all ──
 router.delete('/clear-all', requirePlatformPermission('notifications.view'), async (req, res, next) => {
   try {
-    const result = await Notification.deleteMany({ tenantId: null });
+    const result = await Notification.deleteMany(platformNotificationFilter());
     res.json({ success: true, deleted: result.deletedCount });
   } catch (error) { next(error); }
 });
