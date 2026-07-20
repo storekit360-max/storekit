@@ -2,12 +2,18 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const mongoose = require('mongoose');
 const {
   requiredTenantId,
   tenantFilterForRequest,
   disableSharedTenantCaching,
 } = require('../utils/tenantGuard');
-const { chooseRequestTenantId } = require('../middleware/tenantContext');
+const {
+  chooseRequestTenantId,
+  installTenantScope,
+  runWithTenant,
+  withoutTenantScope,
+} = require('../middleware/tenantContext');
 
 test('public tenant filters always include the resolved tenant', () => {
   const tenantA = tenantFilterForRequest({ tenantId: 'tenant-a' }, { isActive: true });
@@ -56,4 +62,26 @@ test('authenticated admin tenant overrides the shared storefront domain tenant',
     chooseRequestTenantId('shopzen-tenant', { role: 'customer', tenantId: 'other-tenant' }),
     'shopzen-tenant'
   );
+});
+
+test('platform records can explicitly bypass tenant injection', async () => {
+  const isolatedMongoose = new mongoose.Mongoose();
+  installTenantScope(isolatedMongoose);
+  const ScopedRecord = isolatedMongoose.model('TenantScopeBypassRecord', new isolatedMongoose.Schema({
+    tenantId: { type: isolatedMongoose.Schema.Types.ObjectId, default: null },
+  }));
+  const tenantId = new mongoose.Types.ObjectId();
+
+  await runWithTenant(tenantId, async () => {
+    const tenantRecord = new ScopedRecord({ tenantId: null });
+    await tenantRecord.validate();
+    assert.equal(String(tenantRecord.tenantId), String(tenantId));
+
+    const platformRecord = await withoutTenantScope(async () => {
+      const record = new ScopedRecord({ tenantId: null });
+      await record.validate();
+      return record;
+    });
+    assert.equal(platformRecord.tenantId, null);
+  });
 });

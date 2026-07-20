@@ -43,6 +43,14 @@ test('support records are tenant scoped and internal notes are distinct', () => 
   assert.equal(SupportMessage.schema.path('tenant').options.required, true);
 });
 
+test('tenant support actions create platform notifications outside tenant scope', () => {
+  const service = fs.readFileSync(path.join(__dirname, '../services/supportService.js'), 'utf8');
+  assert.match(service, /withoutTenantScope/);
+  assert.equal((service.match(/withoutTenantScope\(\(\) => Notification\.create/g) || []).length, 2);
+  assert.match(service, /type: 'support_ticket'/);
+  assert.match(service, /type: 'support_reply'/);
+});
+
 test('urgent SLA deadlines are stricter than normal deadlines', () => {
   const now = new Date('2026-01-01T00:00:00Z'); const urgent = deadlines('urgent', now); const normal = deadlines('normal', now);
   assert.ok(urgent.firstResponseDueAt < normal.firstResponseDueAt);
