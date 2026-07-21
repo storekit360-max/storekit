@@ -21,29 +21,23 @@ const effectivePrice = product => product?.isOnSale
 
 gsap.registerPlugin(ScrollTrigger);
 
-// AI-generated HTML preserves formatting with style attributes on h4 tags.
-// For pasted external HTML (from websites), strip style/class to prevent theme conflicts.
+// Render HTML descriptions properly. AI-generated HTML includes style attributes on h4 tags
+// for proper spacing. We preserve them as-is since they're designed for the store theme.
 function sanitizeHtml(html) {
   if (!html) return '';
   
-  // Check if this is AI-generated HTML (has h3 and h4 with style attributes)
-  const isAiGenerated = /<h3[^>]*>/.test(html) && /<h4[^>]*style=/.test(html);
-  
-  if (isAiGenerated) {
-    // AI-generated HTML: return as-is with proper formatting
-    return html;
-  }
-  
-  // For non-AI content, strip problematic attributes to prevent theme conflicts
+  // Check if this contains HTML tags - if so, render them properly
+  // Look for any HTML tag pattern
   const hasHtmlTags = /<[a-z][\s\S]*>/i.test(html);
+  
   if (!hasHtmlTags) {
+    // Plain text - return as-is (no HTML to render)
     return html;
   }
   
-  return html
-    .replace(/\sstyle="[^"]*"/gi, '')
-    .replace(/\sclass="[^"]*"/gi, '')
-    .replace(/\sbis_skin_checked="[^"]*"/gi, '');
+  // HTML detected - preserve it for proper rendering
+  // The AI generates clean HTML with proper structure, so we keep it as-is
+  return html;
 }
 
 const Stars = ({ rating, count, interactive, selected, onSelect }) => (
