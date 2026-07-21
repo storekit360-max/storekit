@@ -228,7 +228,7 @@ function GoogleSignInButton({ onSuccess, disabled, label = 'Continue with Google
 // ─── Login Page ────────────────────────────────────────────────────────────────
 export function Login() {
   const { login, loginWithGoogle } = useAuth();
-  const { settings } = useTheme();
+  const { settings, visualDark } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname
@@ -259,14 +259,14 @@ export function Login() {
   }, [loginWithGoogle, navigate, from]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12" style={{ background: 'var(--body-bg)' }}>
+    <div className={`auth-theme ${visualDark ? 'dark-mode' : ''} min-h-screen flex items-center justify-center px-3 sm:px-4 py-7 sm:py-12`} style={{ background: 'var(--body-bg)', color:'var(--text-primary)' }}>
       <div className="w-full max-w-md fade-in">
         <div className="text-center mb-8">
           <Logo settings={settings} />
           <h1 className="text-3xl font-bold text-gray-900" style={{ fontFamily: 'var(--font-display)' }}>Welcome back</h1>
           <p className="text-gray-500 mt-1 text-sm">Sign in to continue shopping</p>
         </div>
-        <div className="rounded-2xl border border-gray-100 shadow-xl p-8" style={{ background: 'var(--card-bg)' }}>
+        <div className="rounded-2xl border border-gray-100 shadow-xl p-5 sm:p-8" style={{ background: 'var(--card-bg)', color:'var(--text-on-card)' }}>
           <GoogleSignInButton onSuccess={handleGoogleSuccess} disabled={loading} />
           <Divider />
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -321,7 +321,7 @@ export function Login() {
 // ─── Register Page ─────────────────────────────────────────────────────────────
 export function Register() {
   const { register, loginWithGoogle } = useAuth();
-  const { settings } = useTheme();
+  const { settings, visualDark } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const prefill = location.state?.prefill || {};
@@ -378,8 +378,8 @@ export function Register() {
   }, [loginWithGoogle, navigate, fromCheckout]);
 
   if (newUserCoupon) return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: 'var(--body-bg)' }}>
-      <div className="rounded-2xl border border-gray-100 shadow-xl p-8 max-w-md w-full text-center bounce-in" style={{ background: 'var(--card-bg)' }}>
+    <div className={`auth-theme ${visualDark ? 'dark-mode' : ''} min-h-screen flex items-center justify-center px-3 sm:px-4 py-6`} style={{ background: 'var(--body-bg)', color:'var(--text-primary)' }}>
+      <div className="rounded-2xl border border-gray-100 shadow-xl p-5 sm:p-8 max-w-md w-full text-center bounce-in" style={{ background: 'var(--card-bg)', color:'var(--text-on-card)' }}>
         <div className="text-6xl mb-4">🎉</div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2" style={{ fontFamily: 'var(--font-display)' }}>
           Welcome to {settings?.storeName || 'StoreKit'}!
@@ -400,7 +400,7 @@ export function Register() {
   );
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12" style={{ background: 'var(--body-bg)' }}>
+    <div className={`auth-theme ${visualDark ? 'dark-mode' : ''} min-h-screen flex items-center justify-center px-3 sm:px-4 py-7 sm:py-12`} style={{ background: 'var(--body-bg)', color:'var(--text-primary)' }}>
       <div className="w-full max-w-md fade-in">
         <div className="text-center mb-8">
           <Logo settings={settings} />
@@ -414,12 +414,12 @@ export function Register() {
           )}
         </div>
 
-        <div className="rounded-2xl border border-gray-100 shadow-xl p-8" style={{ background: 'var(--card-bg)' }}>
+        <div className="rounded-2xl border border-gray-100 shadow-xl p-5 sm:p-8" style={{ background: 'var(--card-bg)', color:'var(--text-on-card)' }}>
           <GoogleSignInButton onSuccess={handleGoogleSuccess} disabled={loading} label="Sign up with Google" />
           <Divider />
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="form-label">First Name *</label>
                 <input value={form.firstName} onChange={e => setForm(p => ({ ...p, firstName: e.target.value }))} required className="form-input" placeholder="John" />

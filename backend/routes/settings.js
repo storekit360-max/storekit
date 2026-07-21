@@ -59,6 +59,24 @@ function validateMerchantSeoSettings(settings = {}) {
   }
 }
 
+function normalizeBusinessWelcome(settings = {}) {
+  settings.businessWelcomeEyebrow = String(settings.businessWelcomeEyebrow || '').trim().slice(0, 80);
+  settings.businessWelcomeTitle = String(settings.businessWelcomeTitle || '').trim().slice(0, 140);
+  settings.businessWelcomeSubtitle = String(settings.businessWelcomeSubtitle || '').trim().slice(0, 500);
+  const rows = Array.isArray(settings.businessWelcomeStores) ? settings.businessWelcomeStores : [];
+  settings.businessWelcomeStores = rows.slice(0, 8).map(row => {
+    const rawUrl = String(row?.url || '').trim().slice(0, 500);
+    const rawImage = String(row?.imageUrl || '').trim().slice(0, 1000);
+    return {
+      name: String(row?.name || '').trim().slice(0, 100),
+      description: String(row?.description || '').trim().slice(0, 300),
+      buttonLabel: String(row?.buttonLabel || '').trim().slice(0, 50),
+      url: /^(https?:\/\/|\/)/i.test(rawUrl) ? rawUrl : '',
+      imageUrl: /^https?:\/\//i.test(rawImage) ? rawImage : '',
+    };
+  }).filter(row => row.name || row.url);
+}
+
 function isLocalDomain(domain) {
   return ['localhost', '127.0.0.1'].includes(normalizeDomain(domain));
 }
@@ -228,7 +246,9 @@ router.get('/', async (req, res) => {
 
 router.put('/', adminAuth, async (req, res) => {
   try {
-    const entries = Object.entries(req.body || {});
+    const incoming = { ...(req.body || {}) };
+    if (Object.keys(incoming).some(key => key.startsWith('businessWelcome'))) normalizeBusinessWelcome(incoming);
+    const entries = Object.entries(incoming);
     if (entries.length === 0) return res.json({ success: true });
 
     const tenant = await findTenantFromRequest(req);
@@ -258,6 +278,7 @@ router.put('/', adminAuth, async (req, res) => {
       }
 
       validateMerchantSeoSettings(nextSettings);
+      normalizeBusinessWelcome(nextSettings);
 
       tenant.settings = nextSettings;
       tenant.theme = normalizeTheme(nextTheme);

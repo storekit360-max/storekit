@@ -405,6 +405,12 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
 }
 .customer-storefront.dark-mode main,
 .customer-storefront.dark-mode .storefront-template-home { background-color: var(--body-bg) !important; }
+.auth-theme.dark-mode .form-label,
+.auth-theme.dark-mode h1,
+.auth-theme.dark-mode h2,
+.auth-theme.dark-mode .text-gray-900 { color: var(--text-on-card) !important; }
+.auth-theme.dark-mode .text-gray-500,
+.auth-theme.dark-mode .text-gray-400 { color: var(--text-muted-on-card) !important; }
 /* These labels were hardcoded to a near-black color and stayed unreadable
    whenever the surrounding card/body background turned dark. */
 .dark-mode .breadcrumb-current,

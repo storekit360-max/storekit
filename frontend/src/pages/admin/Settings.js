@@ -123,6 +123,9 @@ export default function AdminSettings() {
     reviewsRequireApproval:true, allowGuestCheckout:true, maintenanceMode:false,
     facebookUrl:'', instagramUrl:'', twitterUrl:'', whatsappNumber:'', youtubeUrl:'', linkedinUrl:'',
     businessType:'ecommerce', enableNewsletter:true, enableWishlist:true,
+    businessWelcomeEnabled:false, businessWelcomeEyebrow:'One brand · Multiple businesses',
+    businessWelcomeTitle:'', businessWelcomeSubtitle:'Choose the business you would like to visit.',
+    businessWelcomeStores:[],
     enableReviews:true, enableGiftCards:true, enableReturns:true, maxReturnDays:7,
     taxEnabled:false, taxRate:0, taxLabel:'VAT',
     emailNotif_order_placed_customer:true, emailNotif_order_placed_admin:true,
@@ -444,6 +447,31 @@ export default function AdminSettings() {
             {tab === 'business' && (
               <div className="space-y-4">
                 <h3 className="font-semibold text-gray-900 mb-4">Business Configuration</h3>
+                <div className="rounded-2xl border border-gray-200 p-4 sm:p-5 space-y-4">
+                  <Toggle label="Enable multi-store welcome screen" desc="Show a configurable business selector before customers enter a store" value={!!settings.businessWelcomeEnabled} onChange={()=>setSettings(p=>({...p,businessWelcomeEnabled:!p.businessWelcomeEnabled}))}/>
+                  {settings.businessWelcomeEnabled && <>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <F label="Small heading" value={settings.businessWelcomeEyebrow||''} onChange={e=>setSettings(p=>({...p,businessWelcomeEyebrow:e.target.value}))} placeholder="One brand · Multiple businesses"/>
+                      <F label="Welcome title" value={settings.businessWelcomeTitle||''} onChange={e=>setSettings(p=>({...p,businessWelcomeTitle:e.target.value}))} placeholder="Welcome to our businesses"/>
+                    </div>
+                    <div><label className="form-label">Welcome description</label><textarea rows={3} className="form-input resize-none" value={settings.businessWelcomeSubtitle||''} onChange={e=>setSettings(p=>({...p,businessWelcomeSubtitle:e.target.value}))} placeholder="Choose the business you would like to visit."/></div>
+                    <div className="border-t pt-4">
+                      <div className="flex items-center justify-between gap-3 mb-3"><div><p className="text-sm font-semibold text-gray-800">Business destinations</p><p className="text-xs text-gray-500">Add this store and any separate store domains or paths.</p></div><button type="button" className="btn-primary text-xs px-3 py-2" onClick={()=>setSettings(p=>({...p,businessWelcomeStores:[...(Array.isArray(p.businessWelcomeStores)?p.businessWelcomeStores:[]),{name:'',description:'',url:'',imageUrl:'',buttonLabel:'Visit store'}]}))}>+ Add business</button></div>
+                      <div className="space-y-3">
+                        {(Array.isArray(settings.businessWelcomeStores)?settings.businessWelcomeStores:[]).map((store,index)=><div key={index} className="rounded-xl bg-gray-50 border border-gray-200 p-4">
+                          <div className="flex justify-between items-center mb-3"><p className="text-xs font-bold text-gray-600">Business {index+1}</p><button type="button" className="text-xs font-semibold text-red-500" onClick={()=>setSettings(p=>({...p,businessWelcomeStores:p.businessWelcomeStores.filter((_,i)=>i!==index)}))}>Remove</button></div>
+                          <div className="grid sm:grid-cols-2 gap-3">
+                            <F label="Business name" value={store.name||''} onChange={e=>setSettings(p=>({...p,businessWelcomeStores:p.businessWelcomeStores.map((s,i)=>i===index?{...s,name:e.target.value}:s)}))} placeholder="Fashion Store"/>
+                            <F label="Destination URL" value={store.url||''} onChange={e=>setSettings(p=>({...p,businessWelcomeStores:p.businessWelcomeStores.map((s,i)=>i===index?{...s,url:e.target.value}:s)}))} placeholder="https://store.example.com or /shop"/>
+                            <F label="Card description" value={store.description||''} onChange={e=>setSettings(p=>({...p,businessWelcomeStores:p.businessWelcomeStores.map((s,i)=>i===index?{...s,description:e.target.value}:s)}))} placeholder="Clothing and accessories"/>
+                            <F label="Button text" value={store.buttonLabel||''} onChange={e=>setSettings(p=>({...p,businessWelcomeStores:p.businessWelcomeStores.map((s,i)=>i===index?{...s,buttonLabel:e.target.value}:s)}))} placeholder="Visit store"/>
+                            <div className="sm:col-span-2"><F label="Card image URL (optional)" value={store.imageUrl||''} onChange={e=>setSettings(p=>({...p,businessWelcomeStores:p.businessWelcomeStores.map((s,i)=>i===index?{...s,imageUrl:e.target.value}:s)}))} placeholder="https://..."/></div>
+                          </div>
+                        </div>)}
+                      </div>
+                    </div>
+                  </>}
+                </div>
                 <div>
                   <label className="form-label">Business Type</label>
                   <select value={settings.businessType||'ecommerce'} onChange={e=>setSettings(p=>({...p,businessType:e.target.value}))} className="form-input">

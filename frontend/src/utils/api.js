@@ -126,11 +126,18 @@ API.interceptors.response.use(
     return res;
   },
   err => {
-    if (err.response?.status === 401 && !err.config?.suppressAuthRedirect) {
+    const currentPath = typeof window !== 'undefined' ? (window.location.pathname || '') : '';
+    const protectedPage = /^\/(admin|superadmin|account|my-orders|returns)(\/|$)/.test(currentPath);
+    // Public product/category/shop pages can make optional authenticated calls
+    // (wishlist, review eligibility, etc.). An expired token must not turn a
+    // public product link into a login redirect.
+    if (err.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      const path = window.location.pathname || '';
-      window.location.href = path.startsWith('/superadmin') ? '/superadmin/login' : '/login';
+      try { window.dispatchEvent(new CustomEvent('storekit:auth-expired')); } catch (_) {}
+    }
+    if (err.response?.status === 401 && !err.config?.suppressAuthRedirect && (err.config?.authRedirect === true || protectedPage)) {
+      window.location.href = currentPath.startsWith('/superadmin') ? '/superadmin/login' : '/login';
     }
     return Promise.reject(err);
   }

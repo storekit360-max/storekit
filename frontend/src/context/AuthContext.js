@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import API from '../utils/api';
 
 const AuthContext = createContext();
@@ -7,6 +7,12 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
     try { return JSON.parse(localStorage.getItem('user')); } catch { return null; }
   });
+
+  useEffect(() => {
+    const expire = () => setUser(null);
+    window.addEventListener('storekit:auth-expired', expire);
+    return () => window.removeEventListener('storekit:auth-expired', expire);
+  }, []);
 
   const login = async (email, password) => {
     const { data } = await API.post('/auth/login', { email, password });

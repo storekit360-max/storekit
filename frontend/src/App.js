@@ -4,7 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { SeasonalProvider } from './context/SeasonalContext';
-import { ThemeProvider } from './context/ThemeContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { AnimationProvider } from './context/AnimationContext';
 import { ScrollProgressBar, FloatingShapes } from './components/Cinematic';
 import AnalyticsBootstrap from './hooks/useAnalytics';
@@ -16,6 +16,7 @@ import AnalyticsBootstrap from './hooks/useAnalytics';
 // — the shell and other routes stay alive. ErrorBoundary in index.js catches
 // chunk-load failures and shows a "Reload" prompt instead of a white screen.
 const Home           = lazy(() => import('./pages/customer/Home'));
+const WelcomeLanding = lazy(() => import('./pages/customer/WelcomeLanding'));
 const Shop           = lazy(() => import('./pages/customer/Shop'));
 const CategoryPage   = lazy(() => import('./pages/customer/CategoryPage'));
 const BrandPage      = lazy(() => import('./pages/customer/BrandPage'));
@@ -38,6 +39,11 @@ const CustomerLayout = lazy(() => import('./pages/customer/CustomerLayout'));
 function LegacyShopCategoryRedirect() {
   const { category } = useParams();
   return <Navigate to={`/category/${category}`} replace />;
+}
+
+function StorefrontEntry() {
+  const { settings } = useTheme();
+  return settings?.businessWelcomeEnabled ? <WelcomeLanding/> : <Home/>;
 }
 
 // ─── Lazy-loaded Admin Pages ──────────────────────────────────────────────────
@@ -217,7 +223,7 @@ export default function App() {
                 <Suspense fallback={null}>
                   <Routes>
                     <Route element={<CustomerLayout/>}>
-                      <Route path="/"                    element={<Home/>}/>
+                      <Route path="/"                    element={<StorefrontEntry/>}/>
                       <Route path="/shop"                element={<Shop/>}/>
                       <Route path="/shop/:category"      element={<LegacyShopCategoryRedirect/>}/>
                       <Route path="/category/:slug"      element={<CategoryPage/>}/>
