@@ -37,6 +37,22 @@ function isLocalDomain(domain) {
   return ['localhost', '127.0.0.1'].includes(normalizeDomain(domain));
 }
 
+// Platform domains that should NOT be resolved to any tenant.
+// These are reserved for platform/superadmin operations and support.
+// Configure via PLATFORM_DOMAINS env var (comma-separated), e.g.:
+// PLATFORM_DOMAINS=storekit-ecru.vercel.app,storekit.lk
+function getPlatformDomains() {
+  const fromEnv = String(process.env.PLATFORM_DOMAINS || '').split(',').map(normalizeDomain).filter(Boolean);
+  // Default platform domains (can be extended in future backend deployments)
+  const defaults = ['storekit-ecru.vercel.app'];
+  return Array.from(new Set([...defaults, ...fromEnv]));
+}
+
+function isPlatformDomain(domain) {
+  const normalized = normalizeDomain(domain);
+  return getPlatformDomains().includes(normalized);
+}
+
 function isTenantAvailable(tenant) {
   if (!tenant) return false;
   const subscriptionStatus = tenant.subscription?.status || tenant.billing?.subscriptionStatus;
@@ -85,6 +101,20 @@ async function resolveTenant(req, res, next) {
 
 async function optionalTenant(req, _res, next) {
   try {
+    // Platform domains should NOT resolve to any tenant - they are for superadmin operations.
+    // Skip tenant resolution for auth and superadmin routes on platform domains.
+    const path = req.originalUrl || req.path || '';
+    const isAuthRoute = path.startsWith('/api/auth');
+    const isSuperadminRoute = path.startsWith('/api/superadmin');
+    const firstDomain = getHeaderDomainCandidates(req)[0];
+
+    if (isAuthRoute || isSuperadminRoute) {
+      if (firstDomain && isPlatformDomain(firstDomain)) {
+        // This is a platform domain accessing auth/superadmin - skip tenant resolution entirely
+        return next();
+      }
+    }
+
     const tenant = await findTenantByDomain(req, { includeInactive: true });
     if (tenant && isTenantAvailable(tenant)) {
       req.tenant = tenant;
@@ -112,7 +142,13 @@ function blockUnavailableStore(req, res, next) {
     path.startsWith('/api/billing') ||
     path.startsWith('/api/superadmin');
 
+  // Platform domains should never be blocked for accessing their platform routes
+  const firstDomain = getHeaderDomainCandidates(req)[0];
+  const isPlatformDomainRequest = firstDomain && isPlatformDomain(firstDomain);
+
   if (isAdminOrBilling) return next();
+
+  if (isPlatformDomainRequest) return next();
 
   if (req.storeUnavailable) {
     return res.status(503).json({
@@ -157,4 +193,7 @@ module.exports = {
   normalizeDomain,
   getHeaderDomainCandidates,
   isTenantAvailable,
+  isPlatformDomain,
+  getPlatformDomains,
+  isLocalDomain,
 };

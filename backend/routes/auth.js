@@ -96,6 +96,14 @@ const DUMMY_HASH = '$2a$12$dummyhashtopreventtimingattacks.onloginendpoint.padde
 async function resolveTenantFromRequest(req) {
   const candidates = getHeaderDomainCandidates(req);
   if (!candidates.length) return null;
+
+  // Check if any of the candidate domains is a platform domain (should not resolve to any tenant)
+  const { isPlatformDomain } = require('../middleware/tenant');
+  if (candidates.some(d => isPlatformDomain(d))) {
+    // Platform domain - no tenant resolution needed
+    return null;
+  }
+
   return Tenant.findOne({
     status: 'active',
     domains: { $elemMatch: { domain: { $in: candidates }, active: true } },
@@ -125,6 +133,18 @@ async function getGoogleReturnStore(origin) {
   if (!parsedOrigin) return null;
   const parsed = new URL(parsedOrigin);
   const domain = normalizeDomain(parsed.hostname);
+
+  // Platform domains should return null (not found) so they fall through to the
+  // platformOrigin check below, allowing the shared frontend to access Google config.
+  const { isPlatformDomain } = require('../middleware/tenant');
+  if (isPlatformDomain(domain)) {
+    // This is the platform domain - allow Google config access
+    const platformOrigin = parseWebOrigin(process.env.FRONTEND_URL);
+    if (platformOrigin) {
+      return { storeName: 'Online Store', logoUrl: '' };
+    }
+    return null;
+  }
 
   const tenant = await Tenant.findOne({
     status: 'active',
