@@ -373,12 +373,40 @@ export const applyTheme = (settings) => {
       (hash, char) => ((hash * 31) + char.charCodeAt(0)) >>> 0,
       0
     );
-    const faviconHref = `/api/settings/favicon.png?v=${faviconRevision}`;
-    ['icon', 'shortcut icon', 'apple-touch-icon'].forEach(rel => {
-      let fav = document.querySelector(`link[rel="${rel}"]`);
-      if (!fav) { fav = document.createElement('link'); fav.rel = rel; document.head.appendChild(fav); }
-      fav.href = faviconHref;
+    // A dedicated favicon is already browser-ready and should not depend on a
+    // second API request. Store logos use the backend's square PNG conversion.
+    const separator = String(faviconSource).includes('?') ? '&' : '?';
+    const faviconHref = settings?.faviconUrl
+      ? `${faviconSource}${separator}v=${faviconRevision}`
+      : `/api/settings/favicon.png?v=${faviconRevision}`;
+
+    // index.html contains several size-specific icon declarations. Updating
+    // only querySelector's first match lets the browser choose a later stale
+    // 16px/32px icon, so update every declared tab icon.
+    const tabIcons = Array.from(document.querySelectorAll(
+      'link[rel="icon"], link[rel="shortcut icon"]'
+    ));
+    if (!tabIcons.length) {
+      const icon = document.createElement('link');
+      icon.rel = 'icon';
+      document.head.appendChild(icon);
+      tabIcons.push(icon);
+    }
+    tabIcons.forEach(icon => {
+      icon.href = faviconHref;
+      icon.removeAttribute('sizes');
+      icon.removeAttribute('type');
     });
+
+    let appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
+    if (!appleIcon) {
+      appleIcon = document.createElement('link');
+      appleIcon.rel = 'apple-touch-icon';
+      document.head.appendChild(appleIcon);
+    }
+    appleIcon.href = settings?.faviconUrl
+      ? faviconHref
+      : `/api/settings/apple-touch-icon.png?v=${faviconRevision}`;
   }
 
   // Apply store name as page title prefix
