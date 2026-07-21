@@ -384,6 +384,27 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
 .dark-mode input::placeholder, .dark-mode textarea::placeholder {
   color: color-mix(in srgb, var(--text-secondary) 70%, transparent) !important;
 }
+/* A dark selection owns the complete storefront chrome. These declarations
+   intentionally beat the header's inline light defaults. */
+.customer-storefront.dark-mode > header,
+.customer-storefront.dark-mode > header.header-scrolled {
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent) !important;
+  color: var(--text-primary) !important;
+  border-bottom-color: var(--border-color) !important;
+  box-shadow: 0 8px 30px rgba(0,0,0,.28) !important;
+}
+.customer-storefront.dark-mode .sz-logo-text,
+.customer-storefront.dark-mode .sz-nav3d,
+.customer-storefront.dark-mode .sz-action-icon { color: var(--text-secondary) !important; }
+.customer-storefront.dark-mode .sz-nav3d:hover,
+.customer-storefront.dark-mode .sz-action-icon:hover { color: var(--color-primary-light) !important; }
+.customer-storefront.dark-mode .mobile-bottom-nav {
+  background: color-mix(in srgb, var(--color-surface) 94%, transparent) !important;
+  color: var(--text-secondary) !important;
+  border-color: var(--border-color) !important;
+}
+.customer-storefront.dark-mode main,
+.customer-storefront.dark-mode .storefront-template-home { background-color: var(--body-bg) !important; }
 /* These labels were hardcoded to a near-black color and stayed unreadable
    whenever the surrounding card/body background turned dark. */
 .dark-mode .breadcrumb-current,

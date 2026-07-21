@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { THEMES, THEME_CATEGORIES, FONTS, STORE_TEMPLATES, TEMPLATE_CATEGORIES, applyTheme, writeCache } from '../../context/ThemeContext';
+import { THEMES, THEME_CATEGORIES, FONTS, STORE_TEMPLATES, TEMPLATE_CATEGORIES, DARK_STORE_TEMPLATES, applyTheme, writeCache } from '../../context/ThemeContext';
 import { useTheme } from '../../context/ThemeContext';
 import StoreLoader, { LOADER_STYLES } from '../../components/StoreLoader';
 import API from '../../utils/api';
@@ -44,6 +44,18 @@ const TEMPLATE_PREVIEW = {
   sriLanka:     { colors:['#b91c1c','#facc15'], hero:'flag',     grid:'local',    radius:14 },
   wholesale:    { colors:['#475569','#fbbf24'], hero:'deal',     grid:'bulk',     radius:5 },
   startup:      { colors:['#7c3aed','#06b6d4'], hero:'saas',     grid:'cards',    radius:16 },
+  carbon:       { colors:['#05070a','#38bdf8'], hero:'tech', grid:'compact', radius:8, dark:true },
+  auroraDark:   { colors:['#07120f','#34d399'], hero:'neon', grid:'glow', radius:24, dark:true },
+  graphite:     { colors:['#111318','#94a3b8'], hero:'bar', grid:'minimal', radius:4, dark:true },
+  eclipse:      { colors:['#070707','#f97316'], hero:'gem', grid:'circles', radius:18, dark:true },
+  terminal:     { colors:['#020b05','#22c55e'], hero:'table', grid:'dense', radius:2, dark:true },
+  deepOcean:    { colors:['#020b1c','#06b6d4'], hero:'neon', grid:'cards', radius:18, dark:true },
+  burgundyNight:{ colors:['#14070d','#f43f5e'], hero:'editorial', grid:'tall', radius:22, dark:true },
+  purpleVoid:   { colors:['#0c0317','#a855f7'], hero:'neon', grid:'glow', radius:20, dark:true },
+  copperNight:  { colors:['#120b07','#d97706'], hero:'deal', grid:'wide', radius:12, dark:true },
+  emeraldNight: { colors:['#02100b','#10b981'], hero:'leaf', grid:'natural', radius:22, dark:true },
+  blueSteel:    { colors:['#0a1019','#60a5fa'], hero:'tech', grid:'compact', radius:10, dark:true },
+  crimsonShadow:{ colors:['#0d0507','#dc2626'], hero:'diagonal', grid:'stripes', radius:8, dark:true },
 };
 
 const TemplateCard = ({ id, template, active, onSelect }) => {
@@ -248,6 +260,21 @@ export default function ThemeBuilder() {
       accent: t.accent,
     };
     setCustomColors(newColors);
+    if (t.category === 'dark') {
+      const nextSurfaces = {
+        body: t.darkBodyBg || t.bodyBg || '#070b12',
+        card: t.darkCardBg || t.cardBg || '#111827',
+        surface: t.surface || '#182235',
+      };
+      setSurfaceColors(nextSurfaces);
+      setDarkMode(true);
+      applyTheme({ ...settings, theme:id, fontStyle:selectedFont, fontFamily:selectedFont,
+        primaryColor:newColors.primary, primaryDarkColor:newColors.primaryDark,
+        primaryLightColor:newColors.primaryLight, secondaryColor:newColors.accent,
+        darkMode:true, storeTemplate:selectedTemplate, bodyBgColor:nextSurfaces.body,
+        cardBgColor:nextSurfaces.card, surfaceColor:nextSurfaces.surface });
+      return;
+    }
     applyPreview(id, selectedFont, newColors, darkMode);
   };
 
@@ -259,6 +286,17 @@ export default function ThemeBuilder() {
 
   const handleTemplateSelect = (id) => {
     setSelectedTemplate(id);
+    if (DARK_STORE_TEMPLATES.has(id)) {
+      const nextSurfaces = { body:'#070b12', card:'#111827', surface:'#182235' };
+      setSurfaceColors(nextSurfaces);
+      setDarkMode(true);
+      applyTheme({ ...settings, theme:selectedTheme, fontStyle:selectedFont, fontFamily:selectedFont,
+        primaryColor:customColors.primary, primaryDarkColor:customColors.primaryDark,
+        primaryLightColor:customColors.primaryLight, secondaryColor:customColors.accent,
+        darkMode:true, storeTemplate:id, bodyBgColor:nextSurfaces.body,
+        cardBgColor:nextSurfaces.card, surfaceColor:nextSurfaces.surface });
+      return;
+    }
     applyPreview(selectedTheme, selectedFont, customColors, darkMode, id);
   };
 

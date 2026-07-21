@@ -128,6 +128,18 @@ export const STORE_TEMPLATES = {
   masonry:       { name: 'Masonry Market', category: 'modern', description: 'Varied editorial tiles and staggered catalogue rhythm.' },
   capsule:       { name: 'Capsule Collection', category: 'minimal', description: 'Ultra-focused limited collection with oversized product stages.' },
   nightMarket:   { name: 'Night Market', category: 'local', description: 'Festival-like dark market with glowing stalls and compact browsing.' },
+  carbon:        { name: 'Carbon Commerce', category: 'dark', description: 'Layered carbon panels with crisp electric-blue actions.' },
+  auroraDark:    { name: 'Aurora Night', category: 'dark', description: 'Deep polar sky with luminous green and violet highlights.' },
+  graphite:      { name: 'Graphite Studio', category: 'dark', description: 'Refined charcoal storefront with quiet silver details.' },
+  eclipse:       { name: 'Solar Eclipse', category: 'dark', description: 'Near-black canvas with warm solar-orange accents.' },
+  terminal:      { name: 'Terminal Shop', category: 'dark', description: 'Developer-inspired dark catalogue with terminal-green signals.' },
+  deepOcean:     { name: 'Deep Ocean', category: 'dark', description: 'Abyss-blue surfaces with bright cyan navigation and actions.' },
+  burgundyNight: { name: 'Burgundy Night', category: 'dark', description: 'Rich wine-black boutique styling with rose highlights.' },
+  purpleVoid:    { name: 'Purple Void', category: 'dark', description: 'Deep violet atmosphere with luminous lavender controls.' },
+  copperNight:   { name: 'Copper Night', category: 'dark', description: 'Dark artisan retail with warm metallic copper details.' },
+  emeraldNight:  { name: 'Emerald Night', category: 'dark', description: 'Black-green luxury surfaces with vivid emerald actions.' },
+  blueSteel:     { name: 'Blue Steel', category: 'dark', description: 'Professional steel-blue dark commerce interface.' },
+  crimsonShadow: { name: 'Crimson Shadow', category: 'dark', description: 'Dramatic black-and-crimson storefront for bold brands.' },
 };
 
 export const TEMPLATE_CATEGORIES = {
@@ -136,7 +148,7 @@ export const TEMPLATE_CATEGORIES = {
   premium:      { label: 'Premium', templates: ['luxury','jewelry','premiumApple','zen','wedding','photography','auction'] },
   professional: { label: 'Professional', templates: ['pharmacy','b2b','wholesale','industrial','academy','medical'] },
   minimal:      { label: 'Minimal', templates: ['minimal','books','nordic','editorialMono','capsule'] },
-  dark:         { label: 'Dark', templates: ['neon','automotive','noir','space','gaming'] },
+  dark:         { label: 'Dark', templates: ['neon','automotive','noir','space','gaming','carbon','auroraDark','graphite','eclipse','terminal','deepOcean','burgundyNight','purpleVoid','copperNight','emeraldNight','blueSteel','crimsonShadow'] },
   local:        { label: 'Local', templates: ['sriLanka','startup','nightMarket'] },
   modern:       { label: 'Experimental', templates: ['brutalist','glass','creator','masonry'] },
   b2b:          { label: 'Bulk Commerce', templates: ['warehouse'] },
@@ -231,14 +243,29 @@ const templateMetrics = {
   masonry:      { radius:'12px', shadow:'0 20px 45px rgba(15,23,42,.13)', gap:'1rem' },
   capsule:      { radius:'0px', shadow:'none', gap:'6rem' },
   nightMarket:  { radius:'16px 4px', shadow:'0 0 25px rgba(250,204,21,.22)', gap:'.8rem' },
+  carbon:       { radius:'8px', shadow:'0 18px 45px rgba(0,0,0,.48)', gap:'1rem' },
+  auroraDark:   { radius:'24px', shadow:'0 0 35px rgba(52,211,153,.18)', gap:'1.4rem' },
+  graphite:     { radius:'4px', shadow:'0 20px 55px rgba(0,0,0,.42)', gap:'1.6rem' },
+  eclipse:      { radius:'50% 8px 8px', shadow:'0 0 30px rgba(249,115,22,.18)', gap:'1.5rem' },
+  terminal:     { radius:'2px', shadow:'4px 4px 0 rgba(34,197,94,.25)', gap:'.8rem' },
+  deepOcean:    { radius:'18px 4px', shadow:'0 18px 55px rgba(6,182,212,.18)', gap:'1.2rem' },
+  burgundyNight:{ radius:'28px 6px', shadow:'0 22px 60px rgba(190,24,93,.18)', gap:'1.5rem' },
+  purpleVoid:   { radius:'20px', shadow:'0 0 38px rgba(168,85,247,.2)', gap:'1.1rem' },
+  copperNight:  { radius:'5px 22px', shadow:'6px 6px 0 rgba(180,83,9,.22)', gap:'1.4rem' },
+  emeraldNight: { radius:'3px 26px', shadow:'0 22px 65px rgba(16,185,129,.16)', gap:'1.3rem' },
+  blueSteel:    { radius:'10px', shadow:'0 16px 40px rgba(2,6,23,.5)', gap:'.9rem' },
+  crimsonShadow:{ radius:'0 20px', shadow:'0 20px 60px rgba(220,38,38,.18)', gap:'1rem' },
 };
+
+export const DARK_STORE_TEMPLATES = new Set(TEMPLATE_CATEGORIES.dark.templates);
 
 /* ── Core applyTheme ─────────────────────────────────────────────────── */
 export const applyTheme = (settings) => {
   const root = document.documentElement;
   const key  = settings?.theme || 'default';
   const t    = THEMES[key] || THEMES.default;
-  const isDark = settings?.darkMode === true;
+  const templateKey = settings?.storeTemplate || settings?.template || settings?.layoutTemplate || 'classic';
+  const isDark = settings?.darkMode === true || DARK_STORE_TEMPLATES.has(templateKey);
 
   const primary      = settings?.primaryColor      || t.primary;
   const primaryDark  = settings?.primaryDarkColor  || t.primaryDark;
@@ -315,7 +342,6 @@ export const applyTheme = (settings) => {
     document.body.style.removeProperty('color');
   }
 
-  const templateKey = settings?.storeTemplate || settings?.template || settings?.layoutTemplate || 'classic';
   const safeTemplate = STORE_TEMPLATES[templateKey] ? templateKey : 'classic';
   root.setAttribute('data-store-template', safeTemplate);
   root.style.setProperty('--template-card-radius', templateMetrics[safeTemplate]?.radius || '20px');
