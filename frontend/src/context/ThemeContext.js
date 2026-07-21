@@ -545,13 +545,16 @@ export const ThemeProvider = ({ children }) => {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  const setDarkMode = useCallback((val) => {
+  const setDarkMode = useCallback((val, overrides = {}) => {
     setSettings(prev => {
-      const updated = { ...(prev || {}), darkMode: val };
+      // Theme Builder may switch a template/palette and dark mode in one user
+      // action. Merge those values atomically; otherwise the settings sync
+      // effect observes the old template and immediately selects it again.
+      const updated = { ...(prev || {}), ...overrides, darkMode: val };
       const result = applyTheme(updated);
       if (result) setVisualDark(result.visualDark);
       writeCache(updated);
-      API.put('/settings', updated).catch(() => {});
+      API.put('/settings', { ...overrides, darkMode: val }).catch(() => {});
       return updated;
     });
     setDarkModeState(val);

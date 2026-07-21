@@ -267,12 +267,13 @@ export default function ThemeBuilder() {
         surface: t.surface || '#182235',
       };
       setSurfaceColors(nextSurfaces);
-      setDarkMode(true);
-      applyTheme({ ...settings, theme:id, fontStyle:selectedFont, fontFamily:selectedFont,
+      const nextTheme = { theme:id, fontStyle:selectedFont, fontFamily:selectedFont,
         primaryColor:newColors.primary, primaryDarkColor:newColors.primaryDark,
         primaryLightColor:newColors.primaryLight, secondaryColor:newColors.accent,
         darkMode:true, storeTemplate:selectedTemplate, bodyBgColor:nextSurfaces.body,
-        cardBgColor:nextSurfaces.card, surfaceColor:nextSurfaces.surface });
+        cardBgColor:nextSurfaces.card, surfaceColor:nextSurfaces.surface };
+      setDarkMode(true, nextTheme);
+      applyTheme({ ...settings, ...nextTheme });
       return;
     }
     applyPreview(id, selectedFont, newColors, darkMode);
@@ -289,12 +290,13 @@ export default function ThemeBuilder() {
     if (DARK_STORE_TEMPLATES.has(id)) {
       const nextSurfaces = { body:'#070b12', card:'#111827', surface:'#182235' };
       setSurfaceColors(nextSurfaces);
-      setDarkMode(true);
-      applyTheme({ ...settings, theme:selectedTheme, fontStyle:selectedFont, fontFamily:selectedFont,
+      const nextTheme = { theme:selectedTheme, fontStyle:selectedFont, fontFamily:selectedFont,
         primaryColor:customColors.primary, primaryDarkColor:customColors.primaryDark,
         primaryLightColor:customColors.primaryLight, secondaryColor:customColors.accent,
         darkMode:true, storeTemplate:id, bodyBgColor:nextSurfaces.body,
-        cardBgColor:nextSurfaces.card, surfaceColor:nextSurfaces.surface });
+        cardBgColor:nextSurfaces.card, surfaceColor:nextSurfaces.surface };
+      setDarkMode(true, nextTheme);
+      applyTheme({ ...settings, ...nextTheme });
       return;
     }
     applyPreview(selectedTheme, selectedFont, customColors, darkMode, id);
@@ -323,11 +325,13 @@ export default function ThemeBuilder() {
       ? { body: '#0b1120', card: '#172033', surface: '#1e293b' }
       : { body: '#f8fafc', card: '#ffffff', surface: '#f1f5f9' };
     setSurfaceColors(nextSurfaces);
-    setDarkMode(val);
-    applyTheme({ ...settings, theme:selectedTheme, fontStyle:selectedFont, ...{
+    const nextTheme = { theme:selectedTheme, fontStyle:selectedFont, ...{
       primaryColor:customColors.primary, primaryDarkColor:customColors.primaryDark,
       primaryLightColor:customColors.primaryLight, secondaryColor:customColors.accent,
-    }, darkMode:val, bodyBgColor:nextSurfaces.body, cardBgColor:nextSurfaces.card, surfaceColor:nextSurfaces.surface });
+    }, darkMode:val, storeTemplate:selectedTemplate, bodyBgColor:nextSurfaces.body,
+      cardBgColor:nextSurfaces.card, surfaceColor:nextSurfaces.surface };
+    setDarkMode(val, nextTheme);
+    applyTheme({ ...settings, ...nextTheme });
   };
 
   const handleSave = async () => {
