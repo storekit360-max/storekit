@@ -21,10 +21,25 @@ const effectivePrice = product => product?.isOnSale
 
 gsap.registerPlugin(ScrollTrigger);
 
-// Strip external inline styles and class names from pasted HTML so it
-// renders cleanly with the store theme instead of Sony/Apple/etc. styles.
+// AI-generated HTML preserves formatting with style attributes on h4 tags.
+// For pasted external HTML (from websites), strip style/class to prevent theme conflicts.
 function sanitizeHtml(html) {
   if (!html) return '';
+  
+  // Check if this is AI-generated HTML (has h3 and h4 with style attributes)
+  const isAiGenerated = /<h3[^>]*>/.test(html) && /<h4[^>]*style=/.test(html);
+  
+  if (isAiGenerated) {
+    // AI-generated HTML: return as-is with proper formatting
+    return html;
+  }
+  
+  // For non-AI content, strip problematic attributes to prevent theme conflicts
+  const hasHtmlTags = /<[a-z][\s\S]*>/i.test(html);
+  if (!hasHtmlTags) {
+    return html;
+  }
+  
   return html
     .replace(/\sstyle="[^"]*"/gi, '')
     .replace(/\sclass="[^"]*"/gi, '')
