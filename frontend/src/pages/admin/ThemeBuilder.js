@@ -182,6 +182,11 @@ export default function ThemeBuilder() {
     accent: settings?.secondaryColor || THEMES[themeKey || 'default']?.accent || '#f0a500',
   });
   const [customCSS, setCustomCSS] = useState(settings?.customCSS || '');
+  const [surfaceColors, setSurfaceColors] = useState({
+    body: settings?.bodyBgColor || (darkMode ? '#0b1120' : '#f8fafc'),
+    card: settings?.cardBgColor || (darkMode ? '#172033' : '#ffffff'),
+    surface: settings?.surfaceColor || (darkMode ? '#1e293b' : '#f1f5f9'),
+  });
   const [saving, setSaving] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [templateFilter, setTemplateFilter] = useState('all');
@@ -203,6 +208,11 @@ export default function ThemeBuilder() {
       accent: settings.secondaryColor || settings.accentColor || THEMES[nextTheme]?.accent || '#f0a500',
     });
     setCustomCSS(settings.customCSS || '');
+    setSurfaceColors({
+      body: settings.bodyBgColor || (settings.darkMode ? '#0b1120' : '#f8fafc'),
+      card: settings.cardBgColor || (settings.darkMode ? '#172033' : '#ffffff'),
+      surface: settings.surfaceColor || (settings.darkMode ? '#1e293b' : '#f1f5f9'),
+    });
     setSelectedLoader(settings.loaderStyle || 'classic-ring');
     setLoadingText(settings.loadingText || 'Preparing your shopping experience');
   }, [settings]);
@@ -219,11 +229,14 @@ export default function ThemeBuilder() {
       secondaryColor: colors.accent,
       darkMode: dark,
       storeTemplate: template,
+      bodyBgColor: surfaceColors.body,
+      cardBgColor: surfaceColors.card,
+      surfaceColor: surfaceColors.surface,
       customCSS,
     };
     applyTheme(merged);
     writeCache(merged);
-  }, [settings, customCSS, selectedTemplate]);
+  }, [settings, customCSS, selectedTemplate, surfaceColors]);
 
   const handleThemeSelect = (id) => {
     setSelectedTheme(id);
@@ -255,9 +268,28 @@ export default function ThemeBuilder() {
     applyPreview(selectedTheme, selectedFont, newColors, darkMode);
   };
 
+  const handleSurfaceChange = (key, val) => {
+    const next = { ...surfaceColors, [key]: val };
+    setSurfaceColors(next);
+    applyTheme({
+      ...settings, theme:selectedTheme, fontStyle:selectedFont, fontFamily:selectedFont,
+      primaryColor:customColors.primary, primaryDarkColor:customColors.primaryDark,
+      primaryLightColor:customColors.primaryLight, secondaryColor:customColors.accent,
+      darkMode, storeTemplate:selectedTemplate,
+      bodyBgColor:next.body, cardBgColor:next.card, surfaceColor:next.surface,
+    });
+  };
+
   const handleDarkMode = (val) => {
+    const nextSurfaces = val
+      ? { body: '#0b1120', card: '#172033', surface: '#1e293b' }
+      : { body: '#f8fafc', card: '#ffffff', surface: '#f1f5f9' };
+    setSurfaceColors(nextSurfaces);
     setDarkMode(val);
-    applyPreview(selectedTheme, selectedFont, customColors, val);
+    applyTheme({ ...settings, theme:selectedTheme, fontStyle:selectedFont, ...{
+      primaryColor:customColors.primary, primaryDarkColor:customColors.primaryDark,
+      primaryLightColor:customColors.primaryLight, secondaryColor:customColors.accent,
+    }, darkMode:val, bodyBgColor:nextSurfaces.body, cardBgColor:nextSurfaces.card, surfaceColor:nextSurfaces.surface });
   };
 
   const handleSave = async () => {
@@ -273,6 +305,9 @@ export default function ThemeBuilder() {
         secondaryColor: customColors.accent,
         darkMode,
         storeTemplate: selectedTemplate,
+        bodyBgColor: surfaceColors.body,
+        cardBgColor: surfaceColors.card,
+        surfaceColor: surfaceColors.surface,
         customCSS,
         loaderStyle: selectedLoader,
         loadingText,
@@ -457,6 +492,19 @@ export default function ThemeBuilder() {
             <ColorSwatch color={customColors.primaryLight} onChange={v => handleColorChange('primaryLight', v)} label="Primary Light" />
             <ColorSwatch color={customColors.accent} onChange={v => handleColorChange('accent', v)} label="Accent / Secondary" />
           </div>
+          <div className="border-t border-gray-100 pt-5">
+            <h3 className="text-sm font-semibold text-gray-900 mb-1">Store surfaces</h3>
+            <p className="text-xs text-gray-500 mb-4">Choose any light or dark surfaces. Readable text is selected automatically for each background.</p>
+            <div className="grid sm:grid-cols-3 gap-6">
+              <ColorSwatch color={surfaceColors.body} onChange={v => handleSurfaceChange('body', v)} label="Page Background" />
+              <ColorSwatch color={surfaceColors.card} onChange={v => handleSurfaceChange('card', v)} label="Cards & Panels" />
+              <ColorSwatch color={surfaceColors.surface} onChange={v => handleSurfaceChange('surface', v)} label="Header / Dark Surface" />
+            </div>
+            <div className="mt-4 grid grid-cols-2 overflow-hidden rounded-xl border border-gray-200">
+              <div className="p-4" style={{background:surfaceColors.body, color:'var(--text-primary)'}}><p className="font-bold text-sm">Page text</p><p className="text-xs opacity-75">Always remains readable</p></div>
+              <div className="p-4" style={{background:surfaceColors.card, color:'var(--text-on-card)'}}><p className="font-bold text-sm">Card text</p><p className="text-xs opacity-75">Automatic contrast</p></div>
+            </div>
+          </div>
           <div className="p-4 rounded-xl" style={{ background: `linear-gradient(135deg, ${customColors.primary}, ${customColors.primaryLight}, ${customColors.accent})` }}>
             <p className="text-white font-bold text-sm">Live Color Preview</p>
             <p className="text-white/70 text-xs mt-0.5">This gradient uses your selected colors</p>
@@ -533,19 +581,19 @@ export default function ThemeBuilder() {
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h3 className="text-sm font-semibold text-gray-900">Custom CSS</h3>
-                <p className="text-xs text-gray-500 mt-0.5">Advanced customization with raw CSS. Applied store-wide.</p>
+                <p className="text-xs text-gray-500 mt-0.5">Safe appearance CSS, scoped to the customer storefront only.</p>
               </div>
             </div>
             <textarea
               value={customCSS}
               onChange={e => setCustomCSS(e.target.value)}
               rows={16}
-              placeholder={`/* Custom CSS — Examples */\n\n/* Round all buttons more */\n.btn-primary { border-radius: 50px !important; }\n\n/* Custom hero font size */\n.hero-title { font-size: 5rem !important; }\n\n/* Hide newsletter bar */\n.newsletter-bar { display: none; }\n\n/* Add custom shadow to product cards */\n.product-card { box-shadow: 0 20px 60px rgba(0,0,0,0.12); }`}
+              placeholder={`/* Safe appearance CSS — Examples */\n\n.btn-primary { border-radius: 50px; }\n.hero-title { color: #ffffff; font-weight: 800; }\n.product-card { box-shadow: 0 20px 60px rgba(0,0,0,0.12); }`}
               className="w-full font-mono text-xs bg-gray-900 text-green-400 rounded-xl p-4 border-0 resize-none focus:ring-2 focus:ring-primary/30 outline-none"
             />
           </div>
-          <div className="bg-red-50 border border-red-100 rounded-xl p-3">
-            <p className="text-xs text-red-700 font-medium">⚠️ Custom CSS is applied to the live site immediately on save. Test carefully before saving.</p>
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+            <p className="text-xs text-blue-700 font-medium">Layout-changing CSS (position, display, spacing, sizing, transforms, hiding content, and similar rules) is removed automatically when saved. Custom CSS never runs in the admin panel.</p>
           </div>
         </div>
       )}

@@ -7,11 +7,13 @@ const { adminAuth } = require('../middleware/auth');
 const { clearThemeCache } = require('../utils/mailer');
 const https = require('https');
 const http = require('http');
+const { sanitizeThemeCss } = require('../utils/themeCss');
 
 const THEME_KEYS = new Set([
   'theme', 'primaryColor', 'primaryDarkColor', 'primaryLightColor',
   'secondaryColor', 'accentColor', 'darkBgColor', 'darkColor',
   'fontStyle', 'fontFamily', 'darkMode', 'customCSS', 'logoSize',
+  'bodyBgColor', 'cardBgColor', 'surfaceColor',
   'storeTemplate', 'template', 'layoutTemplate',
 ]);
 
@@ -31,6 +33,7 @@ function toPlain(value) {
 
 function normalizeTheme(theme = {}) {
   const t = { ...theme };
+  if (t.customCSS) t.customCSS = sanitizeThemeCss(t.customCSS);
   if (t.accentColor && !t.secondaryColor) t.secondaryColor = t.accentColor;
   if (t.secondaryColor && !t.accentColor) t.accentColor = t.secondaryColor;
   if (t.darkColor && !t.darkBgColor) t.darkBgColor = t.darkColor;
@@ -213,7 +216,7 @@ router.get('/', async (req, res) => {
 
     const settings = await Settings.find({ tenantId: null });
     const obj = {};
-    settings.forEach(s => { obj[s.key] = s.value; });
+    settings.forEach(s => { obj[s.key] = s.key === 'customCSS' ? sanitizeThemeCss(s.value) : s.value; });
     _settingsCache.set(cacheKey, { at: Date.now(), value: obj });
     res.json(obj);
   } catch (err) {
@@ -244,7 +247,7 @@ router.put('/', adminAuth, async (req, res) => {
         if (key === 'storeName') {
           tenant.storeName = value;
         } else if (THEME_KEYS.has(key)) {
-          nextTheme[key] = value;
+          nextTheme[key] = key === 'customCSS' ? sanitizeThemeCss(value) : value;
         } else if (key === 'storePhone' || key === 'phone') {
           // Keep the legacy and current contact-number fields synchronized.
           nextSettings.storePhone = value;
@@ -267,7 +270,7 @@ router.put('/', adminAuth, async (req, res) => {
     const ops = entries.map(([key, value]) => ({
       updateOne: {
         filter: { key },
-        update: { $set: { key, value, updatedAt: new Date() } },
+        update: { $set: { key, value: key === 'customCSS' ? sanitizeThemeCss(value) : value, updatedAt: new Date() } },
         upsert: true,
       },
     }));

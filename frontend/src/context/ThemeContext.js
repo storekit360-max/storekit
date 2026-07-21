@@ -269,7 +269,7 @@ export const applyTheme = (settings) => {
   const textSecondary = textPrimary === '#f8fafc' ? '#cbd5e1' : '#64748b';
   const textOnCard    = contrastText(cardBg);
   const textMutedOnCard = textOnCard === '#f8fafc' ? '#cbd5e1' : '#64748b';
-  const borderColor   = isDark ? '#1e293b' : '#e5e7eb';
+  const borderColor   = contrastText(cardBg) === '#f8fafc' ? '#334155' : '#e5e7eb';
   // Some presets (Midnight, Neon, Matrix, Obsidian, etc.) are dark by design
   // even when the admin never flipped the separate "Dark Mode" switch. Detect
   // that from the actual computed background luminance so skeleton loaders,
@@ -333,7 +333,9 @@ export const applyTheme = (settings) => {
 
   let style = document.getElementById('theme-custom-css');
   if (!style) { style = document.createElement('style'); style.id = 'theme-custom-css'; document.head.appendChild(style); }
-  style.textContent = settings?.customCSS || '';
+  // The server stores scoped, appearance-only CSS. Never run tenant CSS in the
+  // admin application, including a stale browser cache from an older release.
+  style.textContent = isAdminView ? '' : (settings?.customCSS || '');
 
   // Apply favicon from settings
   if (settings?.faviconUrl) {
