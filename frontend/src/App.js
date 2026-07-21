@@ -43,7 +43,10 @@ function LegacyShopCategoryRedirect() {
 
 function StorefrontEntry() {
   const { settings } = useTheme();
-  return settings?.businessWelcomeEnabled ? <WelcomeLanding/> : <Home/>;
+  let selected = false;
+  try { selected = sessionStorage.getItem(`storekit:business-selected:${window.location.hostname}`) === '1'; } catch (_) {}
+  if (settings?.businessWelcomeEnabled && !selected) return <WelcomeLanding/>;
+  return <Navigate to="/store" replace/>;
 }
 
 // ─── Lazy-loaded Admin Pages ──────────────────────────────────────────────────
@@ -222,8 +225,11 @@ export default function App() {
                 */}
                 <Suspense fallback={null}>
                   <Routes>
+                    {/* The brand/business selector is deliberately outside
+                        CustomerLayout so it is the first clean screen shown. */}
+                    <Route path="/" element={<StorefrontEntry/>}/>
                     <Route element={<CustomerLayout/>}>
-                      <Route path="/"                    element={<StorefrontEntry/>}/>
+                      <Route path="/store"               element={<Home/>}/>
                       <Route path="/shop"                element={<Shop/>}/>
                       <Route path="/shop/:category"      element={<LegacyShopCategoryRedirect/>}/>
                       <Route path="/category/:slug"      element={<CategoryPage/>}/>

@@ -5,7 +5,11 @@ import { useTheme } from '../../context/ThemeContext';
 const safeDestination = value => {
   const url = String(value || '').trim();
   if (/^https?:\/\//i.test(url) || /^\//.test(url)) return url;
-  return '/shop';
+  return '/store';
+};
+
+const rememberSelection = () => {
+  try { sessionStorage.setItem(`storekit:business-selected:${window.location.hostname}`, '1'); } catch (_) {}
 };
 
 export default function WelcomeLanding() {
@@ -27,7 +31,14 @@ export default function WelcomeLanding() {
 
         <div className={`grid gap-5 sm:gap-7 ${stores.length === 1 ? 'max-w-xl mx-auto' : 'md:grid-cols-2'}`}>
           {stores.map((store, index) => {
-            const destination = safeDestination(store.url);
+            const rawDestination = safeDestination(store.url);
+            // A current-domain root destination would reopen this selector.
+            // Send it to the actual storefront home route instead.
+            let destination = rawDestination === '/' ? '/store' : rawDestination;
+            try {
+              const parsed = new URL(rawDestination, window.location.origin);
+              if (parsed.origin === window.location.origin && parsed.pathname === '/') destination = '/store';
+            } catch (_) {}
             const external = /^https?:\/\//i.test(destination);
             const content = (
               <>
@@ -44,12 +55,12 @@ export default function WelcomeLanding() {
             const className = 'block overflow-hidden border transition-transform hover:-translate-y-1 focus:outline-none focus:ring-2 rounded-[var(--template-card-radius)]';
             const style = {background:'var(--card-bg)',borderColor:'var(--border-color)',boxShadow:'var(--template-card-shadow)'};
             return external
-              ? <a key={index} href={destination} className={className} style={style}>{content}</a>
-              : <Link key={index} to={destination} className={className} style={style}>{content}</Link>;
+              ? <a key={index} href={destination} onClick={rememberSelection} className={className} style={style}>{content}</a>
+              : <Link key={index} to={destination} onClick={rememberSelection} className={className} style={style}>{content}</Link>;
           })}
         </div>
 
-        {!stores.length && <div className="max-w-xl mx-auto text-center rounded-2xl p-8 border" style={{background:'var(--card-bg)',borderColor:'var(--border-color)'}}><p style={{color:'var(--text-secondary)'}}>Store destinations have not been configured yet.</p><Link to="/shop" className="btn-primary inline-flex mt-5">Continue to shop</Link></div>}
+        {!stores.length && <div className="max-w-xl mx-auto text-center rounded-2xl p-8 border" style={{background:'var(--card-bg)',borderColor:'var(--border-color)'}}><p style={{color:'var(--text-secondary)'}}>Store destinations have not been configured yet.</p><Link to="/store" onClick={rememberSelection} className="btn-primary inline-flex mt-5">Continue to store</Link></div>}
       </div>
     </section>
   );
