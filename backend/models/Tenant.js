@@ -85,6 +85,23 @@ const tenantSchema = new mongoose.Schema({
     starterImagesProvider: { type: String, default: '' },
     starterImagesAttributionUrl: { type: String, default: '' },
     homepageProductLimit: { type: Number, default: 8 },
+    // Optional brand-level entry screen for tenants operating multiple stores.
+    // These paths must be explicit because this schema uses strict mode;
+    // otherwise Mongoose silently discards the admin configuration on save.
+    businessWelcomeEnabled: { type: Boolean, default: false },
+    businessWelcomeEyebrow: { type: String, default: 'One brand · Multiple businesses', maxlength: 80 },
+    businessWelcomeTitle: { type: String, default: '', maxlength: 140 },
+    businessWelcomeSubtitle: { type: String, default: 'Choose the business you would like to visit.', maxlength: 500 },
+    businessWelcomeStores: {
+      type: [{
+        name: { type: String, default: '', maxlength: 100 },
+        description: { type: String, default: '', maxlength: 300 },
+        url: { type: String, default: '', maxlength: 500 },
+        imageUrl: { type: String, default: '', maxlength: 1000 },
+        buttonLabel: { type: String, default: 'Visit store', maxlength: 50 },
+      }],
+      default: [],
+    },
   },
 
   subscription: {
