@@ -2,6 +2,64 @@
 <html lang="en-LK">
   <head>
     <meta charset="utf-8"/>
+    <script>
+      /* Deployment freshness guard. Runs before the generated main bundle so
+         it can recover even when an old hashed bundle no longer exists. */
+      (function () {
+        var VERSION_KEY = 'storekit:frontend-version';
+        var RECOVERY_KEY = 'storekit:asset-recovery';
+
+        function clearOldRuntime() {
+          try {
+            if ('caches' in window) caches.keys().then(function (keys) {
+              return Promise.all(keys.map(function (key) { return caches.delete(key); }));
+            });
+            if (navigator.serviceWorker) navigator.serviceWorker.getRegistrations().then(function (rows) {
+              rows.forEach(function (row) { row.unregister(); });
+            });
+          } catch (_) {}
+        }
+
+        function reloadFor(version) {
+          var now = Date.now();
+          var last = 0;
+          try { last = Number(sessionStorage.getItem(RECOVERY_KEY) || 0); } catch (_) {}
+          if (now - last < 10000) return;
+          try {
+            sessionStorage.setItem(RECOVERY_KEY, String(now));
+            if (version) localStorage.setItem(VERSION_KEY, version);
+          } catch (_) {}
+          clearOldRuntime();
+          var url = new URL(window.location.href);
+          url.searchParams.set('__storekit_v', version || String(now));
+          window.setTimeout(function () { window.location.replace(url.toString()); }, 120);
+        }
+
+        function checkVersion(reloadOnChange) {
+          fetch('/version.json?ts=' + Date.now(), { cache: 'no-store', credentials: 'same-origin' })
+            .then(function (response) { return response.ok ? response.json() : null; })
+            .then(function (data) {
+              if (!data || !data.version) return;
+              var previous = null;
+              try { previous = localStorage.getItem(VERSION_KEY); } catch (_) {}
+              if (previous && previous !== data.version && reloadOnChange) reloadFor(data.version);
+              else try { localStorage.setItem(VERSION_KEY, data.version); } catch (_) {}
+            }).catch(function () {});
+        }
+
+        window.addEventListener('error', function (event) {
+          var source = event.target && event.target.tagName === 'SCRIPT' && event.target.src;
+          var message = String(event.message || '');
+          if (source || /Unexpected token ['\"]?</.test(message) || /ChunkLoadError|Loading chunk/i.test(message)) reloadFor();
+        }, true);
+
+        checkVersion(true);
+        window.setInterval(function () { checkVersion(true); }, 60000);
+        document.addEventListener('visibilitychange', function () {
+          if (document.visibilityState === 'visible') checkVersion(true);
+        });
+      })();
+    </script>
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,viewport-fit=cover"/>
     <!-- Core Web Vitals: preconnect to CDN origins used for images -->
     <link rel="preconnect" href="https://res.cloudinary.com" crossorigin/>

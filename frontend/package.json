@@ -20,7 +20,7 @@
   "scripts": {
     "start": "react-scripts start",
     "start:staging": "PORT=3001 REACT_APP_API_URL=http://localhost:5002/api react-scripts start",
-    "build": "GENERATE_SOURCEMAP=false react-scripts build"
+    "build": "GENERATE_SOURCEMAP=false react-scripts build && node scripts/write-build-version.js"
   },
   "proxy": "http://localhost:5001",
   "eslintConfig": {

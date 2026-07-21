@@ -371,9 +371,28 @@ const frontendBuildPath = path.join(__dirname, '..', 'frontend', 'build');
 if (fs.existsSync(frontendBuildPath)) {
   app.use(express.static(frontendBuildPath, {
     index:     false,
-    maxAge:    '7d',
-    immutable: true,
+    maxAge:    0,
+    immutable: false,
+    setHeaders(res, filePath) {
+      const normalized = String(filePath).replace(/\\/g, '/');
+      if (/\/static\/(?:js|css|media)\//.test(normalized)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else if (/\/(?:index\.html|version\.json|asset-manifest\.json|manifest\.json)$/.test(normalized)) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('CDN-Cache-Control', 'no-store');
+        res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
+      } else {
+        res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+      }
+    },
   }));
+
+  // Never answer a missing hashed asset with index.html. Browsers interpret
+  // that HTML as JavaScript and fail with "Unexpected token '<'".
+  app.get('/static/*', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(404).type('text/plain').send('Frontend asset not found; reload for the latest deployment.');
+  });
 }
 
 app.get('*', seoRenderMiddleware);
