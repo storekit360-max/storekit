@@ -357,21 +357,32 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
 
 /* ── Dark Mode Support ─────────────────────────────────────────────────── */
 .dark-mode .bg-white { background: var(--card-bg) !important; }
-.dark-mode .bg-gray-50 { background: color-mix(in srgb, var(--card-bg) 80%, #000 20%) !important; }
-.dark-mode .bg-gray-100 { background: color-mix(in srgb, var(--card-bg) 60%, #000 40%) !important; }
-.dark-mode .text-gray-900 { color: var(--text-primary) !important; }
-.dark-mode .text-gray-800 { color: var(--text-primary) !important; }
-.dark-mode .text-gray-700 { color: color-mix(in srgb, var(--text-primary) 85%, transparent) !important; }
-.dark-mode .text-gray-600 { color: var(--text-secondary) !important; }
-.dark-mode .text-gray-500 { color: var(--text-secondary) !important; }
-.dark-mode .text-gray-400 { color: color-mix(in srgb, var(--text-secondary) 70%, transparent) !important; }
-.dark-mode .border-gray-100 { border-color: var(--border-color) !important; }
-.dark-mode .border-gray-200 { border-color: var(--border-color) !important; }
-.dark-mode .hover\:bg-gray-50:hover { background: color-mix(in srgb, var(--card-bg) 60%, #fff 10%) !important; }
+.dark-mode .bg-gray-50,  .dark-mode .bg-slate-50  { background: color-mix(in srgb, var(--card-bg) 80%, #000 20%) !important; }
+.dark-mode .bg-gray-100, .dark-mode .bg-slate-100 { background: color-mix(in srgb, var(--card-bg) 60%, #000 40%) !important; }
+.dark-mode .bg-gray-200, .dark-mode .bg-slate-200 { background: color-mix(in srgb, var(--card-bg) 45%, #000 55%) !important; }
+.dark-mode .bg-gray-900, .dark-mode .bg-slate-900,
+.dark-mode .bg-gray-800, .dark-mode .bg-slate-950 { background: var(--theme-dark) !important; }
+.dark-mode .text-gray-900, .dark-mode .text-slate-900,
+.dark-mode .text-black { color: var(--text-primary) !important; }
+.dark-mode .text-gray-800, .dark-mode .text-slate-800 { color: var(--text-primary) !important; }
+.dark-mode .text-gray-700, .dark-mode .text-slate-700 { color: color-mix(in srgb, var(--text-primary) 85%, transparent) !important; }
+.dark-mode .text-gray-600, .dark-mode .text-slate-600 { color: var(--text-secondary) !important; }
+.dark-mode .text-gray-500, .dark-mode .text-slate-500 { color: var(--text-secondary) !important; }
+.dark-mode .text-gray-400, .dark-mode .text-slate-400 { color: color-mix(in srgb, var(--text-secondary) 70%, transparent) !important; }
+.dark-mode .text-gray-300, .dark-mode .text-slate-300 { color: color-mix(in srgb, var(--text-secondary) 85%, transparent) !important; }
+.dark-mode .border-gray-50,  .dark-mode .border-gray-100, .dark-mode .border-slate-100 { border-color: var(--border-color) !important; }
+.dark-mode .border-gray-200, .dark-mode .border-slate-200 { border-color: var(--border-color) !important; }
+.dark-mode .border-gray-300, .dark-mode .border-slate-300 { border-color: color-mix(in srgb, var(--border-color) 70%, var(--text-secondary) 30%) !important; }
+.dark-mode .divide-gray-100>*, .dark-mode .divide-gray-200>* { border-color: var(--border-color) !important; }
+.dark-mode .hover\:bg-gray-50:hover, .dark-mode .hover\:bg-slate-50:hover { background: color-mix(in srgb, var(--card-bg) 60%, #fff 10%) !important; }
+.dark-mode .placeholder-gray-400::placeholder { color: color-mix(in srgb, var(--text-secondary) 70%, transparent) !important; }
 .dark-mode input, .dark-mode textarea, .dark-mode select {
   background: color-mix(in srgb, var(--card-bg) 80%, #000 20%) !important;
   color: var(--text-primary) !important;
   border-color: var(--border-color) !important;
+}
+.dark-mode input::placeholder, .dark-mode textarea::placeholder {
+  color: color-mix(in srgb, var(--text-secondary) 70%, transparent) !important;
 }
 /* These labels were hardcoded to a near-black color and stayed unreadable
    whenever the surrounding card/body background turned dark. */
@@ -381,7 +392,11 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
 .dark-mode .checkout-order-name,
 .dark-mode .pay-method-label,
 .dark-mode .cart-toast,
-.dark-mode .accordion-trigger {
+.dark-mode .accordion-trigger,
+.dark-mode .sticky-atc-name,
+.dark-mode .qty-stepper-val,
+.dark-mode .form-input,
+.dark-mode .search-premium input {
   color: var(--text-primary) !important;
 }
 
