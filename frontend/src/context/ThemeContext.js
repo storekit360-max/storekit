@@ -363,12 +363,21 @@ export const applyTheme = (settings) => {
   // admin application, including a stale browser cache from an older release.
   style.textContent = isAdminView ? '' : (settings?.customCSS || '');
 
-  // Apply favicon from settings
-  if (settings?.faviconUrl) {
+  // Use the dedicated favicon when supplied, otherwise derive a square icon
+  // from the uploaded store logo through the backend image endpoint. Include a
+  // stable revision so replacing an upload invalidates the browser's favicon
+  // cache without forcing a new download on every theme application.
+  const faviconSource = settings?.faviconUrl || settings?.logoUrl;
+  if (faviconSource) {
+    const faviconRevision = Array.from(String(faviconSource)).reduce(
+      (hash, char) => ((hash * 31) + char.charCodeAt(0)) >>> 0,
+      0
+    );
+    const faviconHref = `/api/settings/favicon.png?v=${faviconRevision}`;
     ['icon', 'shortcut icon', 'apple-touch-icon'].forEach(rel => {
       let fav = document.querySelector(`link[rel="${rel}"]`);
       if (!fav) { fav = document.createElement('link'); fav.rel = rel; document.head.appendChild(fav); }
-      fav.href = settings.faviconUrl;
+      fav.href = faviconHref;
     });
   }
 

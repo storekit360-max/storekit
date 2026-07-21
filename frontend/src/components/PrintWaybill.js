@@ -18,6 +18,7 @@ export default function PrintWaybill({ order, trigger }) {
     const storeAddress = s.storeAddress || '';
     const logoUrl      = String(s.logoUrl || s.storeLogo || s.logo || '').replace(/^http:\/\//i, 'https://');
     const primaryColor = s.primaryColor || '#4f46e5';
+    const accentColor  = s.secondaryColor || s.accentColor || primaryColor;
 
     const fmtDate = (d) => new Date(d).toLocaleDateString('en-LK', { year: 'numeric', month: 'short', day: 'numeric' });
 
@@ -72,7 +73,7 @@ export default function PrintWaybill({ order, trigger }) {
       + '.card{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.10);}'
 
       /* Header */
-      + '.wb-header{background:linear-gradient(135deg,' + primaryColor + ' 0%,' + primaryColor + 'cc 100%);padding:28px 32px;display:flex;justify-content:space-between;align-items:center;}'
+      + '.wb-header{background:linear-gradient(135deg,' + primaryColor + ' 0%,' + accentColor + ' 100%);padding:28px 32px;display:flex;justify-content:space-between;align-items:center;}'
       + '.logo-panel{min-width:120px;min-height:72px;max-width:300px;padding:8px 14px;border-radius:10px;background:rgba(255,255,255,.94);display:inline-flex;align-items:center;justify-content:flex-start;}'
       + '.logo-img{display:block;height:84px;object-fit:contain;object-position:left center;max-width:270px;filter:none;}'
       + '.logo-fallback{font-size:30px;font-weight:900;color:#0f172a;letter-spacing:-1px;line-height:1.05;}'

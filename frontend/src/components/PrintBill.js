@@ -19,6 +19,7 @@ export default function PrintBill({ order, trigger }) {
     const storeAddress = s.storeAddress || '';
     const logoUrl      = String(s.logoUrl || s.storeLogo || s.logo || '').replace(/^http:\/\//i, 'https://');
     const primaryColor = s.primaryColor || '#4f46e5';
+    const accentColor  = s.secondaryColor || s.accentColor || primaryColor;
 
     const fmtDate = (d) => new Date(d).toLocaleDateString('en-LK', { year: 'numeric', month: 'long', day: 'numeric' });
     const fmtTime = (d) => new Date(d).toLocaleTimeString('en-LK', { hour: '2-digit', minute: '2-digit' });
@@ -89,7 +90,7 @@ export default function PrintBill({ order, trigger }) {
       + '.page{max-width:820px;margin:0 auto;padding:0;}'
 
       /* Header gradient strip */
-      + '.header{background:linear-gradient(135deg,' + primaryColor + ' 0%,' + primaryColor + 'cc 100%);padding:32px 40px;display:flex;justify-content:space-between;align-items:center;}'
+      + '.header{background:linear-gradient(135deg,' + primaryColor + ' 0%,' + accentColor + ' 100%);padding:32px 40px;display:flex;justify-content:space-between;align-items:center;}'
       + '.logo-panel{min-width:120px;min-height:72px;max-width:320px;padding:8px 14px;border-radius:10px;background:rgba(255,255,255,.94);display:inline-flex;align-items:center;justify-content:flex-start;}'
       + '.logo-img{display:block;height:84px;object-fit:contain;object-position:left center;max-width:290px;filter:none;}'
       + '.logo-fallback{font-size:30px;font-weight:900;color:#0f172a;letter-spacing:-1px;line-height:1.05;}'
