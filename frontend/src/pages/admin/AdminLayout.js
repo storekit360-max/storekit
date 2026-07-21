@@ -359,7 +359,7 @@ export default function AdminLayout() {
   const sidebarProps = { user, logout, navigate, isActive, badges, navRef, nav: visibleNav };
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="admin-shell flex h-screen bg-gray-50 overflow-hidden">
 
       {/* ── Desktop sidebar (lg+) ── */}
       <aside className="hidden lg:block flex-shrink-0 w-64 h-screen overflow-hidden">
