@@ -587,7 +587,7 @@ const Header = ({ settings, campaign }) => {
                 boxShadow: navHovered ? 'inset 0 1px 0 rgba(255,255,255,0.8), 0 1px 8px rgba(0,0,0,0.04)' : 'none',
               }}
             >
-              <NavLink3D to="/" label="Home" isActive={location.pathname==='/'} />
+              <NavLink3D to="/store" label="Home" isActive={location.pathname==='/store'} />
               <NavLink3D to="/shop" label="Shop" isActive={location.pathname==='/shop' || (location.pathname.startsWith('/shop/') && !categories.some(c=>location.pathname===`/shop/${c.slug}`))} />
               {categories.slice(0,4).map(cat => (
                 <NavLink3D
@@ -754,7 +754,7 @@ const Header = ({ settings, campaign }) => {
         {/* Mobile menu — FIX: sz-mobile-menu-link for tap-target height */}
         {menuOpen && (
           <div className="lg:hidden border-t border-gray-100 py-2 space-y-0.5 fade-in">
-            {[['/', '🏠 Home'],['/shop','🛍️ Shop'],['/gift-cards','🎁 Gift Cards'],['/wishlist','❤️ Wishlist'],['/returns','↩️ Returns'],['/account','👤 My Account']].map(([to,label])=>(
+            {[['/store', '🏠 Home'],['/shop','🛍️ Shop'],['/gift-cards','🎁 Gift Cards'],['/wishlist','❤️ Wishlist'],['/returns','↩️ Returns'],['/account','👤 My Account']].map(([to,label])=>(
               <Link key={to} to={to} className="sz-mobile-menu-link px-3 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 rounded-xl transition-colors">{label}</Link>
             ))}
             {categories.map(cat => <Link key={cat._id} to={`/category/${cat.slug}`} className="sz-mobile-menu-link px-3 py-2.5 text-sm text-gray-500 hover:bg-gray-50 rounded-xl">{cat.name}</Link>)}
@@ -778,7 +778,7 @@ const MobileBottomNav = ({ settings }) => {
   const primary = 'var(--color-primary)';
 
   const tabs = [
-    { to:'/', exact:true, icon:<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>, label:'Home' },
+    { to:'/store', exact:true, icon:<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>, label:'Home' },
     { to:'/shop', icon:<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>, label:'Shop' },
     { cart:true, icon:<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 001.99 1.61h9.72a2 2 0 001.99-1.61L23 6H6"/></svg>, label:'Cart' },
     { to: settings?.enableWishlist!==false ? '/wishlist' : '/shop', icon:<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>, label:'Wishlist' },
@@ -890,7 +890,7 @@ const Footer = ({ settings }) => {
           <div>
             <h4 className="text-white font-bold mb-3 text-xs uppercase tracking-widest">Shop</h4>
             <ul className="space-y-2">
-              {[['/', 'Home'],['/shop','All Products'],['/gift-cards','🎁 Gift Cards'],['/shop?onSale=true','Sale Items']].map(([to,label])=>(
+              {[['/store','Home'],['/shop','All Products'],['/gift-cards','🎁 Gift Cards'],['/shop?onSale=true','Sale Items']].map(([to,label])=>(
                 <li key={to}><Link to={to} className="text-sm hover:text-white transition-colors">{label}</Link></li>
               ))}
             </ul>
