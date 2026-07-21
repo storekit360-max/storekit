@@ -97,13 +97,10 @@ async function resolveTenantFromRequest(req) {
   const candidates = getHeaderDomainCandidates(req);
   if (!candidates.length) return null;
 
-  // Check if any of the candidate domains is a platform domain (should not resolve to any tenant)
-  const { isPlatformDomain } = require('../middleware/tenant');
-  if (candidates.some(d => isPlatformDomain(d))) {
-    // Platform domain - no tenant resolution needed
-    return null;
-  }
-
+  // Prefer a real domain mapping even when the hostname is also used as a
+  // StoreKit platform domain.  The login handler already performs a separate,
+  // tenant-less lookup for superadmins, so discarding the mapped tenant here
+  // makes every customer and store admin on that storefront fail with 401.
   return Tenant.findOne({
     status: 'active',
     domains: { $elemMatch: { domain: { $in: candidates }, active: true } },

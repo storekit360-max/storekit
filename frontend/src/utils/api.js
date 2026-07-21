@@ -67,7 +67,7 @@ export function clearApiCache(pattern) {
 
 API.interceptors.request.use(config => {
   const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (token && !config.skipAuth) config.headers.Authorization = `Bearer ${token}`;
   if (typeof window !== 'undefined') {
     config.headers['X-Tenant-Domain'] = window.location.hostname;
   }

@@ -46,7 +46,10 @@ test('security center endpoints require dynamic security permissions', () => {
 
 test('password login is tenant-scoped and emits authentication events', () => {
   const source = fs.readFileSync(path.join(__dirname, '../routes/auth.js'), 'utf8');
+  const resolver = source.slice(source.indexOf('async function resolveTenantFromRequest'), source.indexOf('function parseWebOrigin'));
   const login = source.slice(source.indexOf("router.post('/login'"), source.indexOf('// ─── Google OAuth'));
+  assert.match(resolver, /Tenant\.findOne/);
+  assert.doesNotMatch(resolver, /isPlatformDomain/);
   assert.match(login, /User\.findOne\(\{ tenantId, email: normalizedEmail \}\)/);
   assert.match(login, /issueSession\(user, req, 'password'\)/);
   assert.match(login, /recordAuthEvent/);

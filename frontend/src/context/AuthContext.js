@@ -15,7 +15,13 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (email, password) => {
-    const { data } = await API.post('/auth/login', { email, password });
+    // A token from an expired/other account is irrelevant to credential login.
+    // Suppress it explicitly so login remains an unauthenticated request.
+    const { data } = await API.post('/auth/login', { email, password }, {
+      headers: { Authorization: undefined },
+      skipAuth: true,
+      suppressAuthRedirect: true,
+    });
     if (data.mfaRequired) return { ...data.user, mfaRequired: true, challengeToken: data.challengeToken };
     localStorage.setItem('token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
