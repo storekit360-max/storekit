@@ -373,6 +373,17 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
   color: var(--text-primary) !important;
   border-color: var(--border-color) !important;
 }
+/* These labels were hardcoded to a near-black color and stayed unreadable
+   whenever the surrounding card/body background turned dark. */
+.dark-mode .breadcrumb-current,
+.dark-mode .empty-state-title,
+.dark-mode .checkout-step-title,
+.dark-mode .checkout-order-name,
+.dark-mode .pay-method-label,
+.dark-mode .cart-toast,
+.dark-mode .accordion-trigger {
+  color: var(--text-primary) !important;
+}
 
 /* Adaptive storefront contrast. Admin pages never receive the
    `.customer-storefront` scope, so storefront dark mode cannot recolor them. */
@@ -610,7 +621,7 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
   width:44px;height:44px;border:none;background:transparent;
   font-size:20px;font-weight:400;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
-  color:#64748b;transition:all 0.15s;
+  color:var(--text-muted-on-card, #64748b);transition:all 0.15s;
 }
 .qty-stepper-btn:hover{background:color-mix(in srgb, var(--color-primary) 8%, transparent);color:var(--color-primary)}
 .qty-stepper-btn:active{transform:scale(0.85)}
@@ -618,7 +629,7 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
 .qty-stepper-val{
   min-width:48px;text-align:center;
   font-size:16px;font-weight:800;
-  color:#1a1a2e;padding:0 4px;
+  color:var(--text-on-card, #1a1a2e);padding:0 4px;
   animation:numberRoll 0.2s var(--ease-expo);
 }
 

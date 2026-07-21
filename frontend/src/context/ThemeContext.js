@@ -270,6 +270,13 @@ export const applyTheme = (settings) => {
   const textOnCard    = contrastText(cardBg);
   const textMutedOnCard = textOnCard === '#f8fafc' ? '#cbd5e1' : '#64748b';
   const borderColor   = isDark ? '#1e293b' : '#e5e7eb';
+  // Some presets (Midnight, Neon, Matrix, Obsidian, etc.) are dark by design
+  // even when the admin never flipped the separate "Dark Mode" switch. Detect
+  // that from the actual computed background luminance so skeleton loaders,
+  // sticky bars and gray-scale utility overrides that only listen for
+  // `.dark-mode` still get applied instead of silently staying in their
+  // light-background styling on a black page.
+  const visualDark = isDark || textPrimary === '#f8fafc';
 
   root.style.setProperty('--color-primary',        primary);
   root.style.setProperty('--color-primary-dark',   primaryDark);
@@ -298,6 +305,7 @@ export const applyTheme = (settings) => {
 
   const isAdminView = /^\/(admin|superadmin)(\/|$)/.test(window.location.pathname);
   root.toggleAttribute('data-customer-dark', isDark);
+  root.toggleAttribute('data-visual-dark', visualDark);
   root.classList.remove('dark-mode');
   if (!isAdminView) {
     document.body.style.setProperty('background', bodyBg, 'important');
@@ -344,6 +352,8 @@ export const applyTheme = (settings) => {
       document.title = settings.storeName;
     }
   }
+
+  return { visualDark };
 };
 
 /* ── IIFE: runs before React ─────────────────────────────────────────── */
@@ -360,6 +370,14 @@ export const ThemeProvider = ({ children }) => {
   const [settings, setSettings] = useState(initialSettings);
   const [themeKey, setThemeKey] = useState(() => initialSettings()?.theme || 'default');
   const [darkMode, setDarkModeState] = useState(() => initialSettings()?.darkMode || false);
+  // Whether the *rendered* background is actually dark, independent of the
+  // darkMode toggle (some presets are dark by default). Used so contrast
+  // fixes gated behind `.dark-mode` (skeleton loaders, sticky bars, etc.)
+  // still apply on those presets.
+  const [visualDark, setVisualDark] = useState(() => {
+    const boot = initialSettings();
+    return Boolean(boot?.darkMode) || /midnight|neon|matrix|obsidian/.test(boot?.theme || '');
+  });
   // The pre-React bootstrap has already validated and loaded tenant settings.
   // Treat that as the initial successful check so CustomerLayout does not show
   // a second transitional loading component before Home's main loader.
@@ -367,7 +385,10 @@ export const ThemeProvider = ({ children }) => {
 
   useLayoutEffect(() => {
     const boot = window.__STOREKIT_BOOTSTRAP_SETTINGS__ || readCache();
-    if (boot) applyTheme(boot);
+    if (boot) {
+      const result = applyTheme(boot);
+      if (result) setVisualDark(result.visualDark);
+    }
     document.documentElement.classList.add('storekit-theme-ready');
   }, []);
 
@@ -393,7 +414,8 @@ export const ThemeProvider = ({ children }) => {
       setSettings(data);
       setThemeKey(data.theme || 'default');
       setDarkModeState(data.darkMode || false);
-      applyTheme(data);
+      const result = applyTheme(data);
+      if (result) setVisualDark(result.visualDark);
       writeCache(data);
       window.__STOREKIT_BOOTSTRAP_SETTINGS__ = data;
       window.__szApiFetched = true;
@@ -487,7 +509,8 @@ export const ThemeProvider = ({ children }) => {
         setSettings(next);
         setThemeKey(next.theme || 'default');
         setDarkModeState(next.darkMode === true);
-        applyTheme(next);
+        const result = applyTheme(next);
+        if (result) setVisualDark(result.visualDark);
       } catch {}
     };
     window.addEventListener('storage', onStorage);
@@ -497,7 +520,8 @@ export const ThemeProvider = ({ children }) => {
   const setDarkMode = useCallback((val) => {
     setSettings(prev => {
       const updated = { ...(prev || {}), darkMode: val };
-      applyTheme(updated);
+      const result = applyTheme(updated);
+      if (result) setVisualDark(result.visualDark);
       writeCache(updated);
       API.put('/settings', updated).catch(() => {});
       return updated;
@@ -511,7 +535,8 @@ export const ThemeProvider = ({ children }) => {
       const updated = { ...(prev || {}), ...updates };
       setThemeKey(updated.theme || 'default');
       setDarkModeState(updated.darkMode || false);
-      applyTheme(updated);
+      const result = applyTheme(updated);
+      if (result) setVisualDark(result.visualDark);
       writeCache(updated);
       return updated;
     });
@@ -528,7 +553,7 @@ export const ThemeProvider = ({ children }) => {
   }, [loadAndApply]);
 
   return (
-    <ThemeContext.Provider value={{ settings, themeKey, darkMode, storeStatus, setDarkMode, saveTheme, THEMES, THEME_CATEGORIES, FONTS, STORE_TEMPLATES, TEMPLATE_CATEGORIES, refreshTheme, applyTheme }}>
+    <ThemeContext.Provider value={{ settings, themeKey, darkMode, visualDark, storeStatus, setDarkMode, saveTheme, THEMES, THEME_CATEGORIES, FONTS, STORE_TEMPLATES, TEMPLATE_CATEGORIES, refreshTheme, applyTheme }}>
       {children}
     </ThemeContext.Provider>
   );

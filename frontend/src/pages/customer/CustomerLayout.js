@@ -953,7 +953,7 @@ const Footer = ({ settings }) => {
 /* ── Main Layout ───────────────────────────────────────────────── */
 export default function CustomerLayout() {
   const { campaign } = useSeasonal();
-  const { settings, storeStatus }  = useTheme();
+  const { settings, storeStatus, visualDark }  = useTheme();
   const { user } = useAuth();
   useStorefrontClickAnalytics(user);
 
@@ -994,7 +994,7 @@ export default function CustomerLayout() {
   }
 
   return (
-    <div className={`customer-storefront min-h-screen flex flex-col ${settings?.darkMode === true ? 'dark-mode' : ''}`} style={{background:'var(--body-bg)',color:'var(--text-primary)',fontFamily:'var(--font-body)',overflowX:'hidden',maxWidth:'100vw'}}>
+    <div className={`customer-storefront min-h-screen flex flex-col ${(settings?.darkMode === true || visualDark) ? 'dark-mode' : ''}`} style={{background:'var(--body-bg)',color:'var(--text-primary)',fontFamily:'var(--font-body)',overflowX:'hidden',maxWidth:'100vw'}}>
       {/* FIX: inject responsive overrides */}
       <ResponsiveStyles />
       {campaign?.theme?.snowEffect     && <SnowEffect/>}
