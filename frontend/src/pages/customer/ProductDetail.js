@@ -395,7 +395,7 @@ export default function ProductDetail() {
     toast.custom(t => (
       <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl border-2 ${t.visible ? 'fade-up' : ''}`}
         style={{ background: 'var(--card-bg)', borderColor: 'var(--color-primary)', minWidth: 250 }}>
-        <img src={product.thumbnail || product.images?.[0] || 'https://via.placeholder.com/48'} alt={product.name}
+        <img src={product.thumbnail || product.images?.[0] || 'https://via.placeholder.com/48'} alt={product.name} width="48" height="48" loading="lazy" decoding="async"
           className="w-12 h-12 rounded-xl object-cover flex-shrink-0"/>
         <div className="flex-1 min-w-0">
           <p className="text-xs font-black" style={{ color: 'var(--color-primary)', fontFamily: 'var(--font-display)' }}>Added to Cart! 🛒</p>
@@ -501,7 +501,7 @@ export default function ProductDetail() {
           <div ref={imgRef} className="gallery-main mb-3 w-full"
             onClick={() => setZoomed(true)}
             style={{ transformStyle: 'preserve-3d', willChange: 'transform' }}>
-            <img src={images[selImg] || 'https://via.placeholder.com/600'} alt={product.name}
+            <img src={images[selImg] || 'https://via.placeholder.com/600'} alt={product.name} width="800" height="800" loading="eager" decoding="async" fetchPriority="high"
               className="w-full h-full object-contain transition-all duration-500"/>
             {/* Shine */}
             <div ref={shineRef} className="absolute inset-0 pointer-events-none z-10"
@@ -525,7 +525,7 @@ export default function ProductDetail() {
                   setSelImg(i);
                   gsap.fromTo(imgRef.current, { opacity: 0.4, scale: 0.97 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'power2.out' });
                 }} className={`gallery-thumb ${selImg===i?'active':''}`}>
-                  <img src={img} alt={`${product.name} — view ${i + 1}`}/>
+                  <img src={img} alt={`${product.name} — view ${i + 1}`} width="96" height="96" loading="lazy" decoding="async"/>
                 </button>
               ))}
             </div>
@@ -783,7 +783,7 @@ export default function ProductDetail() {
               {similarItems.map((p) => (
                 <div key={p._id} className="product-card" style={{ transformStyle: 'preserve-3d' }}>
                   <Link to={`/product/${p.slug}`} className="block overflow-hidden bg-gray-50" style={{ aspectRatio: '1' }}>
-                    <img src={p.thumbnail || p.images?.[0]} alt={p.name} className="card-img w-full h-full object-cover" />
+                    <img src={p.thumbnail || p.images?.[0]} alt={p.name} width="600" height="600" loading="lazy" decoding="async" className="card-img w-full h-full object-cover" />
                   </Link>
                   <div className="p-3.5" style={{ background: 'var(--card-bg)' }}>
                     <Link to={`/product/${p.slug}`}>
@@ -833,7 +833,7 @@ export default function ProductDetail() {
             {related.map((p) => (
               <div key={p._id} className="product-card" style={{ transformStyle: 'preserve-3d' }}>
                 <Link to={`/product/${p.slug}`} className="block overflow-hidden bg-gray-50" style={{ aspectRatio: '1' }}>
-                  <img src={p.thumbnail || p.images?.[0]} alt={p.name} className="card-img w-full h-full object-cover" />
+                  <img src={p.thumbnail || p.images?.[0]} alt={p.name} width="600" height="600" loading="lazy" decoding="async" className="card-img w-full h-full object-cover" />
                 </Link>
                 <div className="p-3.5" style={{ background: 'var(--card-bg)' }}>
                   <Link to={`/product/${p.slug}`}>
@@ -870,7 +870,7 @@ export default function ProductDetail() {
             {brandProducts.map(p => (
               <div key={p._id} className="product-card" style={{ transformStyle: 'preserve-3d' }}>
                 <Link to={`/product/${p.slug}`} className="block overflow-hidden bg-gray-50" style={{ aspectRatio: '1' }}>
-                  <img src={p.thumbnail || p.images?.[0]} alt={`${product.brand} — ${p.name}`} className="card-img w-full h-full object-cover" />
+                  <img src={p.thumbnail || p.images?.[0]} alt={`${product.brand} — ${p.name}`} width="600" height="600" loading="lazy" decoding="async" className="card-img w-full h-full object-cover" />
                 </Link>
                 <div className="p-3.5" style={{ background: 'var(--card-bg)' }}>
                   <Link to={`/product/${p.slug}`}>
@@ -937,7 +937,7 @@ export default function ProductDetail() {
             {recentlyViewed.map(p => (
               <div key={p._id} className="product-card" style={{ transformStyle: 'preserve-3d' }}>
                 <Link to={`/product/${p.slug}`} className="block overflow-hidden bg-gray-50" style={{ aspectRatio: '1' }}>
-                  <img src={p.thumbnail} alt={p.name} className="card-img w-full h-full object-cover" loading="lazy" />
+                  <img src={p.thumbnail} alt={p.name} width="600" height="600" className="card-img w-full h-full object-cover" loading="lazy" decoding="async" />
                 </Link>
                 <div className="p-3.5" style={{ background: 'var(--card-bg)' }}>
                   <Link to={`/product/${p.slug}`}>
@@ -958,7 +958,7 @@ export default function ProductDetail() {
       {zoomed && images[selImg] && (
         <div className="img-zoom-modal" onClick={() => setZoomed(false)}>
           <button className="img-zoom-close" onClick={() => setZoomed(false)}>✕</button>
-          <img src={images[selImg]} alt={product.name} onClick={e => e.stopPropagation()}/>
+          <img src={images[selImg]} alt={product.name} width="1200" height="1200" decoding="async" onClick={e => e.stopPropagation()}/>
         </div>
       )}
 
@@ -966,7 +966,7 @@ export default function ProductDetail() {
       {stickyVisible && product?.stock > 0 && (
         <div className="sticky-atc">
           <div className="sticky-atc-inner">
-            <img src={images[0]} alt={product.name} className="sticky-atc-img hidden sm:block"/>
+            <img src={images[0]} alt={product.name} width="48" height="48" loading="lazy" decoding="async" className="sticky-atc-img hidden sm:block"/>
             <div className="sticky-atc-info">
               <div className="sticky-atc-name">{product.name}</div>
               <div className="sticky-atc-price" style={{color:'var(--color-primary)'}}>{sym} {curPrice?.toLocaleString()}</div>

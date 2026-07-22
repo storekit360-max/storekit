@@ -45,6 +45,8 @@ const {
   buildReturnPolicy,
 } = require('../utils/productSeo');
 
+const SITEMAP_PAGE_SIZE = 45000; // safety margin below Google's 50,000 URL limit
+
 // ── XML helpers ───────────────────────────────────────────────────────────────
 function xe(str) {
   if (!str) return '';
@@ -226,25 +228,37 @@ router.get('/sitemap.xml', async (req, res) => {
     const { siteUrl, tenantId, unavailable, notFound } = await resolveTenantForSEO(req);
     if (unavailable) return noIndexXml(res, 503, 'Store unavailable');
     if (notFound) return noIndexXml(res, 404, 'Store not found');
-    const today = new Date().toISOString().split('T')[0];
+    const [productCount, latestProduct, latestCategory, latestPage] = await Promise.all([
+      Product.countDocuments(tenantFilter(tenantId, { isActive: true })),
+      Product.findOne(tenantFilter(tenantId, { isActive: true }), 'updatedAt').sort({ updatedAt: -1 }).lean(),
+      Category.findOne(tenantFilter(tenantId, { isActive: true }), 'updatedAt').sort({ updatedAt: -1 }).lean(),
+      BusinessPage.findOne(tenantFilter(tenantId, { isActive: true }), 'updatedAt').sort({ updatedAt: -1 }).lean(),
+    ]);
+    const meaningfulDate = value => value ? new Date(value).toISOString().split('T')[0] : null;
+    const productLastmod = meaningfulDate(latestProduct?.updatedAt);
+    const categoryLastmod = meaningfulDate(latestCategory?.updatedAt || latestProduct?.updatedAt);
+    const pageLastmod = meaningfulDate(latestPage?.updatedAt || latestProduct?.updatedAt);
+    const productSitemapPages = Math.max(1, Math.ceil(productCount / SITEMAP_PAGE_SIZE));
+    const productSitemaps = Array.from({ length: productSitemapPages }, (_, index) => {
+      const page = index + 1;
+      const loc = page === 1 ? `${siteUrl}/products-sitemap.xml` : `${siteUrl}/products-sitemap.xml?page=${page}`;
+      return `  <sitemap>\n    <loc>${xe(loc)}</loc>${productLastmod ? `\n    <lastmod>${productLastmod}</lastmod>` : ''}\n  </sitemap>`;
+    }).join('\n');
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <sitemap>
-    <loc>${siteUrl}/products-sitemap.xml</loc>
-    <lastmod>${today}</lastmod>
-  </sitemap>
+${productSitemaps}
   <sitemap>
     <loc>${siteUrl}/categories-sitemap.xml</loc>
-    <lastmod>${today}</lastmod>
+    ${categoryLastmod ? `<lastmod>${categoryLastmod}</lastmod>` : ''}
   </sitemap>
   <sitemap>
     <loc>${siteUrl}/brands-sitemap.xml</loc>
-    <lastmod>${today}</lastmod>
+    ${productLastmod ? `<lastmod>${productLastmod}</lastmod>` : ''}
   </sitemap>
   <sitemap>
     <loc>${siteUrl}/pages-sitemap.xml</loc>
-    <lastmod>${today}</lastmod>
+    ${pageLastmod ? `<lastmod>${pageLastmod}</lastmod>` : ''}
   </sitemap>
 </sitemapindex>`;
 
@@ -264,12 +278,13 @@ router.get('/products-sitemap.xml', async (req, res) => {
     if (unavailable) return noIndexXml(res, 503, 'Store unavailable');
     if (notFound) return noIndexXml(res, 404, 'Store not found');
     const today = new Date().toISOString().split('T')[0];
+    const page = Math.max(1, Math.floor(Number(req.query.page) || 1));
     const products = await Product.find(
       tenantFilter(tenantId, { isActive: true }),
       'slug updatedAt thumbnail images name brand description shortDescription price salePrice isOnSale stock category'
-    ).lean();
+    ).sort({ _id: 1 }).skip((page - 1) * SITEMAP_PAGE_SIZE).limit(SITEMAP_PAGE_SIZE).lean();
 
-    const entries = products.filter(product => productSeoAudit(product, { siteUrl }).eligible).map(p => {
+    const entries = products.filter(product => productSeoAudit(product, { siteUrl }).indexEligible).map(p => {
       const allImages    = [p.thumbnail, ...(p.images || [])].map(image => absoluteUrl(image, siteUrl)).filter(Boolean);
       const uniqueImages = [...new Set(allImages)].slice(0, 10);
       return urlEntry(
@@ -305,36 +320,42 @@ router.get('/google-shopping-feed.xml', async (req, res) => {
     const storeSettings = tenant?.settings || {};
     const products = await Product.find(
       tenantFilter(tenantId, { isActive: true, price: { $gt: 0 } }),
-      'name slug description shortDescription thumbnail images price salePrice isOnSale stock sku gtin mpn identifierExists condition googleProductCategory brand category updatedAt'
+      'name slug description shortDescription thumbnail images price salePrice isOnSale stock sku gtin mpn identifierExists condition googleProductCategory brand category updatedAt variantCombinations'
     ).populate('category', 'name slug').sort({ updatedAt: -1 }).lean();
 
-    const items = products.filter(product => productSeoAudit(product, { siteUrl }).merchantEligible).map(product => {
+    const items = products.filter(product => productSeoAudit(product, { siteUrl }).merchantEligible).flatMap(product => {
       const hasSale = product.isOnSale && Number(product.salePrice) > 0 && Number(product.salePrice) < Number(product.price);
-      const activePrice = hasSale ? product.salePrice : product.price;
       const description = stripHtml(product.shortDescription || product.description || product.name).slice(0, 5000);
+      // Extensionless CDN URLs are valid when their fetched MIME type is an
+      // image. Reject only known unsupported SVG placeholders here.
       const images = [...new Set([product.thumbnail, ...(product.images || [])]
         .map(image => absoluteUrl(image, siteUrl))
-        .filter(image => image && /\.(?:jpe?g|webp|png|gif|bmp|tiff?)(?:$|[?#])/i.test(image)))];
+        .filter(image => /^https:\/\//i.test(image) && !/\.svg(?:$|[?#])/i.test(image)))];
       const image = images[0] || '';
       const additionalImages = images.slice(1, 11).map(url => `<g:additional_image_link>${xe(url)}</g:additional_image_link>`).join('\n    ');
       const country = String(storeSettings.merchantCountryCode || storeSettings.countryCode || 'LK').trim().toUpperCase();
       const shippingCost = Math.max(0, Number(storeSettings.merchantShippingCost ?? storeSettings.standardDelivery ?? 0));
-      return `  <item>
-    <g:id>${xe(product._id)}</g:id>
-    <title>${xe(String(product.name).slice(0, 150))}</title>
+      const renderItem = ({ id, title, regularPrice, salePrice, stock, gtin, mpn, imageUrl, itemGroupId = '', attributes = {} }) => `  <item>
+    <g:id>${xe(id)}</g:id>
+    <title>${xe(String(title).slice(0, 150))}</title>
     <description>${xe(description)}</description>
     <link>${xe(`${siteUrl}/product/${product.slug}`)}</link>
     <g:canonical_link>${xe(`${siteUrl}/product/${product.slug}`)}</g:canonical_link>
-    ${image ? `<g:image_link>${xe(image)}</g:image_link>` : ''}
+    ${imageUrl ? `<g:image_link>${xe(imageUrl)}</g:image_link>` : ''}
     ${additionalImages}
-    <g:availability>${product.stock > 0 ? 'in_stock' : 'out_of_stock'}</g:availability>
-    <g:price>${Number(product.price).toFixed(2)} ${currency}</g:price>
-    ${hasSale ? `<g:sale_price>${Number(activePrice).toFixed(2)} ${currency}</g:sale_price>` : ''}
+    <g:availability>${Number(stock) > 0 ? 'in_stock' : 'out_of_stock'}</g:availability>
+    <g:price>${Number(regularPrice).toFixed(2)} ${currency}</g:price>
+    ${Number(salePrice) > 0 && Number(salePrice) < Number(regularPrice) ? `<g:sale_price>${Number(salePrice).toFixed(2)} ${currency}</g:sale_price>` : ''}
     <g:condition>${merchantCondition(product.condition)}</g:condition>
     ${product.brand && product.identifierExists !== false ? `<g:brand>${xe(product.brand)}</g:brand>` : ''}
-    ${Object.keys(gtinProperty(product.gtin)).length ? `<g:gtin>${xe(String(product.gtin).replace(/\D/g, ''))}</g:gtin>` : ''}
-    ${product.mpn ? `<g:mpn>${xe(product.mpn)}</g:mpn>` : ''}
+    ${Object.keys(gtinProperty(gtin)).length ? `<g:gtin>${xe(String(gtin).replace(/\D/g, ''))}</g:gtin>` : ''}
+    ${mpn ? `<g:mpn>${xe(mpn)}</g:mpn>` : ''}
     ${product.identifierExists === false ? '<g:identifier_exists>no</g:identifier_exists>' : ''}
+    ${itemGroupId ? `<g:item_group_id>${xe(itemGroupId)}</g:item_group_id>` : ''}
+    ${attributes.color ? `<g:color>${xe(attributes.color)}</g:color>` : ''}
+    ${attributes.size ? `<g:size>${xe(attributes.size)}</g:size>` : ''}
+    ${attributes.material ? `<g:material>${xe(attributes.material)}</g:material>` : ''}
+    ${attributes.pattern ? `<g:pattern>${xe(attributes.pattern)}</g:pattern>` : ''}
     ${product.googleProductCategory ? `<g:google_product_category>${xe(product.googleProductCategory)}</g:google_product_category>` : ''}
     ${product.category?.name ? `<g:product_type>${xe(product.category.name)}</g:product_type>` : ''}
     <g:shipping>
@@ -343,6 +364,34 @@ router.get('/google-shopping-feed.xml', async (req, res) => {
       <g:price>${shippingCost.toFixed(2)} ${currency}</g:price>
     </g:shipping>
   </item>`;
+
+      const combinations = Array.isArray(product.variantCombinations)
+        ? product.variantCombinations.filter(item => item?.combination && Number(item.price ?? product.price) > 0)
+        : [];
+      if (!combinations.length) return [renderItem({
+        id: product._id, title: product.name, regularPrice: product.price,
+        salePrice: hasSale ? product.salePrice : null, stock: product.stock,
+        gtin: product.gtin, mpn: product.mpn, imageUrl: image,
+      })];
+
+      return combinations.map((variant, index) => {
+        const attributes = Object.fromEntries(Object.entries(variant.combination || {}).map(([key, value]) => [String(key).toLowerCase(), String(value)]));
+        const labels = Object.values(variant.combination || {}).filter(Boolean);
+        const regularPrice = Number(variant.price ?? product.price);
+        const variantImage = absoluteUrl(variant.image, siteUrl) || image;
+        return renderItem({
+          id: `${product._id}-${variant._id || variant.sku || index + 1}`,
+          title: `${product.name}${labels.length ? ` — ${labels.join(' / ')}` : ''}`,
+          regularPrice,
+          salePrice: variant.salePrice,
+          stock: variant.stock ?? product.stock,
+          gtin: variant.gtin,
+          mpn: variant.mpn,
+          imageUrl: variantImage,
+          itemGroupId: String(product._id),
+          attributes,
+        });
+      });
     }).join('\n');
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -497,9 +546,22 @@ Disallow: /superadmin/
 Disallow: /api/
 Disallow: /checkout
 Disallow: /cart
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
 Disallow: /account
 Disallow: /my-orders
+Disallow: /wishlist
+Disallow: /order-success/
+Disallow: /track-order/
 Disallow: /returns
+Disallow: /*?*search=
+Disallow: /*?*sort=
+Disallow: /*?*minPrice=
+Disallow: /*?*maxPrice=
+Disallow: /*?*utm_
+Disallow: /*?*gclid=
+Disallow: /*?*fbclid=
 
 Sitemap: ${siteUrl}/sitemap.xml`;
     if (customRobots) {
@@ -562,6 +624,7 @@ router.get('/admin/product-audit', adminAuth, async (req, res) => {
       ...productSeoAudit(product, { siteUrl }),
     }));
     const activeRows = rows.filter(row => row.active);
+    const indexEligible = activeRows.filter(row => row.indexEligible).length;
     const eligible = activeRows.filter(row => row.eligible).length;
     const merchantEligible = activeRows.filter(row => row.merchantEligible).length;
     const errorCount = activeRows.reduce((sum, row) => sum + row.errors.length, 0);
@@ -580,9 +643,9 @@ router.get('/admin/product-audit', adminAuth, async (req, res) => {
     ];
     return res.json({
       siteUrl,
-      summary: { total: products.length, active: activeRows.length, eligible, merchantEligible, errorCount, merchantErrorCount, warningCount, score: activeRows.length ? Math.round(activeRows.reduce((sum, row) => sum + row.score, 0) / activeRows.length) : 0 },
+      summary: { total: products.length, active: activeRows.length, indexEligible, eligible, merchantEligible, errorCount, merchantErrorCount, warningCount, score: activeRows.length ? Math.round(activeRows.reduce((sum, row) => sum + row.score, 0) / activeRows.length) : 0 },
       storeChecks,
-      products: rows.filter(row => row.active && (!row.eligible || row.warnings.length)).slice(0, 200),
+      products: rows.filter(row => row.active && (!row.merchantEligible || row.warnings.length)).slice(0, 200),
       urls: siteUrl ? { sitemap: `${siteUrl}/sitemap.xml`, productSitemap: `${siteUrl}/products-sitemap.xml`, merchantFeed: `${siteUrl}/google-shopping-feed.xml`, robots: `${siteUrl}/robots.txt` } : {},
     });
   } catch (err) {
@@ -630,7 +693,7 @@ function jsonForHtml(value) {
 }
 
 // ── Meta injection ─────────────────────────────────────────────────────────────
-function injectMeta(html, { title, desc, canonical, ogImage, ogType = 'website', keywords, schemas = [], verification = '' }) {
+function injectMeta(html, { title, desc, canonical, ogImage, ogType = 'website', keywords, schemas = [], verification = '', robots = 'index,follow,max-image-preview:large' }) {
   const schemaBlocks = schemas.filter(Boolean).map(s =>
     `<script type="application/ld+json">${jsonForHtml(s)}</script>`
   ).join('\n');
@@ -638,7 +701,7 @@ function injectMeta(html, { title, desc, canonical, ogImage, ogType = 'website',
   const head = `
   <title>${xe(title)}</title>
   <meta name="description" content="${xe(desc)}">
-  <meta name="robots" content="index,follow,max-image-preview:large">
+  <meta name="robots" content="${xe(robots)}">
   ${verification ? `<meta name="google-site-verification" content="${xe(verification)}">` : ''}
   <meta name="keywords" content="${xe(keywords || '')}">
   <link rel="canonical" href="${xe(canonical)}">
@@ -729,52 +792,6 @@ async function getReviewSchemas(productId, tenantId) {
   } catch { return []; }
 }
 
-function buildProductFAQ(product, siteUrl, storeName) {
-  const price = hasValidSale(product) ? product.salePrice : product.price;
-  const qs = [
-    { q: `What is the price of ${product.name} in Sri Lanka?`, a: `${product.name} is available at Rs.${price?.toLocaleString()} at ${storeName}.` },
-    { q: `Is ${product.name} available in Sri Lanka?`, a: `Yes, ${product.name} is available for purchase at ${storeName} with fast delivery across Sri Lanka.` },
-    { q: `What is the warranty for ${product.name}?`, a: product.brand ? `${product.brand} products come with the manufacturer's standard warranty. Contact ${storeName} for details.` : `Please contact ${storeName} for warranty information.` },
-    { q: `How long does delivery take for ${product.name}?`, a: `Standard delivery takes 1–5 business days across Sri Lanka. Express options may be available at checkout.` },
-  ];
-  return {
-    '@context': 'https://schema.org', '@type': 'FAQPage',
-    mainEntity: qs.map(({ q, a }) => ({
-      '@type': 'Question', name: q,
-      acceptedAnswer: { '@type': 'Answer', text: a },
-    })),
-  };
-}
-
-function buildCategoryFAQ(catName, siteUrl) {
-  const qs = [
-    { q: `Where can I buy ${catName} online in Sri Lanka?`, a: `You can buy ${catName} online in Sri Lanka right here, with fast delivery island-wide.` },
-    { q: `What brands of ${catName} are available?`, a: `We carry a wide selection of ${catName} from leading brands. Browse our collection for the latest models and best prices.` },
-    { q: `How do I get the best price on ${catName} in Sri Lanka?`, a: `Check our ${catName} section regularly for deals, sale prices, and bundle offers. Sign up for our newsletter for exclusive discounts.` },
-  ];
-  return {
-    '@context': 'https://schema.org', '@type': 'FAQPage',
-    mainEntity: qs.map(({ q, a }) => ({
-      '@type': 'Question', name: q,
-      acceptedAnswer: { '@type': 'Answer', text: a },
-    })),
-  };
-}
-
-function buildBrandFAQ(brandName, siteUrl, slug) {
-  const qs = [
-    { q: `Where can I buy ${brandName} products in Sri Lanka?`, a: `Genuine ${brandName} products are available here with manufacturer warranty and fast delivery across Sri Lanka.` },
-    { q: `Are ${brandName} products genuine/original in Sri Lanka?`, a: `Yes, all ${brandName} products listed here are 100% genuine with valid manufacturer warranty.` },
-  ];
-  return {
-    '@context': 'https://schema.org', '@type': 'FAQPage',
-    mainEntity: qs.map(({ q, a }) => ({
-      '@type': 'Question', name: q,
-      acceptedAnswer: { '@type': 'Answer', text: a },
-    })),
-  };
-}
-
 function buildItemListSchema(products, listUrl, listName) {
   if (!products?.length) return null;
   let origin = '';
@@ -789,6 +806,72 @@ function buildItemListSchema(products, listUrl, listName) {
       name: p.name,
       image: absoluteUrl(p.thumbnail || p.images?.[0], origin) || undefined,
     })),
+  };
+}
+
+function buildProductGroupSchema(product, productSchema, productUrl) {
+  const combinations = Array.isArray(product.variantCombinations)
+    ? product.variantCombinations.filter(item => item && item.combination && Number(item.price ?? product.price) > 0)
+    : [];
+  if (!combinations.length) return productSchema;
+
+  const variantKeys = [...new Set(combinations.flatMap(item => Object.keys(item.combination || {})))];
+  const propertyMap = {
+    color: 'https://schema.org/color',
+    size: 'https://schema.org/size',
+    material: 'https://schema.org/material',
+    pattern: 'https://schema.org/pattern',
+  };
+  // Google only accepts Schema.org properties in variesBy. Custom variant
+  // dimensions remain represented on each variant through additionalProperty.
+  const variesBy = variantKeys
+    .map(key => propertyMap[String(key).toLowerCase()])
+    .filter(Boolean);
+  const common = { ...productSchema };
+  delete common['@context'];
+  delete common['@type'];
+  delete common.sku;
+  delete common.offers;
+  delete common.gtin8;
+  delete common.gtin12;
+  delete common.gtin13;
+  delete common.gtin14;
+  delete common.mpn;
+
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'ProductGroup',
+    ...common,
+    productGroupID: String(product._id),
+    ...(variesBy.length ? { variesBy } : {}),
+    hasVariant: combinations.map((item, index) => {
+      const labels = Object.entries(item.combination || {}).filter(([, value]) => value !== undefined && value !== null && value !== '');
+      const variantPrice = Number(item.salePrice) > 0 && Number(item.salePrice) < Number(item.price ?? product.price)
+        ? Number(item.salePrice)
+        : Number(item.price ?? productSchema.offers?.price);
+      const variant = {
+        '@type': 'Product',
+        name: `${product.name}${labels.length ? ` — ${labels.map(([, value]) => value).join(' / ')}` : ''}`,
+        sku: item.sku || `${product.sku || product._id}-${index + 1}`,
+        ...gtinProperty(item.gtin),
+        ...(item.mpn ? { mpn: item.mpn } : {}),
+        image: item.image ? [absoluteUrl(item.image, productUrl), ...(productSchema.image || [])].filter(Boolean) : productSchema.image,
+        offers: {
+          ...productSchema.offers,
+          // This storefront selects variants on one canonical page. Do not
+          // invent variant URLs that the UI cannot restore on navigation.
+          url: productUrl,
+          price: variantPrice,
+          availability: Number(item.stock ?? product.stock) > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+        },
+      };
+      labels.forEach(([key, value]) => {
+        const normalized = String(key).toLowerCase();
+        if (['color', 'size', 'material', 'pattern'].includes(normalized)) variant[normalized] = String(value);
+        else variant.additionalProperty = [...(variant.additionalProperty || []), { '@type': 'PropertyValue', name: key, value: String(value) }];
+      });
+      return variant;
+    }),
   };
 }
 
@@ -840,10 +923,17 @@ const seoRenderMiddleware = async (req, res) => {
   const returnPolicy = buildReturnPolicy(tenantSettings);
   if (returnPolicy) returnPolicy['@id'] = `${siteUrl}/returns#policy`;
 
+  const sameAs = [tenantSettings.facebookUrl, tenantSettings.instagramUrl, tenantSettings.twitterUrl,
+    tenantSettings.linkedinUrl, tenantSettings.youtubeUrl].map(value => absoluteUrl(value, siteUrl)).filter(Boolean);
+
   const orgSchema = {
-    '@context': 'https://schema.org', '@type': 'Organization',
+    '@context': 'https://schema.org', '@type': 'OnlineStore', '@id': `${siteUrl}/#organization`,
     name: storeName, url: siteUrl,
-    ...(logoUrl ? { logo: { '@type': 'ImageObject', url: logoUrl, width: 512, height: 512 } } : {}),
+    ...(logoUrl ? { logo: absoluteUrl(logoUrl, siteUrl) } : {}),
+    ...(tenantSettings.storeEmail ? { email: tenantSettings.storeEmail } : {}),
+    ...(tenantSettings.storePhone || tenantSettings.phone ? { telephone: tenantSettings.storePhone || tenantSettings.phone } : {}),
+    ...(tenantSettings.storeAddress ? { address: { '@type': 'PostalAddress', streetAddress: tenantSettings.storeAddress, addressCountry: tenantSettings.merchantCountryCode || 'LK' } } : {}),
+    ...(sameAs.length ? { sameAs } : {}),
     ...(returnPolicy ? { hasMerchantReturnPolicy: returnPolicy } : {}),
   };
 
@@ -858,7 +948,7 @@ const seoRenderMiddleware = async (req, res) => {
       if (product) {
         const productUrl   = `${siteUrl}/product/${product.slug}`;
         const eligibility = productSeoAudit(product, { siteUrl });
-        if (!eligibility.eligible) {
+        if (!eligibility.indexEligible) {
           return noIndexResponse(res, 200, `<!doctype html><html><head><meta name="robots" content="noindex,follow"><title>${xe(product.name)}</title></head><body><h1>${xe(product.name)}</h1><p>This product page is awaiting complete product information.</p></body></html>`);
         }
         const metaTitle    = buildProductTitle(product, storeName);
@@ -875,13 +965,27 @@ const seoRenderMiddleware = async (req, res) => {
         const keywords     = [product.name, product.brand, product.category?.name, ...(product.tags || []), 'sri lanka'].filter(Boolean).join(', ');
         const schemaDesc   = plainDesc.slice(0, 500) || (product.brand ? `${product.brand} ${product.name}` : product.name);
 
-        const reviewSchemas = await getReviewSchemas(product._id, tenantId);
+        const relatedClauses = [
+          ...(product.category?._id ? [{ category: product.category._id }] : []),
+          ...(product.brand ? [{ brand: product.brand }] : []),
+        ];
+        const relatedFilter = {
+          _id: { $ne: product._id },
+          isActive: true,
+          ...(relatedClauses.length ? { $or: relatedClauses } : {}),
+        };
+        const [reviewSchemas, relatedProducts] = await Promise.all([
+          getReviewSchemas(product._id, tenantId),
+          Product.find(tenantFilter(tenantId, relatedFilter), 'name slug brand thumbnail')
+            .sort({ isFeatured: -1, soldCount: -1, updatedAt: -1 }).limit(8).lean(),
+        ]);
 
         const schema = {
           '@context': 'https://schema.org', '@type': 'Product',
           name: product.name, description: schemaDesc,
           image: uniqueImages.slice(0, 10),
           sku: product.sku || product._id.toString(),
+          ...(product.category?.name ? { category: product.category.name } : {}),
           ...gtinProperty(product.gtin),
           ...(product.mpn ? { mpn: product.mpn } : {}),
           ...(product.brand ? { brand: { '@type': 'Brand', name: product.brand } } : {}),
@@ -894,7 +998,7 @@ const seoRenderMiddleware = async (req, res) => {
             } : {}),
             availability: product.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
             itemCondition: schemaCondition(product.condition),
-            seller: { '@type': 'Organization', name: storeName },
+            seller: { '@id': `${siteUrl}/#organization` },
             shippingDetails: buildShippingDetails(tenantSettings, seoSettings.currencyCode || tenantSettings.currency),
             ...(returnPolicy ? { hasMerchantReturnPolicy: { '@id': `${siteUrl}/returns#policy` } } : {}),
           },
@@ -908,6 +1012,7 @@ const seoRenderMiddleware = async (req, res) => {
           } : {}),
           ...(reviewSchemas.length ? { review: reviewSchemas } : {}),
         };
+        const structuredProduct = buildProductGroupSchema(product, schema, productUrl);
 
         const breadcrumb = {
           '@context': 'https://schema.org', '@type': 'BreadcrumbList',
@@ -919,14 +1024,16 @@ const seoRenderMiddleware = async (req, res) => {
           ],
         };
 
-        const metadataHtml = injectTenantMeta(html, { title: metaTitle, desc: metaDesc, canonical: productUrl, ogImage, ogType: 'product', keywords, schemas: [schema, breadcrumb, orgSchema] });
+        const metadataHtml = injectTenantMeta(html, { title: metaTitle, desc: metaDesc, canonical: productUrl, ogImage, ogType: 'product', keywords, schemas: [eligibility.eligible ? structuredProduct : null, breadcrumb, orgSchema].filter(Boolean) });
         const out = injectVisibleContent(metadataHtml, `<article>
-          <nav><a href="${xe(siteUrl)}">Home</a> · <a href="${xe(`${siteUrl}/shop`)}">Shop</a></nav>
+          <nav aria-label="Breadcrumb"><a href="${xe(siteUrl)}">Home</a> · <a href="${xe(`${siteUrl}/shop`)}">Shop</a>${product.category ? ` · <a href="${xe(`${siteUrl}/category/${product.category.slug}`)}">${xe(product.category.name)}</a>` : ''}</nav>
           <h1>${xe(product.name)}</h1>
-          ${ogImage ? `<img src="${xe(ogImage)}" alt="${xe(product.name)}" width="800" height="800">` : ''}
+          ${ogImage ? `<img src="${xe(ogImage)}" alt="${xe(`${product.name}${product.brand ? ` by ${product.brand}` : ''}`)}" title="${xe(product.name)}" width="800" height="800" loading="eager" fetchpriority="high">` : ''}
           <p>${xe(schemaDesc)}</p>
           <p><strong>${xe(normalizeCurrency(seoSettings.currencyCode || tenantSettings.currency))} ${Number(activePrice).toFixed(2)}</strong></p>
           <p>${product.stock > 0 ? `In stock (${Number(product.stock)} available)` : 'Out of stock'}</p>
+          ${product.brand ? `<p>Brand: <a href="${xe(`${siteUrl}/brand/${publicSlug(product.brand)}`)}">${xe(product.brand)}</a></p>` : ''}
+          ${relatedProducts.length ? `<section aria-labelledby="related-products"><h2 id="related-products">Related products</h2><ul>${relatedProducts.map(item => `<li><a href="${xe(`${siteUrl}/product/${item.slug}`)}">${xe(item.name)}</a></li>`).join('')}</ul></section>` : ''}
         </article>`);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-cache, must-revalidate');
@@ -943,15 +1050,20 @@ const seoRenderMiddleware = async (req, res) => {
       const slug = categoryMatch[1];
       const cat  = await Category.findOne(tenantFilter(tenantId, { slug, isActive: true })).lean();
       if (cat) {
-        const catUrl   = `${siteUrl}/category/${slug}`;
-        const title    = `${cat.name} — Buy Online in Sri Lanka | ${storeName}`;
+        const page = Math.max(1, Math.floor(Number(req.query.page) || 1));
+        const pageSize = 24;
+        const catBaseUrl = `${siteUrl}/category/${slug}`;
+        const catUrl   = `${catBaseUrl}${page > 1 ? `?page=${page}` : ''}`;
+        const title    = `${cat.name} — Buy Online in Sri Lanka${page > 1 ? ` — Page ${page}` : ''} | ${storeName}`;
         const plainCatDesc = cat.description ? String(cat.description).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim() : '';
         const desc     = plainCatDesc.slice(0, 155) || `Browse ${cat.name} at ${storeName}. See current prices, product details, and live stock status.`;
         const keywords = `${cat.name}, buy ${cat.name} online sri lanka, ${storeName}`;
 
-        const [featuredProduct, catProducts] = await Promise.all([
+        const [featuredProduct, catProducts, catProductCount] = await Promise.all([
           Product.findOne(tenantFilter(tenantId, { category: cat._id, isActive: true, thumbnail: { $exists: true, $ne: '' } })).lean(),
-          Product.find(tenantFilter(tenantId, { category: cat._id, isActive: true }), 'name slug thumbnail images brand price salePrice stock ratings').limit(20).lean(),
+          Product.find(tenantFilter(tenantId, { category: cat._id, isActive: true }), 'name slug thumbnail images brand price salePrice stock ratings')
+            .sort({ updatedAt: -1, _id: 1 }).skip((page - 1) * pageSize).limit(pageSize).lean(),
+          Product.countDocuments(tenantFilter(tenantId, { category: cat._id, isActive: true })),
         ]);
         if (!catProducts.length) return noIndexResponse(res, 404, '<!doctype html><meta name="robots" content="noindex"><title>Category has no products</title><h1>Category has no products</h1>');
         const ogImage = featuredProduct?.thumbnail || fallbackOgImage;
@@ -963,7 +1075,8 @@ const seoRenderMiddleware = async (req, res) => {
         ]};
         const itemListSchema = buildItemListSchema(catProducts, catUrl, `${cat.name} — Buy Online`);
         const metadataHtml = injectTenantMeta(html, { title, desc, canonical: catUrl, ogImage, ogType: 'website', keywords, schemas: [breadcrumb, orgSchema, itemListSchema].filter(Boolean) });
-        const out = injectVisibleContent(metadataHtml, `<section><h1>${xe(cat.name)}</h1><p>${xe(desc)}</p><ul>${catProducts.map(product => `<li><a href="${xe(`${siteUrl}/product/${product.slug}`)}">${xe(product.name)}</a></li>`).join('')}</ul></section>`);
+        const totalPages = Math.max(1, Math.ceil(catProductCount / pageSize));
+        const out = injectVisibleContent(metadataHtml, `<section><nav aria-label="Breadcrumb"><a href="${xe(siteUrl)}">Home</a> · <a href="${xe(`${siteUrl}/shop`)}">Shop</a></nav><h1>${xe(cat.name)}${page > 1 ? ` — Page ${page}` : ''}</h1><p>${xe(desc)}</p><ul>${catProducts.map(product => `<li><a href="${xe(`${siteUrl}/product/${product.slug}`)}">${xe(product.name)}</a></li>`).join('')}</ul><nav aria-label="Pagination">${page > 1 ? `<a href="${xe(`${catBaseUrl}${page > 2 ? `?page=${page - 1}` : ''}`)}">Previous</a>` : ''}${page < totalPages ? ` <a href="${xe(`${catBaseUrl}?page=${page + 1}`)}">Next</a>` : ''}</nav></section>`);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-cache, must-revalidate');
         return res.status(200).send(injectWindowConfig(out, tenantInfo));
@@ -980,14 +1093,19 @@ const seoRenderMiddleware = async (req, res) => {
       const brandNames = await Product.distinct('brand', tenantFilter(tenantId, { isActive: true, brand: { $nin: [null, ''] } }));
       const brandName = brandNames.find(name => publicSlug(name) === slug);
       if (!brandName) return noIndexResponse(res, 404, '<!doctype html><meta name="robots" content="noindex"><title>Brand not found</title><h1>Brand not found</h1>');
-      const brandUrl  = `${siteUrl}/brand/${slug}`;
-      const title     = `${brandName} Products — Buy Online in Sri Lanka | ${storeName}`;
+      const page = Math.max(1, Math.floor(Number(req.query.page) || 1));
+      const pageSize = 24;
+      const brandBaseUrl = `${siteUrl}/brand/${slug}`;
+      const brandUrl  = `${brandBaseUrl}${page > 1 ? `?page=${page}` : ''}`;
+      const title     = `${brandName} Products — Buy Online in Sri Lanka${page > 1 ? ` — Page ${page}` : ''} | ${storeName}`;
       const desc      = `Browse ${brandName} products at ${storeName}. See current prices, product details, and live stock status.`;
       const keywords  = `${brandName}, buy ${brandName} online sri lanka, ${storeName}`;
 
-      const [featuredProduct, brandProducts] = await Promise.all([
+      const [featuredProduct, brandProducts, brandProductCount] = await Promise.all([
         Product.findOne(tenantFilter(tenantId, { brand: brandName, isActive: true, thumbnail: { $exists: true, $ne: '' } })).lean(),
-        Product.find(tenantFilter(tenantId, { brand: brandName, isActive: true }), 'name slug thumbnail brand price salePrice stock').limit(20).lean(),
+        Product.find(tenantFilter(tenantId, { brand: brandName, isActive: true }), 'name slug thumbnail brand price salePrice stock')
+          .sort({ updatedAt: -1, _id: 1 }).skip((page - 1) * pageSize).limit(pageSize).lean(),
+        Product.countDocuments(tenantFilter(tenantId, { brand: brandName, isActive: true })),
       ]);
       if (!brandProducts.length) return noIndexResponse(res, 404, '<!doctype html><meta name="robots" content="noindex"><title>Brand not found</title><h1>Brand not found</h1>');
       const ogImage = featuredProduct?.thumbnail || fallbackOgImage;
@@ -999,7 +1117,8 @@ const seoRenderMiddleware = async (req, res) => {
       ]};
       const itemListSchema = buildItemListSchema(brandProducts, brandUrl, `${brandName} Products`);
       const metadataHtml = injectTenantMeta(html, { title, desc, canonical: brandUrl, ogImage, ogType: 'website', keywords, schemas: [breadcrumb, orgSchema, itemListSchema].filter(Boolean) });
-      const out = injectVisibleContent(metadataHtml, `<section><h1>${xe(`${brandName} Products`)}</h1><p>${xe(desc)}</p><ul>${brandProducts.map(product => `<li><a href="${xe(`${siteUrl}/product/${product.slug}`)}">${xe(product.name)}</a></li>`).join('')}</ul></section>`);
+      const totalPages = Math.max(1, Math.ceil(brandProductCount / pageSize));
+      const out = injectVisibleContent(metadataHtml, `<section><nav aria-label="Breadcrumb"><a href="${xe(siteUrl)}">Home</a> · <a href="${xe(`${siteUrl}/shop`)}">Shop</a></nav><h1>${xe(`${brandName} Products`)}${page > 1 ? ` — Page ${page}` : ''}</h1><p>${xe(desc)}</p><ul>${brandProducts.map(product => `<li><a href="${xe(`${siteUrl}/product/${product.slug}`)}">${xe(product.name)}</a></li>`).join('')}</ul><nav aria-label="Pagination">${page > 1 ? `<a href="${xe(`${brandBaseUrl}${page > 2 ? `?page=${page - 1}` : ''}`)}">Previous</a>` : ''}${page < totalPages ? ` <a href="${xe(`${brandBaseUrl}?page=${page + 1}`)}">Next</a>` : ''}</nav></section>`);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, must-revalidate');
       return res.status(200).send(injectWindowConfig(out, tenantInfo));
@@ -1036,8 +1155,9 @@ const seoRenderMiddleware = async (req, res) => {
       const ogImage = tenantSettings.ogImage || seoSettings.defaultOgImage || fallbackOgImage;
 
       const homeSchema = {
-        '@context': 'https://schema.org', '@type': 'WebSite',
+        '@context': 'https://schema.org', '@type': 'WebSite', '@id': `${siteUrl}/#website`,
         name: storeName, url: siteUrl,
+        publisher: { '@id': `${siteUrl}/#organization` },
         potentialAction: {
           '@type': 'SearchAction',
           target: { '@type': 'EntryPoint', urlTemplate: `${siteUrl}/shop?search={search_term_string}` },
@@ -1053,6 +1173,10 @@ const seoRenderMiddleware = async (req, res) => {
     } catch (err) { console.error('[SSR home]', err.message); return noIndexResponse(res, 503, 'Store SEO temporarily unavailable'); }
   }
 
+  // /store is the client application's home alias. Search engines should
+  // consolidate it into the tenant root instead of indexing duplicate home URLs.
+  if (req.path === '/store') return res.redirect(301, siteUrl);
+
   // ── /shop ────────────────────────────────────────────────────────────────────
   const legacyShopCategory = req.path.match(/^\/shop\/([^/]+)$/);
   if (legacyShopCategory) {
@@ -1063,12 +1187,24 @@ const seoRenderMiddleware = async (req, res) => {
 
   if (req.path === '/shop' || req.path.startsWith('/shop/')) {
     try {
-      const title   = `Shop All Products | ${storeName}`;
+      const page = Math.max(1, Math.floor(Number(req.query.page) || 1));
+      const pageSize = 24;
+      const filterKeys = Object.keys(req.query || {}).filter(key => key !== 'page' && !/^(utm_|fbclid|gclid|msclkid|ref|igshid)/i.test(key));
+      const isFiltered = filterKeys.length > 0;
+      const shopBaseUrl = `${siteUrl}/shop`;
+      const canonical = `${shopBaseUrl}${!isFiltered && page > 1 ? `?page=${page}` : ''}`;
+      const title   = `Shop All Products${!isFiltered && page > 1 ? ` — Page ${page}` : ''} | ${storeName}`;
       const desc    = `Browse all current products at ${storeName}, including prices, details, and live stock status.`;
-      const products = await Product.find(tenantFilter(tenantId, { isActive: true }), 'name slug thumbnail images').sort({ updatedAt: -1 }).limit(100).lean();
-      const itemListSchema = buildItemListSchema(products, `${siteUrl}/shop`, `Products at ${storeName}`);
-      const metadataHtml = injectTenantMeta(html, { title, desc, canonical: `${siteUrl}/shop`, ogImage: fallbackOgImage, ogType: 'website', keywords: storeName, schemas: [orgSchema, itemListSchema].filter(Boolean) });
-      const out = injectVisibleContent(metadataHtml, `<section><h1>Shop All Products</h1><p>${xe(desc)}</p><ul>${products.map(product => `<li><a href="${xe(`${siteUrl}/product/${product.slug}`)}">${xe(product.name)}</a></li>`).join('')}</ul></section>`);
+      const [products, productCount] = await Promise.all([
+        Product.find(tenantFilter(tenantId, { isActive: true }), 'name slug thumbnail images')
+          .sort({ updatedAt: -1, _id: 1 }).skip((page - 1) * pageSize).limit(pageSize).lean(),
+        Product.countDocuments(tenantFilter(tenantId, { isActive: true })),
+      ]);
+      if (!products.length && page > 1) return noIndexResponse(res, 404, '<!doctype html><meta name="robots" content="noindex"><title>Page not found</title><h1>Page not found</h1>');
+      const itemListSchema = !isFiltered ? buildItemListSchema(products, canonical, `Products at ${storeName}`) : null;
+      const metadataHtml = injectTenantMeta(html, { title, desc, canonical, ogImage: fallbackOgImage, ogType: 'website', keywords: storeName, schemas: [orgSchema, itemListSchema].filter(Boolean), robots: isFiltered ? 'noindex,follow' : 'index,follow,max-image-preview:large' });
+      const totalPages = Math.max(1, Math.ceil(productCount / pageSize));
+      const out = injectVisibleContent(metadataHtml, `<section><h1>Shop All Products${!isFiltered && page > 1 ? ` — Page ${page}` : ''}</h1><p>${xe(desc)}</p><ul>${products.map(product => `<li><a href="${xe(`${siteUrl}/product/${product.slug}`)}">${xe(product.name)}</a></li>`).join('')}</ul><nav aria-label="Pagination">${!isFiltered && page > 1 ? `<a href="${xe(`${shopBaseUrl}${page > 2 ? `?page=${page - 1}` : ''}`)}">Previous</a>` : ''}${!isFiltered && page < totalPages ? ` <a href="${xe(`${shopBaseUrl}?page=${page + 1}`)}">Next</a>` : ''}</nav></section>`);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache, must-revalidate');
       return res.status(200).send(injectWindowConfig(out, tenantInfo));

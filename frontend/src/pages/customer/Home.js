@@ -134,8 +134,8 @@ const ProductCard = ({ product, settings, priority = false }) => {
           className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl border-2 cursor-pointer ${t.visible?'fade-up':''}`}
           style={{ background:'var(--card-bg)', borderColor:'var(--color-primary)', minWidth:250, maxWidth:320 }}>
           <div className="relative flex-shrink-0">
-            <img src={product.thumbnail||product.images?.[0]||'https://via.placeholder.com/48'} alt=""
-              className="w-12 h-12 rounded-xl object-cover"/>
+            <img src={product.thumbnail||product.images?.[0]||'https://via.placeholder.com/48'} alt="" width="48" height="48"
+              loading="lazy" decoding="async" className="w-12 h-12 rounded-xl object-cover"/>
             <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-black"
               style={{ background:'var(--theme-gradient)' }}>✓</div>
           </div>
@@ -154,7 +154,7 @@ const ProductCard = ({ product, settings, priority = false }) => {
   return (
     <article ref={cardRef} className="product-card group" style={{ transformStyle:'preserve-3d', willChange:'transform' }}>
       <Link to={`/product/${product.slug}`} className="product-card-media block relative overflow-hidden bg-gray-50" style={{ aspectRatio:'1/1' }}>
-        <img ref={imgRef} src={product.thumbnail||product.images?.[0]||'https://via.placeholder.com/300'} alt={product.name}
+        <img ref={imgRef} src={product.thumbnail||product.images?.[0]||'https://via.placeholder.com/300'} alt={product.name} width="600" height="600"
           loading={priority ? 'eager' : 'lazy'} decoding="async" fetchPriority={priority ? 'high' : 'auto'}
           className="w-full h-full object-cover" style={{ willChange: config.reducedMotion ? 'auto' : 'transform' }}/>
         <div ref={shineRef} className="absolute inset-0 pointer-events-none z-10"
@@ -329,7 +329,7 @@ const HeroSlider = ({ banners, settings, campaign, anim }) => {
       {/* BG */}
       <div ref={bgRef} className="absolute will-change-transform" style={{ inset:0, top:'-14%', height:'128%', transformOrigin:'center center' }}>
         {slide.image
-          ? <img src={slide.image} alt="" className="w-full h-full object-cover" loading="eager" decoding="async" fetchPriority="high"/>
+          ? <img src={slide.image} alt="" width="1600" height="900" className="w-full h-full object-cover" loading="eager" decoding="async" fetchPriority="high"/>
           : (
             <div className="w-full h-full relative" style={{ background:'var(--hero-gradient)' }}>
               {/* Animated orbs */}
@@ -503,7 +503,7 @@ const CategoryCard = ({ cat }) => {
       <div ref={iconRef} className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-2xl sm:text-3xl"
         style={{ background:'linear-gradient(135deg,var(--color-primary)20,var(--color-accent)10)', willChange:'transform' }}>
         {cat.image
-          ? <img src={cat.image} alt={cat.name} className="w-8 h-8 sm:w-10 sm:h-10 object-cover rounded-xl" loading="lazy" decoding="async"/>
+          ? <img src={cat.image} alt={cat.name} width="40" height="40" className="w-8 h-8 sm:w-10 sm:h-10 object-cover rounded-xl" loading="lazy" decoding="async"/>
           : <span>{ICONS[cat.slug]||'🛍️'}</span>}
       </div>
       <span className="text-xs sm:text-sm font-bold text-center leading-tight" style={{ color:'var(--color-dark)' }}>{cat.name}</span>
@@ -532,7 +532,7 @@ const BrandLogoCard = ({ brand }) => {
       <div className="mx-auto w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center overflow-hidden mb-3"
         style={{ background:'linear-gradient(135deg,var(--color-primary)10,var(--color-accent)08)' }}>
         {brand.image ? (
-          <img src={brand.image} alt={brand.name} className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300" loading="lazy" decoding="async"/>
+          <img src={brand.image} alt={brand.name} width="160" height="80" className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300" loading="lazy" decoding="async"/>
         ) : (
           <span className="text-lg sm:text-xl font-black" style={{ color:'var(--color-primary)', fontFamily:'var(--font-display)' }}>{initials}</span>
         )}
@@ -654,7 +654,7 @@ const PromoBanner = ({ banner, tall=false }) => {
       style={{ minHeight:tall?280:210, transformStyle:'preserve-3d', willChange:'transform' }}>
       <div ref={imgRef} className="absolute will-change-transform" style={{ inset:'-12%', top:'-16%', height:'132%' }}>
         {banner.image
-          ? <img src={banner.image} alt={banner.title||''} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" decoding="async"/>
+          ? <img src={banner.image} alt={banner.title||''} width="1200" height="500" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" decoding="async"/>
           : <div className="w-full h-full" style={{ background:'var(--theme-gradient)' }}/>}
       </div>
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent"/>
@@ -1202,7 +1202,7 @@ export default function Home() {
           {/* Logo / icon */}
           <div style={{animation:'szl-fade-up 0.65s cubic-bezier(.34,1.56,.64,1) 0.05s both', marginBottom:'28px'}}>
             {logoUrl ? (
-              <img src={logoUrl} alt={storeName} style={{
+              <img src={logoUrl} alt={`${storeName} logo`} width="200" height="60" style={{
                 height:'60px', maxWidth:'200px', objectFit:'contain',
                 filter: LOGO_FILTER,
                 transition:'filter 0.8s ease',

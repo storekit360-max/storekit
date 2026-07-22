@@ -59,6 +59,26 @@ test('SEO audit accepts extensionless HTTPS CDN image URLs', () => {
   assert.equal(result.merchantEligible, true);
 });
 
+test('Organic indexability is independent from optional rich-result fields', () => {
+  const result = productSeoAudit({ name: 'Discoverable product', slug: 'discoverable-product', isActive: true }, { siteUrl: 'https://shop.example.com' });
+  assert.equal(result.indexEligible, true);
+  assert.equal(result.eligible, false);
+  assert.equal(result.merchantEligible, false);
+});
+
+test('Every sellable variant requires a variant-level identifier for Merchant Center', () => {
+  const result = productSeoAudit({
+    ...goodProduct,
+    variantCombinations: [
+      { combination: { Color: 'Black' }, price: 12500, stock: 2, gtin: '4006381333931' },
+      { combination: { Color: 'Blue' }, price: 12500, stock: 2 },
+    ],
+  }, { siteUrl: 'https://shop.example.com' });
+  assert.equal(result.indexEligible, true);
+  assert.equal(result.merchantEligible, false);
+  assert.ok(result.merchantErrors.some(error => error.includes('Each sellable variant')));
+});
+
 test('GTIN schema property uses the correct identifier length', () => {
   assert.equal(isValidGtin('96385074'), true);
   assert.equal(isValidGtin('4006381333931'), true);
@@ -97,6 +117,7 @@ test('Railway exposes root aliases used by Vercel and Google crawlers', () => {
   const source = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
   assert.match(source, /app\.get\('\/google-shopping-feed\.xml'/);
   assert.match(source, /app\.get\('\/sitemap_index\.xml'/);
+  assert.match(source, /req\.originalUrl\.slice\(queryIndex\)/);
 });
 
 test('Custom robots rules cannot silently remove Google product access', () => {

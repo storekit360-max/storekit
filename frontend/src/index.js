@@ -28,6 +28,12 @@ async function mountStorefront() {
     document.documentElement.setAttribute('data-react-ready', '1');
     const ssrHide = document.getElementById('ssr-hide');
     if (ssrHide) ssrHide.remove();
+    // Crawler responses include meaningful HTML before JavaScript runs. Once
+    // React has committed the equivalent interactive page, remove that static
+    // copy so rendered-DOM validators and assistive technology never see
+    // duplicate headings or product content.
+    const seoContent = document.getElementById('seo-visible-content');
+    if (seoContent) seoContent.remove();
   });
 }
 

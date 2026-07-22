@@ -60,7 +60,12 @@ const productSchema = new mongoose.Schema({
     salePrice: Number,
     stock: Number,
     sku: String,
-    image: String
+    image: String,
+    // Variant-level identifiers prevent Merchant Center from receiving the
+    // same GTIN for several distinct sellable variants. Existing products are
+    // backward-compatible; these fields are optional until an admin supplies them.
+    gtin: { type: String, trim: true, default: '' },
+    mpn: { type: String, trim: true, default: '' }
   }],
   tags: [String],
   isFeatured: { type: Boolean, default: false },

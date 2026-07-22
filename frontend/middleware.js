@@ -34,6 +34,7 @@ export const config = {
   // (assets, /api, /static, favicons, fonts, etc.) before the function runs.
   matcher: [
     '/',
+    '/store',
     '/product/:path*',
     '/category/:path*',
     '/brand/:path*',
@@ -105,6 +106,8 @@ const BOT_UA_RE = new RegExp(
     'Discordbot', 'TelegramBot',
     'Pinterest', 'redditbot',
     'Applebot', 'DuckDuckBot',
+    'OAI-SearchBot', 'ChatGPT-User', 'GPTBot',
+    'ClaudeBot', 'Claude-User', 'PerplexityBot', 'Amazonbot',
     'YandexBot', 'Baiduspider',
   ].join('|'),
   'i'
@@ -170,7 +173,10 @@ export default async function middleware(request) {
         'x-forwarded-host': hostname,
         'x-forwarded-proto': 'https',
       },
-      redirect: 'follow',
+      // Preserve canonical/legacy redirects (for example /store -> /) for the
+      // crawler instead of following them inside the proxy and returning 200
+      // for the obsolete URL.
+      redirect: 'manual',
       signal:   AbortSignal.timeout(10000),
     });
 

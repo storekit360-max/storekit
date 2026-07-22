@@ -59,13 +59,15 @@ function merchantCondition(condition) {
 }
 
 function productSeoAudit(product, { siteUrl = '' } = {}) {
+  const indexErrors = [];
   const errors = [];
   const merchantErrors = [];
   const warnings = [];
   const description = stripHtml(product.shortDescription || product.description);
   const image = absoluteUrl(product.thumbnail || product.images?.[0], siteUrl);
-  if (!String(product.name || '').trim()) errors.push('Missing product title');
-  if (!String(product.slug || '').trim()) errors.push('Missing product URL slug');
+  if (!String(product.name || '').trim()) indexErrors.push('Missing product title');
+  if (!String(product.slug || '').trim()) indexErrors.push('Missing product URL slug');
+  errors.push(...indexErrors);
   if (!(Number(product.price) > 0)) errors.push('Price must be greater than zero');
   if (!description) errors.push('Missing product description');
   else if (description.length < 50) warnings.push('Description should be at least 50 characters');
@@ -82,18 +84,31 @@ function productSeoAudit(product, { siteUrl = '' } = {}) {
   }
   if (!String(product.brand || '').trim()) warnings.push('Brand is recommended when the product has a manufacturer');
   if (product.mpn && !String(product.brand || '').trim()) merchantErrors.push('A brand is required when an MPN is supplied');
-  if (!product.gtin && !product.mpn && product.identifierExists !== false) {
+  const sellableVariants = Array.isArray(product.variantCombinations)
+    ? product.variantCombinations.filter(item => item?.combination && Number(item.price ?? product.price) > 0)
+    : [];
+  const variantsHaveIdentifiers = sellableVariants.length > 0
+    && sellableVariants.every(item => isValidGtin(item.gtin) || String(item.mpn || '').trim());
+  if (!product.gtin && !product.mpn && product.identifierExists !== false && !variantsHaveIdentifiers) {
     merchantErrors.push('Add GTIN or MPN, or explicitly mark that manufacturer identifiers do not exist');
     warnings.push('Merchant Center is waiting for a GTIN/MPN decision');
   }
   if (product.gtin && !isValidGtin(product.gtin)) merchantErrors.push('GTIN has an invalid length or check digit');
+  if (sellableVariants.some(item => item.gtin && !isValidGtin(item.gtin))) merchantErrors.push('One or more variant GTINs have an invalid length or check digit');
+  if (sellableVariants.length && product.identifierExists !== false && !variantsHaveIdentifiers) {
+    merchantErrors.push('Each sellable variant needs its own valid GTIN or MPN');
+  }
   if (product.identifierExists === false && (product.gtin || product.mpn)) merchantErrors.push('Identifier-exists cannot be No when a GTIN or MPN is supplied');
   if ((product.images || []).filter(Boolean).length < 2) warnings.push('Additional product images are recommended');
   const active = product.isActive !== false;
+  // Organic discovery and Merchant eligibility are intentionally separate.
+  // Missing feed/rich-result fields must not make an otherwise useful active
+  // product disappear from Google and from internal discovery sitemaps.
+  const indexEligible = active && indexErrors.length === 0;
   const eligible = active && errors.length === 0;
   const merchantEligible = eligible && merchantErrors.length === 0;
   const score = Math.max(0, 100 - errors.length * 25 - merchantErrors.length * 15 - warnings.length * 5);
-  return { eligible, merchantEligible, score, errors, merchantErrors, warnings };
+  return { indexEligible, eligible, merchantEligible, score, errors, merchantErrors, warnings };
 }
 
 function buildShippingDetails(settings = {}, currency = 'LKR') {

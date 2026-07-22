@@ -18,6 +18,10 @@
       "destination": "https://storekit1-production.up.railway.app/api/:path*"
     },
     {
+      "source": "/manifest.json",
+      "destination": "https://storekit1-production.up.railway.app/api/settings/manifest.json"
+    },
+    {
       "source": "/sitemap.xml",
       "destination": "https://storekit1-production.up.railway.app/api/seo/sitemap.xml"
     },
@@ -55,6 +59,12 @@
     }
   ],
   "headers": [
+    {
+      "source": "/(admin|superadmin|account|my-orders|wishlist|checkout|cart|login|register|forgot-password|order-success|track-order)/:path*",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+      ]
+    },
     {
       "source": "/(.*)",
       "headers": [

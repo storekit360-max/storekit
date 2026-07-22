@@ -353,7 +353,7 @@ export default function Shop() {
                     return (
                       <article key={product._id} className="product-card group">
                         <Link to={`/product/${product.slug}`} className="product-card-media block relative overflow-hidden bg-gray-50" style={{aspectRatio:'1/1'}}>
-                          <img src={product.thumbnail||product.images?.[0]||'https://via.placeholder.com/300'} alt={product.name} loading="lazy" className="card-img w-full h-full object-cover"/>
+                          <img src={product.thumbnail||product.images?.[0]||'https://via.placeholder.com/300'} alt={product.name} width="600" height="600" loading="lazy" decoding="async" className="card-img w-full h-full object-cover"/>
                           <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"/>
                           <div className="absolute top-2 left-2 flex flex-col gap-1">
                             {isOnSale && <span className="badge badge-sale">{discount}% OFF</span>}

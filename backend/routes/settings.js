@@ -205,6 +205,48 @@ router.get('/apple-touch-icon.png', async (req, res) => {
   } catch (err) { res.status(500).send(err.message); }
 });
 
+// A manifest must be tenant-aware too; otherwise an uploaded store icon can
+// appear in the page header while installed tabs/PWA surfaces keep StoreKit's
+// default artwork. When no tenant artwork exists, reference verified bundled
+// PNG fallbacks instead of returning broken image URLs.
+router.get('/manifest.json', async (req, res) => {
+  try {
+    if (req.storeUnavailable) return res.status(503).json({ error: 'Store unavailable' });
+    const tenant = await findTenantFromRequest(req);
+    const settings = toPlain(tenant?.settings);
+    const storeName = tenant?.storeName || settings.storeName || 'Online Store';
+    const hasTenantIcon = Boolean(settings.faviconUrl || settings.logoUrl);
+    const icons = hasTenantIcon
+      ? [
+          { src: '/api/settings/favicon-32x32.png', sizes: '32x32', type: 'image/png', purpose: 'any' },
+          { src: '/api/settings/apple-touch-icon.png', sizes: '180x180', type: 'image/png', purpose: 'any' },
+          { src: '/api/settings/favicon.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+        ]
+      : [
+          { src: '/favicon-32x32.png', sizes: '32x32', type: 'image/png', purpose: 'any' },
+          { src: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png', purpose: 'any' },
+          { src: '/android-chrome-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+          { src: '/android-chrome-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+        ];
+    res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
+    return res.json({
+      short_name: storeName.slice(0, 30),
+      name: storeName,
+      icons,
+      start_url: '/',
+      scope: '/',
+      display: 'standalone',
+      theme_color: settings.primaryColor || '#15803d',
+      background_color: settings.bodyBgColor || (settings.darkMode ? '#0d0d1a' : '#ffffff'),
+      description: settings.metaDescription || `Shop online at ${storeName}`,
+      lang: 'en-LK',
+      dir: 'ltr',
+      categories: ['shopping'],
+    });
+  } catch (err) { return res.status(500).json({ error: err.message }); }
+});
+
 router.get('/', async (req, res) => {
   try {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');

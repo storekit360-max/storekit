@@ -45,14 +45,17 @@ function setLink(rel, href) {
 }
 
 function ssrSchemaExists(schemaType) {
+  const expectedTypes = schemaType === 'Product'
+    ? new Set(['Product', 'ProductGroup'])
+    : new Set([schemaType]);
   const scripts = document.querySelectorAll('script[type="application/ld+json"]');
   for (const s of scripts) {
     if (s.id && s.id.startsWith('ld-')) continue;
     try {
       const data = JSON.parse(s.textContent);
-      if (data['@type'] === schemaType) return true;
+      if (expectedTypes.has(data['@type'])) return true;
       if (Array.isArray(data['@graph'])) {
-        if (data['@graph'].some(node => node['@type'] === schemaType)) return true;
+        if (data['@graph'].some(node => expectedTypes.has(node['@type']))) return true;
       }
     } catch { }
   }
@@ -570,7 +573,7 @@ export default function useSEO({
         });
       }
 
-      setJsonLd('ld-product', productSchema, { bypassSsrCheck: true });
+      setJsonLd('ld-product', productSchema);
     } else {
       removeJsonLd('ld-product');
     }
@@ -588,7 +591,7 @@ export default function useSEO({
             item: b.url.startsWith('http') ? b.url : `${siteUrl}${b.url}`,
           })),
         ],
-      }, { bypassSsrCheck: true });
+      });
     } else {
       removeJsonLd('ld-breadcrumb');
     }

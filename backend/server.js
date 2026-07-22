@@ -330,7 +330,8 @@ safeMount('/api/support',       require('./routes/support'), tenantScope);
 // ─── SEO aliases ──────────────────────────────────────────────────────────────
 function serveSeoAlias(pathname) {
   return (req, res, next) => {
-    req.url = pathname;
+    const queryIndex = req.originalUrl.indexOf('?');
+    req.url = `${pathname}${queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : ''}`;
     seoRoutes(req, res, next);
   };
 }
