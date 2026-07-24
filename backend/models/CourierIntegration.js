@@ -4,7 +4,18 @@ const mongoose = require('mongoose');
 
 const courierIntegrationSchema = new mongoose.Schema({
   tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true },
-  provider: { type: String, enum: ['curfox'], required: true, default: 'curfox' },
+  provider: { type: String, required: true, lowercase: true, trim: true, default: 'curfox' },
+  displayName: { type: String, trim: true, default: '' },
+  environment: { type: String, enum: ['sandbox', 'production'], default: 'production' },
+  isDefault: { type: Boolean, default: false },
+  connectionStatus: { type: String, enum: ['not_tested', 'connected', 'failed'], default: 'not_tested' },
+  lastTestedAt: { type: Date },
+  publicConfiguration: { type: mongoose.Schema.Types.Mixed, default: {} },
+  capabilities: { type: [String], default: [] },
+  encryptedCredentials: {
+    ciphertext: { type: String, select: false }, iv: { type: String, select: false },
+    tag: { type: String, select: false }, version: { type: Number, select: false, default: 1 },
+  },
   enabled: { type: Boolean, default: false },
   courierTenant: { type: String, trim: true, default: '' },
   merchantEmail: { type: String, lowercase: true, trim: true, default: '' },

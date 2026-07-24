@@ -317,6 +317,7 @@ safeMount('/api/scrape',        require('./routes/scrape'), tenantScope);
 safeMount('/api/payments',      require('./routes/payments'), tenantContextOnly);
 safeMount('/api/delivery',      require('./routes/delivery'), tenantScope);
 safeMount('/api/curfox',        require('./routes/curfox'), tenantScope);
+safeMount('/api/courier-integrations', require('./routes/courierIntegrations'), tenantScope);
 safeMount('/api/marketing',     require('./routes/marketing'), tenantScope);
 safeMount('/api/pages',         require('./routes/pages'), tenantScope);
 safeMount('/api/subscribers',   require('./routes/subscribers'), tenantScope);

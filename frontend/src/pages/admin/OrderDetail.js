@@ -21,6 +21,7 @@ export default function AdminOrderDetail() {
   const [newNote, setNewNote]         = useState('');
   const [addingNote, setAddingNote]   = useState(false);
   const [curfox, setCurfox] = useState({ loading:false, preview:null, cities:[], destinationCity:'', destinationState:'', packageWeight:'', waybillNumber:'', remark:'', manualWaybillsEnabled:false });
+  const [genericCouriers, setGenericCouriers] = useState([]);
 
   useEffect(() => {
     API.get(`/orders/${id}`).then(r => {
@@ -30,6 +31,9 @@ export default function AdminOrderDetail() {
       API.put(`/orders/admin/${id}/read`, {}).catch(() => {});
     }).finally(() => setLoading(false));
   }, [id]);
+  useEffect(() => { API.get('/courier-integrations').then(r => setGenericCouriers((r.data || []).filter(x => x.enabled))).catch(() => {}); }, []);
+  const submitGenericCourier = async provider => { try { const {data} = await API.post(`/courier-integrations/${provider}/orders/${id}/submit`); setOrder(data); toast.success('Order submitted to courier'); } catch (err) { toast.error(err?.response?.data?.message || 'Courier submission failed'); } };
+  const refreshGenericCourier = async provider => { try { const {data} = await API.get(`/courier-integrations/${provider}/orders/${id}/tracking`); setOrder(data); toast.success('Tracking refreshed'); } catch (err) { toast.error(err?.response?.data?.message || 'Tracking refresh failed'); } };
 
   const handleStatusUpdate = async () => {
     if (!statusUpdate.status) return;
@@ -205,6 +209,8 @@ export default function AdminOrderDetail() {
               </>}
             </div>
           )}
+
+          {genericCouriers.length > 0 && <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-3"><div><h2 className="font-semibold text-gray-900">Courier Integrations</h2><p className="text-xs text-gray-500">Shipment creation and tracking are always manual.</p></div>{genericCouriers.map(c => <div key={c.provider} className="border border-gray-100 rounded-xl p-4 flex items-center justify-between gap-3"><div><p className="font-semibold text-gray-800">{c.displayName}</p><p className="text-xs text-gray-500">{c.environment} · {order.courier?.provider === c.provider ? (order.courier.externalStatus || 'Submitted') : 'Not submitted'}</p></div><div className="flex flex-wrap gap-2"><button className="btn-primary text-xs" disabled={!['confirmed','processing'].includes(order.orderStatus) || order.courier?.provider === c.provider} onClick={() => submitGenericCourier(c.provider)}>Submit Order</button><button className="btn-outline text-xs" disabled={order.courier?.provider !== c.provider} onClick={() => refreshGenericCourier(c.provider)}>Refresh Tracking</button></div></div>)}</div>}
 
           {/* Status History */}
           {order.statusHistory?.length > 0 && (

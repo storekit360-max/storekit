@@ -186,6 +186,10 @@ export default function AdminSettings() {
     whatsappShowOnDesktop: true,
   });
   const [savingWA, setSavingWA] = useState(false);
+  const [courierProviders, setCourierProviders] = useState([]);
+  const [courierIntegrations, setCourierIntegrations] = useState([]);
+  const [courierModal, setCourierModal] = useState(null);
+  const [courierForm, setCourierForm] = useState({ provider:'', environment:'production', credentials:{}, defaultPackageWeight:1, enabled:false });
 
   useEffect(() => {
     API.get('/settings', { cacheTTL: 5 * 60 * 1000 }).then(r => {
@@ -206,7 +210,21 @@ export default function AdminSettings() {
     API.get('/curfox/settings').then(r => setCurfoxConfig(p=>({...p,...r.data,password:''}))).catch(() => {});
     API.get('/whatsapp/config').then(r => setWhatsappConfig(p => ({ ...p, ...r.data }))).catch(() => {});
     API.get('/pages/admin/all').then(r => setPages(r.data)).catch(() => {});
+    API.get('/courier-integrations/providers').then(r => setCourierProviders(r.data)).catch(() => {});
+    API.get('/courier-integrations').then(r => setCourierIntegrations(r.data)).catch(() => {});
   }, []);
+
+  const openCourier = (integration = null) => {
+    const provider = courierProviders.find(p => p.provider === integration?.provider) || courierProviders[0];
+    setCourierForm({ provider: provider?.provider || '', environment: integration?.environment || 'production', credentials:{}, publicConfiguration: integration?.publicConfiguration || {}, defaultPackageWeight: integration?.defaultPackageWeight || 1, enabled: integration?.enabled || false });
+    setCourierModal(integration ? 'edit' : 'new');
+  };
+  const courierDefinition = courierProviders.find(p => p.provider === courierForm.provider);
+  const refreshCouriers = () => API.get('/courier-integrations').then(r => setCourierIntegrations(r.data)).catch(() => {});
+  const testCourier = async () => { try { await API.post('/courier-integrations/test', courierForm); toast.success('Connection successful'); refreshCouriers(); } catch (err) { toast.error(err?.response?.data?.message || 'Connection failed'); } };
+  const saveCourier = async () => { try { await API.put(`/courier-integrations/${courierForm.provider}`, courierForm); toast.success('Courier integration saved'); setCourierModal(null); refreshCouriers(); } catch (err) { toast.error(err?.response?.data?.message || 'Could not save courier'); } };
+  const toggleCourier = async (integration) => { try { await API.patch(`/courier-integrations/${integration.provider}/status`, { enabled: !integration.enabled }); refreshCouriers(); } catch (err) { toast.error(err?.response?.data?.message || 'Could not update courier'); } };
+  const deleteCourier = async (integration) => { if (!window.confirm(`Delete ${integration.displayName} integration?`)) return; try { await API.delete(`/courier-integrations/${integration.provider}`); refreshCouriers(); } catch (err) { toast.error(err?.response?.data?.message || 'Could not delete courier'); } };
 
   const save = async () => {
     setSaving(true);
@@ -537,6 +555,11 @@ export default function AdminSettings() {
                   <div className="flex gap-2"><button onClick={testCurfox} disabled={curfoxWorking} className="btn-outline text-sm">Test Connection & Load Businesses</button><button onClick={saveCurfox} disabled={curfoxWorking} className="btn-primary text-sm">Save Curfox</button></div>
                   <p className="text-xs text-blue-700">You can save credentials while disabled. Then test the connection, select a business, enter the exact origin city/state, and enable Curfox. Connection testing never creates a courier order.</p>
                 </div>
+                <div className="admin-courier-integrations mt-8 border-t pt-6">
+                  <div className="flex items-center justify-between gap-3 mb-4"><div><h3 className="font-semibold text-gray-900">Courier Integrations</h3><p className="text-xs text-gray-400">Connect additional couriers without changing Royal Express settings.</p></div><button className="btn-primary text-sm" onClick={() => openCourier()}>+ Add Courier</button></div>
+                  <div className="space-y-3">{courierIntegrations.map(item => <div key={item.provider} className="border border-gray-100 rounded-xl p-4 flex items-center justify-between gap-3"><div className="min-w-0"><p className="font-semibold text-gray-800">{item.displayName}</p><p className="text-xs text-gray-500">{item.environment} · {item.connectionStatus === 'connected' ? 'Connected' : item.connectionStatus === 'failed' ? 'Connection failed' : 'Not tested'} · {item.enabled ? 'Enabled' : 'Disabled'}</p></div><div className="flex flex-wrap gap-2"><button className="btn-outline text-xs" onClick={() => openCourier(item)}>Edit</button><button className="btn-outline text-xs" onClick={() => toggleCourier(item)}>{item.enabled ? 'Disable' : 'Enable'}</button><button className="text-xs text-red-500" onClick={() => deleteCourier(item)}>Delete</button></div></div>)}</div>
+                </div>
+                {courierModal && <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setCourierModal(null)}><div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}><h3 className="font-bold text-lg mb-4">{courierModal === 'new' ? 'Add Courier' : 'Edit Courier'}</h3><div className="space-y-4"><div><label className="form-label">Courier Type</label><select className="form-input" value={courierForm.provider} disabled={courierModal === 'edit'} onChange={e => setCourierForm(p => ({...p,provider:e.target.value}))}>{courierProviders.map(p => <option key={p.provider} value={p.provider}>{p.displayName}</option>)}</select></div><div><label className="form-label">Environment</label><select className="form-input" value={courierForm.environment} onChange={e => setCourierForm(p => ({...p,environment:e.target.value}))}><option value="production">Production</option><option value="sandbox">Sandbox</option></select></div>{(courierDefinition?.fields || []).map(field => <div key={field.key}><label className="form-label">{field.label}{field.required ? ' *' : ''}</label><input className="form-input" type={field.type || 'text'} placeholder={field.secret && courierModal === 'edit' ? 'Saved — leave blank to preserve' : ''} value={courierForm.credentials?.[field.key] || ''} onChange={e => setCourierForm(p => ({...p,credentials:{...p.credentials,[field.key]:e.target.value}}))}/></div>)}<F label="Default package weight" type="number" value={courierForm.defaultPackageWeight} onChange={e => setCourierForm(p => ({...p,defaultPackageWeight:Number(e.target.value)}))}/><Toggle label="Enable courier" value={courierForm.enabled} onChange={() => setCourierForm(p => ({...p,enabled:!p.enabled}))}/><div className="flex flex-wrap gap-2 justify-end"><button className="btn-outline" onClick={() => setCourierModal(null)}>Cancel</button><button className="btn-outline" onClick={testCourier}>Test Connection</button><button className="btn-primary" onClick={saveCourier}>Save</button></div></div></div></div>}
                 <div className="admin-delivery-heading flex items-center justify-between gap-3 mb-5">
                   <div><h3 className="font-semibold text-gray-900">Delivery Services</h3><p className="text-xs text-gray-400">Configure shipping options for customers</p></div>
                   <button onClick={() => { setDeliveryForm({ name:'', code:'', description:'', estimatedDays:'', trackingUrl:'', coverageAreas:'', deliveryNote:'', codAllowed:true, rates:[{ name:'Standard', price:600, freeAbove:0, estimatedDays:'' }], zoneRates:[], shippingRules:[] }); setEditingDelivery('new'); }} className="btn-primary text-sm">+ Add Service</button>

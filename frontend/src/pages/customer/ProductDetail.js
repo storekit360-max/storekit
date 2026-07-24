@@ -25,19 +25,31 @@ gsap.registerPlugin(ScrollTrigger);
 // for proper spacing. We preserve them as-is since they're designed for the store theme.
 function sanitizeHtml(html) {
   if (!html) return '';
-  
-  // Check if this contains HTML tags - if so, render them properly
-  // Look for any HTML tag pattern
-  const hasHtmlTags = /<[a-z][\s\S]*>/i.test(html);
-  
-  if (!hasHtmlTags) {
-    // Plain text - return as-is (no HTML to render)
-    return html;
-  }
-  
-  // HTML detected - preserve it for proper rendering
-  // The AI generates clean HTML with proper structure, so we keep it as-is
-  return html;
+  // AI/imported descriptions are sometimes persisted entity-encoded
+  // (&lt;h3&gt;...&lt;/h3&gt;). Decode before checking for markup, otherwise
+  // React renders the tags literally on the storefront.
+  const decoder = document.createElement('textarea');
+  decoder.innerHTML = String(html);
+  const decoded = decoder.value;
+  if (!/<[a-z][\s\S]*>/i.test(decoded)) return decoded;
+
+  // Keep product formatting, but never trust generated/imported markup.
+  const doc = new DOMParser().parseFromString(decoded, 'text/html');
+  const allowed = new Set(['H1','H2','H3','H4','H5','H6','P','UL','OL','LI','STRONG','B','EM','I','BR','A','SPAN','DIV']);
+  doc.body.querySelectorAll('*').forEach(node => {
+    if (!allowed.has(node.tagName)) { node.replaceWith(...Array.from(node.childNodes)); return; }
+    [...node.attributes].forEach(attr => {
+      if (attr.name === 'href' && node.tagName === 'A' && /^(https?:|mailto:|tel:|\/)/i.test(attr.value)) {
+        node.setAttribute('rel', 'noopener noreferrer');
+        node.setAttribute('target', '_blank');
+      } else if (attr.name === 'style' && node.tagName.match(/^H[1-6]$/)) {
+        // AI uses these two spacing declarations on headings.
+        const safe = attr.value.match(/(?:margin-top|margin-bottom)\s*:\s*[0-9.]+(?:em|rem|px)\s*;?/gi);
+        safe?.length ? node.setAttribute('style', safe.join(' ')) : node.removeAttribute('style');
+      } else node.removeAttribute(attr.name);
+    });
+  });
+  return doc.body.innerHTML;
 }
 
 const Stars = ({ rating, count, interactive, selected, onSelect }) => (
