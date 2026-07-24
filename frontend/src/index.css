@@ -394,6 +394,7 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
 
 /* Admin settings: keep navigation and setting controls usable on narrow screens. */
 @media (max-width: 639px) {
+  .admin-settings { width: 100%; max-width: 100%; overflow-x: hidden; }
   .admin-settings-panel { padding: 1rem !important; }
   .admin-settings > .mb-6 { align-items: flex-start; }
   .admin-settings > .mb-6 > button { flex-shrink: 0; }
@@ -409,7 +410,10 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
     overflow-x: auto;
     padding: .5rem !important;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    scroll-padding-inline: .5rem;
   }
+  .admin-settings > .flex > .lg\:w-56 > div::-webkit-scrollbar { display: none; }
   .admin-settings > .flex > .lg\:w-56 > div > div {
     display: contents;
   }
@@ -437,6 +441,20 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
   }
   .admin-settings .divide-y > div.flex.items-center.justify-between > button,
   .admin-settings .rounded-xl > .flex.items-center.justify-between > button { margin-left: auto; }
+  .admin-settings button { max-width: 100%; }
+  .admin-settings .flex.gap-2 { flex-wrap: wrap; }
+  .admin-settings .flex.gap-2 > button { flex: 1 1 12rem; white-space: normal; }
+  .admin-settings textarea,
+  .admin-settings input,
+  .admin-settings select { max-width: 100%; min-width: 0; }
+  .admin-settings [style*="borderColor"] { flex-wrap: wrap; }
+  .admin-settings [style*="borderColor"] > div:first-child { min-width: 0; flex: 1 1 calc(100% - 4rem); }
+  .admin-settings [style*="borderColor"] > button { margin-left: auto; }
+  .admin-settings .border-2.border-blue-100 > .flex.items-center.justify-between,
+  .admin-settings .border-2.border-blue-100 > div.flex.items-center.justify-between { flex-wrap: wrap; }
+  .admin-settings .border-2.border-blue-100 > .flex.items-center.justify-between > div:first-child { min-width: 0; flex: 1 1 100%; }
+  .admin-settings .border-2.border-blue-100 > .flex.items-center.justify-between > button { width: 100%; }
+  .admin-settings .admin-settings-toggle { width: 100%; }
   .admin-settings .grid.grid-cols-2 { grid-template-columns: minmax(0, 1fr) !important; }
 }
 
