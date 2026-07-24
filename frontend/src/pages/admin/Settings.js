@@ -213,7 +213,7 @@ export default function AdminSettings() {
     try {
       const res = await API.put('/settings', settings);
       const safeSettings = withoutClientSecrets(settings);
-      // Treat any non-success response as an error so the toast is accurate
+      // Treat any non-success response as an error so the toast is accurates
       if (res.data && res.data.success === false) {
         throw new Error(res.data.message || 'Server returned success:false');
       }
