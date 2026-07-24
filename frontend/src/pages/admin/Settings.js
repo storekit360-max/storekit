@@ -65,12 +65,16 @@ const F = ({ label, value, onChange, type='text', placeholder, hint, col2, disab
 );
 
 const Toggle = ({ label, desc, value, onChange }) => (
-  <div className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
-    <div>
+  <div className="admin-settings-toggle flex items-center justify-between gap-4 py-3 border-b border-gray-50 last:border-0">
+    <div className="min-w-0">
       <p className="text-sm font-medium text-gray-800">{label}</p>
       {desc && <p className="text-xs text-gray-400 mt-0.5">{desc}</p>}
     </div>
     <div
+      role="switch"
+      aria-checked={!!value}
+      tabIndex={0}
+      onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onChange()}
       onClick={onChange}
       className={`w-12 h-6 rounded-full cursor-pointer relative flex-shrink-0 transition-all ${value ? 'bg-primary' : 'bg-gray-200'}`}
     >
@@ -87,8 +91,8 @@ const withoutClientSecrets = (settings = {}) => {
 // SaveBar receives onSave + saving as props so it does not need to close over
 // the parent's state (which would force it back inside the component).
 const SaveBar = ({ onSave, saving }) => (
-  <div className="mt-8 pt-5 border-t border-gray-100 flex items-center justify-between">
-    <p className="text-xs text-gray-400">Changes preview live · Save to apply permanently</p>
+  <div className="admin-settings-savebar mt-8 pt-5 border-t border-gray-100 flex items-center justify-between gap-3">
+    <p className="text-xs text-gray-400 min-w-0">Changes preview live · Save to apply permanently</p>
     <button onClick={onSave} disabled={saving} className="btn-primary flex items-center gap-2">
       {saving ? (
         <>
@@ -380,7 +384,7 @@ export default function AdminSettings() {
   // Inline definitions caused focus loss on every keystroke and unmount loops.
 
   return (
-    <div>
+    <div className="admin-settings">
       <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="font-display text-xl font-bold text-gray-900">Settings</h2>
@@ -413,7 +417,7 @@ export default function AdminSettings() {
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <div className="bg-white rounded-2xl border border-gray-100 p-6">
+          <div className="admin-settings-panel bg-white rounded-2xl border border-gray-100 p-6">
 
             {/* ── GENERAL ── */}
             {tab === 'general' && (

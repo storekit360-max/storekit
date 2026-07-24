@@ -392,6 +392,54 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
 /* ── Fix mobile bottom nav overlap with content ─────────────── */
 .has-mobile-nav { padding-bottom: max(72px, calc(64px + env(safe-area-inset-bottom))) !important; }
 
+/* Admin settings: keep navigation and setting controls usable on narrow screens. */
+@media (max-width: 639px) {
+  .admin-settings-panel { padding: 1rem !important; }
+  .admin-settings > .mb-6 { align-items: flex-start; }
+  .admin-settings > .mb-6 > button { flex-shrink: 0; }
+  .admin-settings > .flex { gap: 1rem !important; }
+  .admin-settings > .flex > .lg\:w-56 {
+    width: 100% !important;
+    min-width: 0;
+  }
+  .admin-settings > .flex > .lg\:w-56 > div {
+    position: static !important;
+    display: flex;
+    gap: .5rem;
+    overflow-x: auto;
+    padding: .5rem !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .admin-settings > .flex > .lg\:w-56 > div > div {
+    display: contents;
+  }
+  .admin-settings > .flex > .lg\:w-56 p { display: none; }
+  .admin-settings > .flex > .lg\:w-56 button {
+    width: max-content;
+    min-width: max-content;
+    white-space: nowrap;
+    padding: .6rem .75rem;
+  }
+  .admin-settings-toggle { align-items: flex-start; }
+  .admin-settings-toggle > div:first-child { flex: 1 1 auto; }
+  .admin-settings-savebar { align-items: stretch; flex-direction: column; }
+  .admin-settings-savebar button { width: 100%; justify-content: center; }
+  .admin-settings .divide-y > div.flex.items-center.justify-between,
+  .admin-settings .rounded-xl > .flex.items-center.justify-between {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    row-gap: .65rem;
+  }
+  .admin-settings .divide-y > div.flex.items-center.justify-between > div:first-child,
+  .admin-settings .rounded-xl > .flex.items-center.justify-between > div:first-child {
+    min-width: 0;
+    flex: 1 1 calc(100% - 3.5rem);
+  }
+  .admin-settings .divide-y > div.flex.items-center.justify-between > button,
+  .admin-settings .rounded-xl > .flex.items-center.justify-between > button { margin-left: auto; }
+  .admin-settings .grid.grid-cols-2 { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
 /* ── Trust bar no-wrap fix ──────────────────────────────────── */
 .trust-bar-item { min-width: max-content; }
 
