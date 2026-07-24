@@ -537,13 +537,13 @@ export default function AdminSettings() {
                   <div className="flex gap-2"><button onClick={testCurfox} disabled={curfoxWorking} className="btn-outline text-sm">Test Connection & Load Businesses</button><button onClick={saveCurfox} disabled={curfoxWorking} className="btn-primary text-sm">Save Curfox</button></div>
                   <p className="text-xs text-blue-700">You can save credentials while disabled. Then test the connection, select a business, enter the exact origin city/state, and enable Curfox. Connection testing never creates a courier order.</p>
                 </div>
-                <div className="flex items-center justify-between mb-5">
+                <div className="admin-delivery-heading flex items-center justify-between gap-3 mb-5">
                   <div><h3 className="font-semibold text-gray-900">Delivery Services</h3><p className="text-xs text-gray-400">Configure shipping options for customers</p></div>
                   <button onClick={() => { setDeliveryForm({ name:'', code:'', description:'', estimatedDays:'', trackingUrl:'', coverageAreas:'', deliveryNote:'', codAllowed:true, rates:[{ name:'Standard', price:600, freeAbove:0, estimatedDays:'' }], zoneRates:[], shippingRules:[] }); setEditingDelivery('new'); }} className="btn-primary text-sm">+ Add Service</button>
                 </div>
                 <div className="space-y-3">
                   {deliveryServices.map(svc => (
-                    <div key={svc.code} className="border border-gray-100 rounded-xl p-4 flex items-start justify-between gap-4">
+                    <div key={svc.code} className="admin-delivery-card border border-gray-100 rounded-xl p-4 flex items-start justify-between gap-4">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <p className="font-semibold text-gray-800 text-sm">{svc.name}</p>
@@ -743,7 +743,7 @@ export default function AdminSettings() {
                 </div>
 
                 {/* Enable toggle */}
-                <div className="flex items-center justify-between p-4 rounded-2xl border-2 transition-colors" style={{borderColor: whatsappConfig.whatsappEnabled ? '#25d366' : '#e5e7eb', background: whatsappConfig.whatsappEnabled ? '#f0fdf4' : '#fafafa'}}>
+                <div className="admin-whatsapp-toggle flex items-center justify-between gap-3 p-4 rounded-2xl border-2 transition-colors" style={{borderColor: whatsappConfig.whatsappEnabled ? '#25d366' : '#e5e7eb', background: whatsappConfig.whatsappEnabled ? '#f0fdf4' : '#fafafa'}}>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{background: '#25d366'}}>💬</div>
                     <div>

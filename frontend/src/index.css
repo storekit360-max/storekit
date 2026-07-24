@@ -455,6 +455,18 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
   .admin-settings .border-2.border-blue-100 > .flex.items-center.justify-between > div:first-child { min-width: 0; flex: 1 1 100%; }
   .admin-settings .border-2.border-blue-100 > .flex.items-center.justify-between > button { width: 100%; }
   .admin-settings .admin-settings-toggle { width: 100%; }
+  .admin-delivery-heading { align-items: flex-start !important; flex-wrap: wrap; }
+  .admin-delivery-heading > div { min-width: 0; flex: 1 1 100%; }
+  .admin-delivery-heading > button { width: 100%; }
+  .admin-delivery-card { display: block !important; padding: 1rem !important; }
+  .admin-delivery-card > div:first-child { min-width: 0; width: 100%; }
+  .admin-delivery-card > div:last-child { display: flex; flex-wrap: wrap; width: 100%; margin-top: .75rem; }
+  .admin-delivery-card > div:last-child > button { flex: 1 1 7rem; }
+  .admin-delivery-card .flex.items-center.justify-between { align-items: flex-start; flex-wrap: wrap; }
+  .admin-delivery-card .flex.items-center.justify-between > span { white-space: normal; min-width: 0; flex: 1 1 calc(100% - 3.5rem); }
+  .admin-whatsapp-toggle { align-items: flex-start !important; flex-wrap: wrap; }
+  .admin-whatsapp-toggle > div:first-child { min-width: 0; flex: 1 1 calc(100% - 4rem); }
+  .admin-whatsapp-toggle > button { margin-left: auto; flex: 0 0 3rem; }
   .admin-settings .grid.grid-cols-2 { grid-template-columns: minmax(0, 1fr) !important; }
 }
 
