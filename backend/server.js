@@ -27,6 +27,23 @@ const compression = require('compression');
 const path       = require('path');
 require('dotenv').config();
 
+function isMongoConnectivityError(error) {
+  const name = String(error?.name || '');
+  const message = String(error?.message || '');
+  return /Mongo(ServerSelection|NetworkTimeout|NetworkError)|MongoTopologyClosedError/i.test(name) ||
+    /Server selection timed out|connection .* timed out|topology is closed|MongoNetworkError/i.test(message);
+}
+
+// A replica-set outage is recoverable. Prevent a rejected background query
+// from terminating the API while Mongoose waits for MongoDB to reconnect.
+process.on('unhandledRejection', error => {
+  if (isMongoConnectivityError(error)) {
+    console.warn('[MongoDB] Background query skipped while database is unavailable:', error.message);
+    return;
+  }
+  console.error('[PROCESS] Unhandled promise rejection:', error);
+});
+
 const { assertSafeStagingDatabase } = require('./utils/stagingSafety');
 assertSafeStagingDatabase(process.env);
 

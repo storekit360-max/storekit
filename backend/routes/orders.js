@@ -1,4 +1,5 @@
 const express   = require('express');
+const mongoose = require('mongoose');
 const rateLimit = require('express-rate-limit');
 const crypto    = require('crypto');
 const router = express.Router();
@@ -119,6 +120,7 @@ if (USE_CLOUDINARY) {
 
 // ── Auto-cancel decision scheduler ───────────────────────────────────────────
 const runAutoCancelDecisions = async () => {
+  if (mongoose.connection.readyState !== 1) return;
   try {
     const rows = await withoutTenantScope(() => Settings.find({
       tenantId: { $ne: null },
@@ -187,8 +189,12 @@ const runAutoCancelDecisions = async () => {
   }
 };
 
-setInterval(runAutoCancelDecisions, 60 * 1000);
-setTimeout(runAutoCancelDecisions, 5000);
+setInterval(() => runAutoCancelDecisions().catch(err => {
+  console.error('[AUTO-CANCEL] Scheduler invocation skipped:', err.message);
+}), 60 * 1000).unref?.();
+setTimeout(() => runAutoCancelDecisions().catch(err => {
+  console.error('[AUTO-CANCEL] Startup invocation skipped:', err.message);
+}), 5000).unref?.();
 
 // ── Admin — Get all orders ────────────────────────────────────────────────────
 router.get('/admin/all', adminAuth, async (req, res) => {
