@@ -22,6 +22,7 @@ const { normalizeWhatsappNumber } = require('../utils/whatsappConfig');
 const { generateStarterKit, normalizeStarterKit, sanitizeBrief } = require('../services/tenantStarterKit');
 const featureRegistry = require('../config/featureRegistry');
 const { revokeAllUserSessions } = require('../services/authSessionService');
+const { connectTenantDomains } = require('../services/vercelDomainService');
 const { requireRecentStepUp } = require('../middleware/stepUp');
 const PlatformPermission = require('../models/PlatformPermission');
 const PlatformRole = require('../models/PlatformRole');
@@ -550,6 +551,11 @@ router.post('/tenants', requirePlatformPermission('tenant.create'), async (req, 
     });
     createdTenantId = tenant._id;
 
+    // Register the tenant's custom domain with the StoreKit Vercel project.
+    // This is best-effort so a temporary Vercel API issue cannot leave a
+    // partially-created tenant; the warning is returned to the super admin.
+    const domainConnection = await connectTenantDomains(primaryDomain);
+
     const user = await User.create({
       firstName: adminFirstName || 'Store',
       lastName: adminLastName || 'Admin',
@@ -581,9 +587,10 @@ router.post('/tenants', requirePlatformPermission('tenant.create'), async (req, 
       starterKitResult: initializeStore ? {
         source: starterKit?.source || 'fallback',
         summary: starterKit?.summary || '',
-        warnings: [...(starterKitResult.warnings || []), ...(bootstrapResult?.warnings || [])],
+        warnings: [...(starterKitResult.warnings || []), ...(bootstrapResult?.warnings || []), ...(domainConnection.warnings || [])],
         created: bootstrapResult,
       } : null,
+      domainConnection,
     });
   } catch (err) {
     if (createdTenantId) await cleanupFailedTenantCreation(createdTenantId);
@@ -647,7 +654,10 @@ router.put('/tenants/:id', requirePlatformPermission('tenant.edit'), async (req,
       tenant = await Tenant.findById(tenant._id).populate('plan').populate('owner', 'firstName lastName email username role');
     }
 
-    res.json(tenant);
+    const domainConnection = patch.domains?.length
+      ? await connectTenantDomains(patch.domains.find(item => item.type === 'primary')?.domain || patch.domains[0].domain)
+      : null;
+    res.json({ ...tenant.toObject(), domainConnection });
   } catch (err) { next(err); }
 });
 

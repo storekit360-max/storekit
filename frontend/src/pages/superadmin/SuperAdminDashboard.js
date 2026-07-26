@@ -406,6 +406,7 @@ export default function SuperAdminDashboard() {
         counts: data.starterKitResult?.created,
         warnings: data.starterKitResult?.warnings || [],
       });
+      (data.domainConnection?.warnings || []).forEach(warning => notify('error', warning));
       setTenantForm({ ...emptyTenant, plan: plans[0]?._id || '' });
       setStarterKitPreview(null);
       setStarterKitWarnings([]);
