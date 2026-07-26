@@ -733,6 +733,13 @@ export default function SuperAdminDashboard() {
                   <Input label="Public Contact Number" placeholder="+94 77 123 4567" value={tenantForm.settings.storePhone} onChange={v => updateTenant('settings.storePhone', v)} />
                   <Input label="WhatsApp" value={tenantForm.settings.whatsapp} onChange={v => updateTenant('settings.whatsapp', v)} />
                   <Input label="Primary Color" type="color" value={tenantForm.theme.primaryColor} onChange={v => updateTenant('theme.primaryColor', v)} />
+                  <Input label="Accent Color" type="color" value={tenantForm.theme.accentColor} onChange={v => updateTenant('theme.accentColor', v)} />
+                  <Input label="Dark / Text Color" type="color" value={tenantForm.theme.darkColor} onChange={v => updateTenant('theme.darkColor', v)} />
+                  <div className="sm:col-span-2 lg:col-span-4 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <span className="text-xs font-semibold text-slate-600">Initial store palette</span>
+                    {[tenantForm.theme.primaryColor, tenantForm.theme.accentColor, tenantForm.theme.darkColor].map((color, index) => <span key={index} title={color} className="h-8 w-8 rounded-full border-2 border-white shadow" style={{ backgroundColor: color }} />)}
+                    <span className="text-[11px] text-slate-500">These three colors are saved to the new tenant theme during creation.</span>
+                  </div>
 
                   <div className="sm:col-span-2 lg:col-span-4 mt-2 rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50 to-cyan-50 p-5">
                     <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
