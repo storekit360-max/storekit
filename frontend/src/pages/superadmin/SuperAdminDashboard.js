@@ -331,7 +331,9 @@ export default function SuperAdminDashboard() {
         metaTitle: data.starterKit.settings?.metaTitle || prev.settings.metaTitle,
         metaDescription: data.starterKit.settings?.metaDescription || prev.settings.metaDescription,
       },
-      theme: { ...prev.theme, ...(data.starterKit.theme || {}) },
+      // Keep the palette chosen by the super admin; starter-kit generation must
+      // not replace it with AI/fallback colors.
+      theme: { ...(data.starterKit.theme || {}), ...prev.theme },
     }));
     return data.starterKit;
   }
@@ -732,9 +734,7 @@ export default function SuperAdminDashboard() {
                   <Input label="Public Store Email" type="email" placeholder="support@store.com" value={tenantForm.settings.storeEmail} onChange={v => updateTenant('settings.storeEmail', v)} />
                   <Input label="Public Contact Number" placeholder="+94 77 123 4567" value={tenantForm.settings.storePhone} onChange={v => updateTenant('settings.storePhone', v)} />
                   <Input label="WhatsApp" value={tenantForm.settings.whatsapp} onChange={v => updateTenant('settings.whatsapp', v)} />
-                  <Input label="Primary Color" type="color" value={tenantForm.theme.primaryColor} onChange={v => updateTenant('theme.primaryColor', v)} />
-                  <Input label="Accent Color" type="color" value={tenantForm.theme.accentColor} onChange={v => updateTenant('theme.accentColor', v)} />
-                  <Input label="Dark / Text Color" type="color" value={tenantForm.theme.darkColor} onChange={v => updateTenant('theme.darkColor', v)} />
+                  {[['primaryColor','Primary Color'],['accentColor','Accent Color'],['darkColor','Dark / Text Color']].map(([key,label]) => <label key={key} className="grid gap-1.5 text-xs font-semibold text-slate-600">{label}<div className="flex gap-2"><input type="color" value={tenantForm.theme[key]} onChange={e=>updateTenant(`theme.${key}`,e.target.value)} className="h-10 w-12 rounded-lg border border-slate-300 p-1 cursor-pointer"/><input type="text" value={tenantForm.theme[key]} pattern="^#[0-9a-fA-F]{6}$" onChange={e=>updateTenant(`theme.${key}`,e.target.value)} className="h-10 min-w-0 flex-1 border border-slate-300 rounded-lg px-3 text-sm font-mono uppercase" placeholder="#6366F1"/></div></label>)}
                   <div className="sm:col-span-2 lg:col-span-4 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <span className="text-xs font-semibold text-slate-600">Initial store palette</span>
                     {[tenantForm.theme.primaryColor, tenantForm.theme.accentColor, tenantForm.theme.darkColor].map((color, index) => <span key={index} title={color} className="h-8 w-8 rounded-full border-2 border-white shadow" style={{ backgroundColor: color }} />)}
