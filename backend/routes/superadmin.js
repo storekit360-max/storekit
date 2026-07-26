@@ -530,6 +530,20 @@ router.post('/tenants', requirePlatformPermission('tenant.create'), async (req, 
       faviconUrl: settings?.faviconUrl || (initializeStore ? starterLogoUrl : ''),
     };
     const tenantTheme = { ...(starterKit?.theme || {}), ...(theme || {}) };
+    // The starter kit may have been generated before the admin chose the
+    // palette. Recolor every generated banner from the final tenant theme so
+    // initial storefront content never introduces a second color scheme.
+    if (starterKit?.banners?.length) {
+      starterKit.banners = starterKit.banners.map(banner => ({
+        ...banner,
+        buttonBgColor: tenantTheme.primaryColor,
+        buttonColor: '#ffffff',
+        ...(banner.position === 'running_top' ? {
+          runningBgColor: tenantTheme.primaryColor,
+          runningTextColor: '#ffffff',
+        } : {}),
+      }));
+    }
     const onboardingData = {
       businessType: brief.businessType,
       businessDescription: brief.businessDescription,

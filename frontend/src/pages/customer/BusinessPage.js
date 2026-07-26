@@ -34,7 +34,7 @@ export default function BusinessPage() {
       <div className="rounded-2xl border border-gray-100 p-8 sm:p-12" style={{ background: 'var(--card-bg)' }}>
         <h1 className="text-3xl font-bold text-gray-900 mb-6" style={{ fontFamily: 'var(--font-display)' }}>{page.title}</h1>
         <div
-          className="prose prose-gray max-w-none"
+          className="prose prose-gray max-w-none whitespace-pre-wrap break-words"
           style={{ fontFamily: 'var(--font-body)' }}
           dangerouslySetInnerHTML={{ __html: page.content }}
         />

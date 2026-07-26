@@ -50,7 +50,7 @@ const ResponsiveStyles = () => (
     /* ── Logo image: scales via --logo-size, no max-height cap ── */
     .sz-logo-img {
       height: var(--logo-size, 48px);
-      max-width: min(280px, 55vw);
+      max-width: min(240px, 42vw);
       width: auto;
       object-fit: contain;
       display: block;
@@ -62,6 +62,14 @@ const ResponsiveStyles = () => (
       display: block;
       font-size: clamp(13px, 3.8vw, 22px);
       white-space: nowrap;
+    }
+
+    /* Keep the header actions inside the viewport on narrow devices. */
+    .sz-header-signin { min-width: 0; white-space: nowrap; }
+    @media (max-width: 640px) {
+      .sz-header-inner { gap: 0 !important; padding-left: 8px; padding-right: 8px; }
+      .sz-header-logo-link { min-width: 0; max-width: 48vw; margin-right: 0 !important; }
+      .sz-header-signin { padding-left: 10px !important; padding-right: 10px !important; font-size: 12px !important; }
     }
 
     /* ── Action icons: tighter on tiny screens ── */
@@ -525,7 +533,7 @@ const Header = ({ settings, campaign }) => {
           {/* ── Logo ── */}
           <Link
             to="/"
-            className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 group mr-1 sm:mr-3"
+            className="sz-header-logo-link flex items-center gap-1.5 sm:gap-2 flex-shrink-0 group mr-1 sm:mr-3"
             style={{perspective:'600px', overflow:'visible', position:'relative', zIndex:10}}
             onMouseEnter={e => { e.currentTarget.querySelector('.logo-inner') && (e.currentTarget.querySelector('.logo-inner').style.transform = 'rotateY(8deg) scale(1.03)'); }}
             onMouseLeave={e => { e.currentTarget.querySelector('.logo-inner') && (e.currentTarget.querySelector('.logo-inner').style.transform = 'rotateY(0deg) scale(1)'); }}
@@ -725,7 +733,7 @@ const Header = ({ settings, campaign }) => {
             ) : (
               <Link
                 to="/login"
-                className="hidden sm:flex btn-primary text-sm py-2 px-4 ml-2 transition-all duration-200"
+                className="sz-header-signin hidden sm:flex btn-primary text-sm py-2 px-4 ml-2 transition-all duration-200"
                 onMouseEnter={e => {
                   e.currentTarget.style.transform = 'perspective(400px) rotateX(-8deg) translateY(-2px)';
                   e.currentTarget.style.boxShadow = '0 8px 20px var(--glow-primary)';

@@ -302,6 +302,21 @@ function normalizeStarterKit(candidate, rawBrief = {}, source = 'ai') {
     .map(row => ({ value: cleanText(row?.value, 18), label: cleanText(row?.label, 32) }))
     .filter(row => row.value && row.label).slice(0, 3);
 
+  const selectedTheme = {
+    primaryColor: validHex(theme.primaryColor, fallback.theme.primaryColor),
+    accentColor: validHex(theme.accentColor, fallback.theme.accentColor),
+    darkColor: validHex(theme.darkColor, fallback.theme.darkColor),
+  };
+  const themedBanners = banners.map(banner => ({
+    ...banner,
+    buttonBgColor: selectedTheme.primaryColor,
+    buttonColor: '#ffffff',
+    ...(banner.position === 'running_top' ? {
+      runningBgColor: selectedTheme.primaryColor,
+      runningTextColor: '#ffffff',
+    } : {}),
+  }));
+
   return {
     version: 1,
     source: source === 'ai' ? 'ai' : 'fallback',
@@ -317,9 +332,7 @@ function normalizeStarterKit(candidate, rawBrief = {}, source = 'ai') {
       layout_builder: { homepage: defaultStarterHomepageLayout() },
     },
     theme: {
-      primaryColor: validHex(theme.primaryColor, fallback.theme.primaryColor),
-      accentColor: validHex(theme.accentColor, fallback.theme.accentColor),
-      darkColor: validHex(theme.darkColor, fallback.theme.darkColor),
+      ...selectedTheme,
       storeTemplate: ALLOWED_STORE_TEMPLATES.has(cleanText(theme.storeTemplate, 40))
         ? cleanText(theme.storeTemplate, 40)
         : fallback.theme.storeTemplate,
@@ -327,7 +340,7 @@ function normalizeStarterKit(candidate, rawBrief = {}, source = 'ai') {
     },
     categories,
     products,
-    banners,
+    banners: themedBanners,
   };
 }
 

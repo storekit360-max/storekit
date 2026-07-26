@@ -131,6 +131,8 @@ async function seedDefaultBanner(tenant, starterKit = null) {
   await Banner.insertMany(banners.map((banner, index) => ({
     tenantId,
     ...banner,
+    buttonBgColor: tenant?.theme?.primaryColor || banner.buttonBgColor || '#3b82f6',
+    buttonColor: '#ffffff',
     image: '',
     isActive: true,
     sortOrder: banner.sortOrder || index + 1,
