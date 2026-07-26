@@ -175,7 +175,7 @@ export default function CampaignPage() {
                 <Link key={p._id} to={`/product/${p.slug}`}
                   className="catalog-product-card bg-white rounded-2xl border border-gray-100 overflow-hidden group hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col h-full">
                   <div className="relative aspect-square bg-gray-50 overflow-hidden">
-                    <img src={p.images?.[0]||'https://via.placeholder.com/300'} alt={p.name}
+                    <img src={p.thumbnail||p.images?.[0]||'https://via.placeholder.com/300'} alt={p.name} width="600" height="600" loading="lazy" decoding="async"
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"/>
                     {p.salePrice && p.price > p.salePrice && (
                       <div className="absolute top-2 left-2 text-white text-xs font-bold px-2 py-1 rounded-lg"

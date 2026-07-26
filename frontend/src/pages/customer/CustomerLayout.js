@@ -81,8 +81,16 @@ const ResponsiveStyles = () => (
 
     /* ── Mobile bottom nav: height + safe-area ── */
     .mobile-bottom-nav {
+      position: fixed !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      width: 100% !important;
+      z-index: 1000 !important;
       height: calc(58px + env(safe-area-inset-bottom, 0px));
       padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+      transform: translate3d(0, 0, 0);
+      isolation: isolate;
     }
 
     /* ── Main content padding accounts for bottom nav + safe area ── */
@@ -409,6 +417,10 @@ const SearchOverlay = ({ onClose, categories }) => {
                 <img
                   src={p.thumbnail || p.images?.[0] || 'https://via.placeholder.com/40'}
                   alt={p.name}
+                  width="40"
+                  height="40"
+                  loading="lazy"
+                  decoding="async"
                   className="w-10 h-10 object-cover rounded-lg flex-shrink-0 bg-gray-100"
                 />
                 <div className="flex-1 min-w-0">

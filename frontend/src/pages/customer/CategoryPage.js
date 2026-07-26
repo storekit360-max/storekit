@@ -298,6 +298,8 @@ export default function CategoryPage() {
                       loading="lazy"
                       width="300"
                       height="300"
+                      decoding="async"
+                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                     />
                     {hasDiscount && (
                       <span className="absolute top-2 left-2 text-white text-xs font-bold px-2 py-0.5 rounded-full"

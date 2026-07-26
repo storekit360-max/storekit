@@ -38,7 +38,7 @@ export default function Wishlist() {
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
               </button>
               <Link to={`/product/${product.slug}`} className="product-card-media block aspect-square bg-gray-50 overflow-hidden">
-                <img src={product.thumbnail || product.images?.[0]} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                <img src={product.thumbnail || product.images?.[0]} alt={product.name} width="600" height="600" loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
               </Link>
               <div className="product-card-body p-4">
                 <Link to={`/product/${product.slug}`}><h3 className="font-semibold text-gray-800 text-sm line-clamp-2 hover:text-primary">{product.name}</h3></Link>

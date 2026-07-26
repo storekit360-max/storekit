@@ -90,6 +90,8 @@ export default function PopupBanner() {
             <img
               src={banner.image}
               alt={banner.title || ''}
+              loading="lazy"
+              decoding="async"
               style={{ width:'100%', display:'block', maxHeight:'520px', objectFit:'cover' }}
             />
 
