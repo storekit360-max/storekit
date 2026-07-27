@@ -454,10 +454,10 @@ export default function ThemeBuilder() {
       </div>
 
       {/* Tab Nav */}
-      <div className="flex gap-2 bg-gray-100 rounded-2xl p-1.5">
+      <div className="flex gap-2 bg-gray-100 rounded-2xl p-1.5 overflow-x-auto">
         {tabs.map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id)}
-            className={`flex-1 text-xs font-semibold py-2 px-3 rounded-xl transition-all ${activeTab === t.id ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
+            className={`flex-1 min-w-max text-xs font-semibold py-2 px-3 rounded-xl transition-all ${activeTab === t.id ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
             <span className="hidden sm:inline">{t.label}</span>
             <span className="sm:hidden">{t.icon}</span>
           </button>

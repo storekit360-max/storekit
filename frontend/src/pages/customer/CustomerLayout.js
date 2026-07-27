@@ -854,6 +854,10 @@ const Footer = ({ settings }) => {
   const storeName = settings?.storeName || 'StoreKit';
   const contactPhone = settings?.storePhone || settings?.phone || settings?.contactNumber || '';
   const contactEmail = settings?.storeEmail || settings?.contactEmail || settings?.email || '';
+  // Layout Builder controls visibility. Older tenants without a saved layout
+  // keep the contact block enabled by default.
+  const footerContactSection = settings?.layout_builder?.footer?.find?.(section => section.id === 'contact_info');
+  const showFooterContact = footerContactSection ? footerContactSection.enabled !== false : true;
   const telephoneHref = String(contactPhone).replace(/[^+\d]/g, '');
   const [footerPages, setFooterPages] = React.useState([]);
   const [socialAccounts, setSocialAccounts] = React.useState([]);
@@ -928,7 +932,7 @@ const Footer = ({ settings }) => {
             </ul>
           </div>
           {/* Contact */}
-          <div>
+          {showFooterContact && <div>
             <h4 className="text-white font-bold mb-3 text-xs uppercase tracking-widest">Contact</h4>
             <div className="space-y-2">
               {settings?.storeAddress && <p className="text-sm whitespace-pre-line break-words">📍 {settings.storeAddress}</p>}
@@ -936,7 +940,7 @@ const Footer = ({ settings }) => {
               {contactEmail && <a href={`mailto:${contactEmail}`} className="block text-sm hover:text-white transition-colors break-all">✉️ {contactEmail}</a>}
               {!settings?.storeAddress && !contactPhone && !contactEmail && <p className="text-sm" style={{color:'#64748b'}}>Contact details can be added in Store Settings.</p>}
             </div>
-          </div>
+          </div>}
         </div>
 
         {/* Newsletter */}
