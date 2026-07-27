@@ -50,8 +50,8 @@ export default function StoreLoader({ settings = {}, compact = false, styleId })
 
   React.useEffect(() => { setLogoFailed(false); }, [loaderLogo]);
 
-  return <div className={`store-loader ${compact ? 'compact' : ''}`} style={{'--lp':primary,'--la':accent,'--lbg':bg,'--lt':text,'--lm':muted}}>
-    <style>{loaderCss}</style>
+  return <div className={`store-loader ${compact ? 'compact' : ''}`} style={{'--lp':primary,'--la':accent,'--lbg':bg,'--lt':text,'--lm':muted,'--loader-logo-size':`${settings.loaderLogoSize || 86}px`}}>
+    <style>{loaderCss}{`.skl-main-logo{height:var(--loader-logo-size,86px);width:min(260px,70vw)} .skl-logo{width:min(170px,70vw);height:var(--loader-logo-size,86px)}`}</style>
     <div className="skl-glow a"/><div className="skl-glow b"/>
     <div className="skl-content" role="status" aria-live="polite" aria-label={`Loading ${storeName}`}>
       {showMainLogo && (

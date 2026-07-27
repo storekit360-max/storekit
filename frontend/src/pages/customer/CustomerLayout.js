@@ -380,7 +380,7 @@ const SearchOverlay = ({ onClose, categories, settings }) => {
       >
         <form onSubmit={handleSearch}>
           <div className="flex items-center gap-3 p-4 border-b border-gray-100">
-            {(settings?.searchLogoUrl || settings?.logoUrl) && <img src={settings.searchLogoUrl || settings.logoUrl} alt={settings.storeName || 'Store'} className="h-7 max-w-[120px] object-contain flex-shrink-0" loading="eager" decoding="async" />}
+            {(settings?.searchLogoUrl || settings?.logoUrl) && <img src={settings.searchLogoUrl || settings.logoUrl} alt={settings.storeName || 'Store'} style={{height:`${settings.searchLogoSize || 32}px`,maxWidth:'120px',objectFit:'contain'}} className="flex-shrink-0" loading="eager" decoding="async" />}
             {loadingSugg ? (
               <svg className="w-5 h-5 text-gray-400 flex-shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
@@ -559,7 +559,7 @@ const Header = ({ settings, campaign }) => {
                   alt={settings.storeName || 'StoreKit'}
                   className="sz-logo-img"
                   style={{
-                    '--logo-size': `${rawLogoHeight}px`,
+                    '--logo-size': `${settings.navbarLogoSize || rawLogoHeight}px`,
                     filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.10))',
                   }}
                 />
@@ -880,7 +880,7 @@ const Footer = ({ settings }) => {
                     src={footerLogo}
                     alt={storeName}
                     onError={() => setLogoFailed(true)}
-                    style={{height:'56px',maxWidth:'180px',objectFit:'contain',objectPosition:'left center'}}
+                    style={{height:`${settings.footerLogoSize || 56}px`,maxWidth:'180px',objectFit:'contain',objectPosition:'left center'}}
                   />
                 : <span className="font-bold text-white text-lg" style={{fontFamily:'var(--font-display)'}}>{storeName}</span>
               }

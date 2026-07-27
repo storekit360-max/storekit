@@ -120,7 +120,7 @@ export default function AdminSettings() {
     codEnabled:true, bankTransferEnabled:true,
     bankName:'', bankAccountName:'', bankAccountNumber:'', bankBranch:'',
     theme:'default', primaryColor:'', secondaryColor:'', darkBgColor:'', darkMode:false,
-    fontStyle:'default', logoUrl:'', navbarLogoUrl:'', loaderLogoUrl:'', footerLogoUrl:'', searchLogoUrl:'', faviconUrl:'', logoSize:48, customCSS:'',
+    fontStyle:'default', logoUrl:'', navbarLogoUrl:'', loaderLogoUrl:'', footerLogoUrl:'', searchLogoUrl:'', faviconUrl:'', logoSize:56, navbarLogoSize:56, loaderLogoSize:86, footerLogoSize:56, searchLogoSize:32, customCSS:'',
     metaTitle:'', metaDescription:'', googleAnalytics:'', facebookPixel:'',
     lowStockAlert:5, orderNotificationEmail:'', cancelWindowMinutes:60, autoConfirmOrders:false,
     autoDecisionEnabled:false, autoDecisionMinutes:60, autoDecisionAction:'approve',
@@ -1036,6 +1036,9 @@ export default function AdminSettings() {
                     <ImageUpload label="Loading Screen Logo (optional)" hint="Used by the storefront loader. Falls back to Store Logo." value={settings.loaderLogoUrl} onChange={url=>setSettings(p=>({...p,loaderLogoUrl:url}))} />
                     <ImageUpload label="Footer Logo (optional)" hint="Used only in the storefront footer. Falls back to Store Logo." value={settings.footerLogoUrl} onChange={url=>setSettings(p=>({...p,footerLogoUrl:url}))} />
                     <ImageUpload label="Search Result Logo (optional)" hint="Used in search branding/results. Falls back to Store Logo." value={settings.searchLogoUrl} onChange={url=>setSettings(p=>({...p,searchLogoUrl:url}))} />
+                  </div>
+                  <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {[['navbarLogoSize','Navbar Logo Size',28,200],['loaderLogoSize','Loading Logo Size',32,240],['footerLogoSize','Footer Logo Size',24,180],['searchLogoSize','Search Logo Size',20,120]].map(([key,label,min,max])=><label key={key} className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-xs font-semibold text-gray-700">{label}<div className="flex items-center gap-3 mt-2"><input type="range" min={min} max={max} step="4" value={settings[key]||min} onChange={e=>setSettings(p=>({...p,[key]:Number(e.target.value)}))} className="w-full accent-primary"/><span className="w-14 text-right font-mono text-gray-500">{settings[key]||min}px</span></div><span className="block mt-1 text-[11px] font-normal text-gray-400">Maximum {max}px</span></label>)}
                   </div>
 
                   {/* Logo Size Control */}
