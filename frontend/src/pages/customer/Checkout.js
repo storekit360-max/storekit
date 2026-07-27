@@ -655,7 +655,7 @@ export default function Checkout() {
       setCouponData(data);
 
       if (giftCardData) {
-        toast.success(`✅ Coupon applied! ${sym} ${data.discount.toLocaleString()} off — gift card will cover the rest`);
+        toast.success(`✅ Coupon applied! ${sym} ${data.discount.toLocaleString()} off — gift voucher will cover the rest`);
       } else {
         toast.success(`✅ Coupon applied! ${sym} ${data.discount.toLocaleString()} discount`);
       }
@@ -681,7 +681,7 @@ export default function Checkout() {
         toast.success(`🎁 Gift card applied! Balance: ${sym} ${data.balance.toLocaleString()}`);
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Invalid gift card');
+      toast.error(err.response?.data?.message || 'Invalid gift voucher');
       setGiftCardData(null);
     } finally { setGiftCardLoading(false); }
   };
@@ -1253,7 +1253,7 @@ export default function Checkout() {
                 {giftCardDeduction > 0 && (
                   <div className="flex justify-between text-purple-600">
                     <span className="flex items-center gap-1">
-                      🎁 Gift Card (payment)
+                      🎁 Gift Voucher (payment)
                       <button type="button" onClick={() => { setGiftCardData(null); setGiftCardCode(''); }} className="text-red-400 hover:text-red-600 text-xs ml-1">✕</button>
                     </span>
                     <span>−{sym} {giftCardDeduction.toLocaleString()}</span>
@@ -1318,7 +1318,7 @@ export default function Checkout() {
                 <div className="flex items-center justify-between rounded-xl px-3 py-2 bg-green-50 border border-green-200">
                   <span className="text-sm font-semibold text-green-700">
                     ✓ {couponCode} — −{sym} {couponData.discount.toLocaleString()}
-                    {giftCardData && <span className="ml-1 text-xs font-normal text-green-600">(stacks with gift card)</span>}
+                    {giftCardData && <span className="ml-1 text-xs font-normal text-green-600">(stacks with gift voucher)</span>}
                   </span>
                   <button type="button" onClick={() => { setCouponData(null); setCouponCode(''); }} className="text-red-400 hover:text-red-600 text-xs">Remove</button>
                 </div>
@@ -1333,9 +1333,9 @@ export default function Checkout() {
               )}
             </div>
 
-            {/* Gift Card */}
+            {/* Gift Voucher */}
             <div className="checkout-card rounded-2xl border border-gray-100 p-4" style={{ background: 'var(--card-bg)' }}>
-              <h3 className="font-semibold text-gray-800 mb-2 text-sm">🎁 Gift Card <span className="font-normal text-xs text-gray-400">(used as payment)</span></h3>
+              <h3 className="font-semibold text-gray-800 mb-2 text-sm">🎁 Gift Voucher <span className="font-normal text-xs text-gray-400">(used as payment)</span></h3>
               {giftCardData ? (
                 <div className="flex items-center justify-between rounded-xl px-3 py-2 bg-purple-50 border border-purple-200">
                   <span className="text-sm font-semibold text-purple-700">
@@ -1423,10 +1423,10 @@ export default function Checkout() {
                   <p className="text-sm font-bold text-green-800">No payment needed!</p>
                   <p className="text-xs text-green-600">
                     {isCouponActive && isGiftCardActive
-                      ? 'Your coupon discount and gift card cover the full order.'
+                      ? 'Your coupon discount and gift voucher cover the full order.'
                       : isCouponActive
                       ? 'Your coupon covers the full order amount.'
-                      : 'Your gift card covers the full order amount.'}
+                      : 'Your gift voucher covers the full order amount.'}
                   </p>
                 </div>
               </div>

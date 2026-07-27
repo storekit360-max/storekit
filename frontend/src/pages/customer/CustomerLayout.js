@@ -735,7 +735,7 @@ const Header = ({ settings, campaign }) => {
                       <p className="text-sm font-bold text-gray-900 truncate">{user.firstName} {user.lastName}</p>
                       <p className="text-xs text-gray-400 truncate">{user.email}</p>
                     </div>
-                    {[['/account','👤','My Account'],['/returns','↩️','Returns'],['/gift-cards','🎁','Gift Cards'],['/wishlist','❤️','Wishlist']].map(([to,icon,label])=>(
+                    {[['/account','👤','My Account'],['/returns','↩️','Returns'],['/gift-cards','🎁','Gift Vouchers'],['/wishlist','❤️','Wishlist']].map(([to,icon,label])=>(
                       <Link key={to} to={to} className="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors">{icon} {label}</Link>
                     ))}
                     {user.role==='admin' && <Link to="/admin" className="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 border-t mt-1">⚙️ Admin Panel</Link>}
@@ -775,7 +775,7 @@ const Header = ({ settings, campaign }) => {
         {/* Mobile menu — FIX: sz-mobile-menu-link for tap-target height */}
         {menuOpen && (
           <div className="lg:hidden border-t border-gray-100 py-2 space-y-0.5 fade-in">
-            {[['/store', '🏠 Home'],['/shop','🛍️ Shop'],['/gift-cards','🎁 Gift Cards'],['/wishlist','❤️ Wishlist'],['/returns','↩️ Returns'],['/account','👤 My Account']].map(([to,label])=>(
+            {[['/store', '🏠 Home'],['/shop','🛍️ Shop'],['/gift-cards','🎁 Gift Vouchers'],['/wishlist','❤️ Wishlist'],['/returns','↩️ Returns'],['/account','👤 My Account']].map(([to,label])=>(
               <Link key={to} to={to} className="sz-mobile-menu-link px-3 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 rounded-xl transition-colors">{label}</Link>
             ))}
             {categories.map(cat => <Link key={cat._id} to={`/category/${cat.slug}`} className="sz-mobile-menu-link px-3 py-2.5 text-sm text-gray-500 hover:bg-gray-50 rounded-xl">{cat.name}</Link>)}
@@ -916,7 +916,7 @@ const Footer = ({ settings }) => {
           <div>
             <h4 className="text-white font-bold mb-3 text-xs uppercase tracking-widest">Shop</h4>
             <ul className="space-y-2">
-              {[['/store','Home'],['/shop','All Products'],['/gift-cards','🎁 Gift Cards'],['/shop?onSale=true','Sale Items']].map(([to,label])=>(
+              {[['/store','Home'],['/shop','All Products'],['/gift-cards','🎁 Gift Vouchers'],['/shop?onSale=true','Sale Items']].map(([to,label])=>(
                 <li key={to}><Link to={to} className="text-sm hover:text-white transition-colors">{label}</Link></li>
               ))}
             </ul>

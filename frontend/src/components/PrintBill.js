@@ -62,7 +62,7 @@ export default function PrintBill({ order, trigger }) {
       ? '<div class="tot-row discount"><span>Coupon' + (order.couponCode ? ' (' + order.couponCode + ')' : '') + '</span><span>-' + fmtCurrency(order.couponDiscount) + '</span></div>'
       : '';
     const giftHtml = ((order.giftCardDeduction || 0) + (order.giftCardDiscount || 0)) > 0
-      ? '<div class="tot-row discount gift"><span>Gift Card</span><span>-' + fmtCurrency(order.giftCardDeduction || order.giftCardDiscount) + '</span></div>'
+      ? '<div class="tot-row discount gift"><span>Gift Voucher</span><span>-' + fmtCurrency(order.giftCardDeduction || order.giftCardDiscount) + '</span></div>'
       : '';
     const trackingHtml = order.trackingNumber
       ? '<div class="pay-detail"><span>Tracking</span><strong class="mono">' + order.trackingNumber + '</strong></div>'

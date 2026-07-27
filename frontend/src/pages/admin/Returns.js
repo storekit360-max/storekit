@@ -380,7 +380,7 @@ export default function AdminReturns() {
                     >
                       <option value="original">Original Payment Method</option>
                       <option value="store_credit">Store Credit</option>
-                      <option value="gift_card">Gift Card</option>
+                      <option value="gift_card">Gift Voucher</option>
                     </select>
                   </div>
                 </div>

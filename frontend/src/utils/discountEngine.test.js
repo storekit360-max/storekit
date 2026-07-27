@@ -163,12 +163,12 @@ describe('resolveBestBenefit()', () => {
   test('no benefit when both null', () => {
     expect(resolveBestBenefit(null, null, 5000)).toEqual({ type: 'none', discount: 0 });
   });
-  test('coupon used when no gift card', () => {
+  test('coupon used when no gift voucher', () => {
     const r = resolveBestBenefit(mkCoupon(500), null, 5000);
     expect(r.type).toBe('coupon');
     expect(r.discount).toBe(500);
   });
-  test('gift card used when no coupon', () => {
+  test('gift voucher used when no coupon', () => {
     const r = resolveBestBenefit(null, mkGiftCard(800), 5000);
     expect(r.type).toBe('giftcard');
     expect(r.discount).toBe(800);
@@ -178,7 +178,7 @@ describe('resolveBestBenefit()', () => {
     expect(r.type).toBe('coupon');
     expect(r.discount).toBe(1000);
   });
-  test('gift card wins when saving is larger', () => {
+  test('gift voucher wins when saving is larger', () => {
     const r = resolveBestBenefit(mkCoupon(300), mkGiftCard(800), 5000);
     expect(r.type).toBe('giftcard');
     expect(r.discount).toBe(800);
@@ -187,12 +187,12 @@ describe('resolveBestBenefit()', () => {
     const r = resolveBestBenefit(mkCoupon(500), mkGiftCard(500), 5000);
     expect(r.type).toBe('coupon');
   });
-  test('gift card discount capped at subtotal', () => {
+  test('gift voucher discount capped at subtotal', () => {
     const r = resolveBestBenefit(null, mkGiftCard(3000), 2000);
     expect(r.type).toBe('giftcard');
     expect(r.discount).toBe(2000);
   });
-  test('capped gift card can still lose to coupon', () => {
+  test('capped gift voucher can still lose to coupon', () => {
     const r = resolveBestBenefit(mkCoupon(2500), mkGiftCard(3000), 2000);
     expect(r.type).toBe('coupon');
     expect(r.discount).toBe(2500);
@@ -214,7 +214,7 @@ describe('computeTotals()', () => {
     expect(t.total).toBe(4500);
     expect(t.benefitType).toBe('coupon');
   });
-  test('gift card reduces total', () => {
+  test('gift voucher reduces total', () => {
     const t = computeTotals({ subtotal: 3000, deliveryFee: 600, couponData: null, giftCardData: mkGiftCard(1000) });
     expect(t.discount).toBe(1000);
     expect(t.total).toBe(2600);
@@ -230,13 +230,13 @@ describe('computeTotals()', () => {
     expect(t.discount).toBe(2300);
     expect(t.total).toBe(0);
   });
-  test('gift card fully covers order', () => {
+  test('gift voucher fully covers order', () => {
     const t = computeTotals({ subtotal: 1000, deliveryFee: 0, couponData: null, giftCardData: mkGiftCard(5000) });
     expect(t.total).toBe(0);
     expect(t.discount).toBe(1000);
     expect(t.benefitType).toBe('giftcard');
   });
-  test('gift card of 0 is no benefit', () => {
+  test('gift voucher of 0 is no benefit', () => {
     const t = computeTotals({ subtotal: 3000, deliveryFee: 0, couponData: null, giftCardData: mkGiftCard(0) });
     expect(t.benefitType).toBe('none');
     expect(t.discount).toBe(0);
@@ -249,7 +249,7 @@ describe('computeTotals()', () => {
     const t = computeTotals({ subtotal: 1000.005, deliveryFee: 0, couponData: null, giftCardData: null });
     expect(t.subtotal).toBe(1000.01);
   });
-  test('best benefit wins — gift card > coupon', () => {
+  test('best benefit wins — gift voucher > coupon', () => {
     const t = computeTotals({ subtotal: 5000, deliveryFee: 0, couponData: mkCoupon(200), giftCardData: mkGiftCard(800) });
     expect(t.benefitType).toBe('giftcard');
     expect(t.discount).toBe(800);
@@ -279,7 +279,7 @@ describe('computeCartTotals()', () => {
     expect(t.discount).toBe(500);
     expect(t.total).toBe(4600);
   });
-  test('applies gift card', () => {
+  test('applies gift voucher', () => {
     const t = computeCartTotals(items, null, '', DEFAULT_SETTINGS, null, mkGiftCard(700));
     expect(t.discount).toBe(700);
     expect(t.total).toBe(4400);
@@ -337,7 +337,7 @@ describe('Seasonal promotions', () => {
     expect(t.discount).toBe(5000);
     expect(t.total).toBe(10000);
   });
-  test('EID20 — seasonal coupon loses to larger gift card', () => {
+  test('EID20 — seasonal coupon loses to larger gift voucher', () => {
     const couponDiscount = Math.round((3000 * 20) / 100); // 600
     const t = computeTotals({
       subtotal: 3000, deliveryFee: 0,
@@ -393,7 +393,7 @@ describe('Full checkout scenarios', () => {
     expect(t.total).toBe(4000); // 4000 - 600 + 600
   });
 
-  test('C — gift card covers entire order (Rs. 0 due)', () => {
+  test('C — gift voucher covers entire order (Rs. 0 due)', () => {
     const t = computeCartTotals([{ price: 2000, quantity: 1 }], null, '', DEFAULT_SETTINGS, null, mkGiftCard(5000));
     expect(t.total).toBe(0);
     expect(t.benefitType).toBe('giftcard');
@@ -421,14 +421,14 @@ describe('Full checkout scenarios', () => {
     expect(t.total).toBe(3600);
   });
 
-  test('F — coupon Rs. 1200 beats gift card Rs. 800', () => {
+  test('F — coupon Rs. 1200 beats gift voucher Rs. 800', () => {
     const t = computeTotals({ subtotal: 6000, deliveryFee: 0, couponData: mkCoupon(1200), giftCardData: mkGiftCard(800) });
     expect(t.benefitType).toBe('coupon');
     expect(t.discount).toBe(1200);
     expect(t.total).toBe(4800);
   });
 
-  test('F² — gift card Rs. 900 beats coupon Rs. 400', () => {
+  test('F² — gift voucher Rs. 900 beats coupon Rs. 400', () => {
     const t = computeTotals({ subtotal: 6000, deliveryFee: 0, couponData: mkCoupon(400), giftCardData: mkGiftCard(900) });
     expect(t.benefitType).toBe('giftcard');
     expect(t.discount).toBe(900);
@@ -442,7 +442,7 @@ describe('Full checkout scenarios', () => {
     expect(t.total).toBe(600);
   });
 
-  test('H — oversized gift card covers subtotal + delivery', () => {
+  test('H — oversized gift voucher covers subtotal + delivery', () => {
     const t = computeTotals({ subtotal: 1000, deliveryFee: 600, couponData: null, giftCardData: mkGiftCard(99999) });
     expect(t.discount).toBe(1600); // capped at 1000 + 600
     expect(t.total).toBe(0);
@@ -508,7 +508,7 @@ test('coupon applies normally when cart has no sale items', () => {
   expect(t.total).toBe(2700);
 });
 
-test('gift card still works even if coupon was blocked by excludeSaleItems', () => {
+test('gift voucher still works even if coupon was blocked by excludeSaleItems', () => {
   // Simulate: coupon rejected server-side → couponData null, giftCardData present
   const t = computeTotals({ subtotal: 2000, deliveryFee: 600, couponData: null, giftCardData: mkGiftCard(500) });
   expect(t.benefitType).toBe('giftcard');
@@ -522,13 +522,13 @@ test('gift card still works even if coupon was blocked by excludeSaleItems', () 
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('Discount priority — best saving always wins', () => {
-test('larger coupon beats smaller gift card', () => {
+test('larger coupon beats smaller gift voucher', () => {
   const t = computeTotals({ subtotal: 5000, deliveryFee: 0, couponData: mkCoupon(800), giftCardData: mkGiftCard(400) });
   expect(t.benefitType).toBe('coupon');
   expect(t.discount).toBe(800);
 });
 
-test('larger gift card beats smaller coupon', () => {
+test('larger gift voucher beats smaller coupon', () => {
   const t = computeTotals({ subtotal: 5000, deliveryFee: 0, couponData: mkCoupon(400), giftCardData: mkGiftCard(800) });
   expect(t.benefitType).toBe('giftcard');
   expect(t.discount).toBe(800);
@@ -547,7 +547,7 @@ test('only best benefit applies — discount never adds both together', () => {
   expect(t.discount).not.toBe(1100);
 });
 
-test('no benefit when both coupon and gift card are zero', () => {
+test('no benefit when both coupon and gift voucher are zero', () => {
   const t = computeTotals({ subtotal: 3000, deliveryFee: 0, couponData: mkCoupon(0), giftCardData: mkGiftCard(0) });
   expect(t.benefitType).toBe('none');
   expect(t.discount).toBe(0);
@@ -559,33 +559,33 @@ test('no benefit when both coupon and gift card are zero', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('Gift card as payment — covers delivery fee', () => {
-test('gift card covers subtotal + delivery — total is 0', () => {
+test('gift voucher covers subtotal + delivery — total is 0', () => {
   const t = computeTotals({ subtotal: 2000, deliveryFee: 600, couponData: null, giftCardData: mkGiftCard(5000) });
   expect(t.total).toBe(0);
   expect(t.discount).toBe(2600); // 2000 + 600
   expect(t.benefitType).toBe('giftcard');
 });
 
-test('partial gift card reduces total, delivery still owed if not fully covered', () => {
+test('partial gift voucher reduces total, delivery still owed if not fully covered', () => {
   const t = computeTotals({ subtotal: 2000, deliveryFee: 600, couponData: null, giftCardData: mkGiftCard(800) });
-  // 800 gift card covers 800 of the 2600 total
+  // 800 gift voucher covers 800 of the 2600 total
   expect(t.discount).toBe(800);
   expect(t.total).toBe(1800); // 2000 - 800 + 600
 });
 
-test('gift card of exactly subtotal + delivery zeroes the order', () => {
+test('gift voucher of exactly subtotal + delivery zeroes the order', () => {
   const t = computeTotals({ subtotal: 1500, deliveryFee: 300, couponData: null, giftCardData: mkGiftCard(1800) });
   expect(t.total).toBe(0);
   expect(t.discount).toBe(1800);
 });
 
-test('gift card of 1 rupee more than total — discount capped, total is 0', () => {
+test('gift voucher of 1 rupee more than total — discount capped, total is 0', () => {
   const t = computeTotals({ subtotal: 1000, deliveryFee: 200, couponData: null, giftCardData: mkGiftCard(1201) });
   expect(t.total).toBe(0);
   expect(t.discount).toBe(1200); // capped at subtotal + delivery
 });
 
-test('zero-balance gift card = no benefit', () => {
+test('zero-balance gift voucher = no benefit', () => {
   const t = computeTotals({ subtotal: 1000, deliveryFee: 600, couponData: null, giftCardData: mkGiftCard(0) });
   expect(t.benefitType).toBe('none');
   expect(t.total).toBe(1600);
@@ -707,7 +707,7 @@ test('globalMaxDiscountPct of 10% on Rs. 5000 limits coupon to Rs. 500', () => {
   expect(t.total).toBe(4500);
 });
 
-test('allowCouponOnSaleItems=false — coupon rejected, gift card still works', () => {
+test('allowCouponOnSaleItems=false — coupon rejected, gift voucher still works', () => {
   // Server rejects coupon due to sale items → couponData null
   const t = computeTotals({
     subtotal: 3000, deliveryFee: 0,
@@ -718,11 +718,11 @@ test('allowCouponOnSaleItems=false — coupon rejected, gift card still works', 
   expect(t.discount).toBe(600);
 });
 
-test('free delivery + profit-capped coupon + gift card — best benefit wins', () => {
+test('free delivery + profit-capped coupon + gift voucher — best benefit wins', () => {
   // Cart: Rs. 6000, free delivery
   // Coupon: 20% = 1200, but profit cap returns 800
   // Gift card: Rs. 700
-  // Best: coupon (800) > gift card (700)
+  // Best: coupon (800) > gift voucher (700)
   const t = computeTotals({
     subtotal: 6000, deliveryFee: 0,
     couponData: mkCoupon(800),
@@ -733,8 +733,8 @@ test('free delivery + profit-capped coupon + gift card — best benefit wins', (
   expect(t.total).toBe(5200);
 });
 
-test('gift card covers delivery when giftCardCoversDelivery is true', () => {
-  // Rs. 2000 cart + Rs. 600 delivery, gift card Rs. 3000
+test('gift voucher covers delivery when giftCardCoversDelivery is true', () => {
+  // Rs. 2000 cart + Rs. 600 delivery, gift voucher Rs. 3000
   const t = computeCartTotals(
     [{ price: 2000, quantity: 1 }],
     null, '', DEFAULT_SETTINGS,
@@ -744,7 +744,7 @@ test('gift card covers delivery when giftCardCoversDelivery is true', () => {
   expect(t.discount).toBe(2600); // covers subtotal + delivery
 });
 
-test('seasonal coupon (BLACK50) + gift card — gift card wins if larger', () => {
+test('seasonal coupon (BLACK50) + gift voucher — gift voucher wins if larger', () => {
   // Seasonal: 50% off Rs. 4000 = Rs. 2000 (BLACK50)
   // Gift card: Rs. 2500 balance
   // Gift card wins

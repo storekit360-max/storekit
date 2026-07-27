@@ -7,9 +7,9 @@
  *  3. Pricing order:
  *       a. Product Discount  (salePrice applied per item — step 1)
  *       b. Customer Benefit  → coupon OR customer-tier discount (best one wins)
- *       c. Gift Card Balance → applied AFTER coupon, against the remaining total
+ *       c. Gift Voucher Balance → applied AFTER coupon, against the remaining total
  *                              (subtotal − coupon + deliveryFee)
- *  4. Coupon and gift card CAN stack. Coupon is a discount; gift card is a
+ *  4. Coupon and gift voucher CAN stack. Coupon is a discount; gift voucher is a
  *     payment method that covers whatever is left after the coupon.
  *  5. Gift-card cap  → deduction capped at remaining total so it never goes < 0.
  *  6. Final total    → Math.max(0, subtotal − couponDiscount + deliveryFee − giftCardDeduction).
@@ -375,7 +375,7 @@ async function validateCoupon(code, subtotal, opts = {}) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Validate a gift card code.
+ * Validate a gift voucher code.
  * @param {string} code
  * @returns {Promise<{ giftCard, balance: number } | { error: string }>}
  */
@@ -387,15 +387,15 @@ async function validateGiftCard(code) {
     isActive: true,
     expiresAt: { $gte: new Date() },
   });
-  if (!giftCard || giftCard.balance <= 0.01) return { error: 'Invalid or expired gift card' };
+  if (!giftCard || giftCard.balance <= 0.01) return { error: 'Invalid or expired gift voucher' };
   return { giftCard, balance: giftCard.balance };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 5. BENEFIT RESOLVER
-//    NEW RULE: Coupon and gift card CAN stack.
+//    NEW RULE: Coupon and gift voucher CAN stack.
 //    - Coupon (or customer benefit) → applied first as a discount on subtotal
-//    - Gift Card → applied as a payment method against remaining total
+//    - Gift Voucher → applied as a payment method against remaining total
 //      (subtotal − couponDiscount + deliveryFee)
 //    Both can be present simultaneously.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -403,19 +403,19 @@ async function validateGiftCard(code) {
 /**
  * @typedef {object} BenefitResult
  * @property {number}      couponDiscount    – discount from coupon (0 if none)
- * @property {number}      giftCardDeduction – amount paid by gift card (0 if none)
+ * @property {number}      giftCardDeduction – amount paid by gift voucher (0 if none)
  * @property {object|null} coupon            – coupon doc (if couponDiscount > 0)
- * @property {object|null} giftCard          – gift card doc (if giftCardDeduction > 0)
+ * @property {object|null} giftCard          – gift voucher doc (if giftCardDeduction > 0)
  * @property {string|null} errorCoupon       – validation error message for coupon, if any
- * @property {string|null} errorGiftCard     – validation error message for gift card, if any
+ * @property {string|null} errorGiftCard     – validation error message for gift voucher, if any
  *
  * Legacy compat:
  * @property {'coupon'|'giftcard'|'both'|'none'} type  – for backward-compat display
- * @property {number}                             discount – total deduction (coupon + gift card portion)
+ * @property {number}                             discount – total deduction (coupon + gift voucher portion)
  */
 
 /**
- * Resolve customer benefits: coupon applied first, then gift card covers remaining.
+ * Resolve customer benefits: coupon applied first, then gift voucher covers remaining.
  * Both can be used together (they stack).
  * Neither benefit is applied to DB yet — call applyBenefit() after order creation.
  *
@@ -425,7 +425,7 @@ async function validateGiftCard(code) {
 async function resolveBenefit(opts) {
   const {
     couponCode, giftCardCode, subtotal,
-    deliveryFee = 0, // optional — if not provided, gift card cap uses subtotal only
+    deliveryFee = 0, // optional — if not provided, gift voucher cap uses subtotal only
     userId, email, categoryIds, productIds, brands, lineItems,
   } = opts;
 
@@ -459,7 +459,7 @@ async function resolveBenefit(opts) {
   else if (couponDiscount > 0)                    type = 'coupon';
   else if (giftCardBalance > 0)                   type = 'giftcard';
 
-  // Legacy 'discount' field = coupon discount only (gift card is a payment, not a discount)
+  // Legacy 'discount' field = coupon discount only (gift voucher is a payment, not a discount)
   return {
     type,
     couponDiscount,
@@ -521,7 +521,7 @@ function computeTotals({ subtotal, deliveryFee, benefit }) {
 /**
  * Apply the chosen benefit to the DB (increment usedCount, deduct gift-card balance).
  * Safe to call even when benefit.type === 'none'.
- * NOW supports 'both' — applies coupon AND gift card side effects.
+ * NOW supports 'both' — applies coupon AND gift voucher side effects.
  *
  * FIX: Gift card deactivation (when balance hits zero) is now done atomically
  * inside the same findOneAndUpdate call using an aggregation pipeline update,

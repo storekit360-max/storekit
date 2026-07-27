@@ -343,7 +343,7 @@ const orderConfirmHtml = async (order) => {
         <tbody>${itemRows}</tbody>
         <tfoot>
           ${order.couponDiscount > 0 ? `<tr><td style="padding:8px 12px;font-size:13px;color:#059669">Coupon (${order.couponCode})</td><td style="padding:8px 12px;font-size:13px;color:#059669;text-align:right">−${sym} ${order.couponDiscount?.toLocaleString()}</td></tr>` : ''}
-          ${order.giftCardDiscount > 0 ? `<tr><td style="padding:8px 12px;font-size:13px;color:#059669">Gift Card</td><td style="padding:8px 12px;font-size:13px;color:#059669;text-align:right">−${sym} ${order.giftCardDiscount?.toLocaleString()}</td></tr>` : ''}
+          ${order.giftCardDiscount > 0 ? `<tr><td style="padding:8px 12px;font-size:13px;color:#059669">Gift Voucher</td><td style="padding:8px 12px;font-size:13px;color:#059669;text-align:right">−${sym} ${order.giftCardDiscount?.toLocaleString()}</td></tr>` : ''}
           <tr><td style="padding:8px 12px;font-size:13px;color:#6b7280">Shipping</td><td style="padding:8px 12px;font-size:13px;color:#6b7280;text-align:right">${sym} ${(order.shippingCost || 0).toLocaleString()}</td></tr>
           <tr style="border-top:2px solid #e5e7eb"><td style="padding:12px;font-size:15px;font-weight:700;color:#111">Total</td><td style="padding:12px;font-size:15px;font-weight:700;color:${t.primary};text-align:right">${sym} ${order.total?.toLocaleString()}</td></tr>
         </tfoot>
@@ -807,7 +807,7 @@ const returnRequestAdminHtml = async ({ customerName, customerEmail, customerPho
 const returnApprovedCustomerHtml = async ({ customerName, orderNumber, returnId, refundAmount, refundMethod, adminNote }) => {
   const t = await getTheme();
   const sym = 'Rs.';
-  const methodLabels = { original: 'Original Payment Method', store_credit: 'Store Credit', gift_card: 'Gift Card' };
+  const methodLabels = { original: 'Original Payment Method', store_credit: 'Store Credit', gift_card: 'Gift Voucher' };
   return wrapper(`
     ${header('Return Request Approved!', t)}
     <div style="padding:32px">
@@ -886,7 +886,7 @@ const returnReceivedCustomerHtml = async ({ customerName, orderNumber, returnId,
 const returnRefundedCustomerHtml = async ({ customerName, orderNumber, returnId, refundAmount, refundMethod, adminNote }) => {
   const t = await getTheme();
   const sym = 'Rs.';
-  const methodLabels = { original: 'Original Payment Method', store_credit: 'Store Credit', gift_card: 'Gift Card' };
+  const methodLabels = { original: 'Original Payment Method', store_credit: 'Store Credit', gift_card: 'Gift Voucher' };
   return wrapper(`
     ${header('Refund Processed!', t)}
     <div style="padding:32px">
@@ -924,7 +924,7 @@ const returnStatusAdminHtml = async ({ customerName, customerEmail, orderNumber,
     pending: '#d97706', approved: '#16a34a', rejected: '#dc2626',
     received: '#2563eb', refunded: '#16a34a',
   };
-  const methodLabels = { original: 'Original Payment Method', store_credit: 'Store Credit', gift_card: 'Gift Card' };
+  const methodLabels = { original: 'Original Payment Method', store_credit: 'Store Credit', gift_card: 'Gift Voucher' };
   const color = statusColors[newStatus] || t.primary;
   return wrapper(`
     ${header('Return Status Updated', t)}

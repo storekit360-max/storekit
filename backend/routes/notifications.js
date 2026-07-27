@@ -22,7 +22,7 @@ const PANEL_TYPES = [
   'payment_confirmed',
   'cancel_request',
   'return_request',
-  'gift_card',   // gift card purchases, slip uploads, activations, rejections
+  'gift_card',   // gift voucher purchases, slip uploads, activations, rejections
   'system',      // platform announcements and maintenance notices
   'support_ticket',  // Added support ticket notifications
   'support_reply'    // Added support reply notifications

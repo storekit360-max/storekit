@@ -151,7 +151,7 @@ export default function AdminOrderDetail() {
               <div className="flex justify-between text-gray-600"><span>Shipping</span><span>Rs. {order.shippingCost?.toLocaleString()}</span></div>
               {(order.giftCardDeduction > 0 || order.giftCardDiscount > 0) && (
                 <div className="flex justify-between text-purple-600">
-                  <span>🎁 Gift Card Payment {order.giftCard ? `(${order.giftCard})` : ''}</span>
+                  <span>🎁 Gift Voucher Payment {order.giftCard ? `(${order.giftCard})` : ''}</span>
                   <span>−Rs. {(order.giftCardDeduction || order.giftCardDiscount)?.toLocaleString()}</span>
                 </div>
               )}

@@ -9,13 +9,13 @@
  *  2. Order Subtotal    → sum of (effectivePrice × qty)
  *  3. Coupon / Customer Benefit → applied as a discount on subtotal
  *  4. Delivery Fee      → added after coupon discount
- *  5. Gift Card Balance → payment method applied to remaining total
+ *  5. Gift Voucher Balance → payment method applied to remaining total
  *                         (subtotal − couponDiscount + deliveryFee)
  *  6. Final Total       → Math.max(0, remaining − giftCardDeduction)
  *
- * KEY CHANGE: Coupon + Gift Card CAN stack.
+ * KEY CHANGE: Coupon + Gift Voucher CAN stack.
  *   - Coupon reduces the order subtotal (it's a discount)
- *   - Gift Card then pays whatever is left (it's a payment method)
+ *   - Gift Voucher then pays whatever is left (it's a payment method)
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -89,23 +89,23 @@ export function effectivePrice(item) {
   }
   
   // ─────────────────────────────────────────────────────────────────────────────
-  // 3. BENEFIT RESOLUTION  (coupon AND gift card can stack)
+  // 3. BENEFIT RESOLUTION  (coupon AND gift voucher can stack)
   // ─────────────────────────────────────────────────────────────────────────────
   
   /**
    * Determine which benefits are active given the validated coupon/gift-card data.
-   * Both can be active simultaneously — coupon is a discount, gift card is a payment.
+   * Both can be active simultaneously — coupon is a discount, gift voucher is a payment.
    *
    * @param {object|null} couponData    – { discount: number } from /coupons/validate
    * @param {object|null} giftCardData  – { balance: number } from /gift-cards/validate
    * @param {number}      subtotal
-   * @param {number}      deliveryFee   – needed to compute remaining total for gift card cap
+   * @param {number}      deliveryFee   – needed to compute remaining total for gift voucher cap
    * @returns {{ couponDiscount: number, giftCardDeduction: number, type: string }}
    */
   export function resolveBenefit(couponData, giftCardData, subtotal, deliveryFee = 0) {
     const couponDiscount = couponData?.discount ?? 0;
   
-    // Remaining total after coupon + delivery — gift card caps at this
+    // Remaining total after coupon + delivery — gift voucher caps at this
     const afterCoupon    = Math.max(0, subtotal - couponDiscount);
     const remainingTotal = afterCoupon + deliveryFee;
     const giftCardDeduction = giftCardData

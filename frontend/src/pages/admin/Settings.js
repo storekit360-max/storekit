@@ -153,7 +153,7 @@ export default function AdminSettings() {
     allowCouponOnSaleItems:false,   // false = block coupons on already-discounted items
     globalMaxDiscountPct:0,         // 0 = disabled; otherwise cap all coupon discounts at N% of subtotal
     globalMinProfitMarginPct:0,     // 0 = disabled; minimum profit margin % to preserve
-    giftCardCoversDelivery:true,    // true = gift card balance can absorb delivery fee
+    giftCardCoversDelivery:true,    // true = gift voucher balance can absorb delivery fee
     heroStyle:'gradient', heroBottomStyle:'wave', headerStyle:'default', footerStyle:'default',
     customHeaderCode:'', customFooterCode:'',
     termsUrl:'', privacyUrl:'',
@@ -1329,15 +1329,15 @@ export default function AdminSettings() {
               <div className="space-y-6">
                 <div>
                   <h3 className="font-semibold text-gray-900">Discount Engine Settings</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">Global rules enforced by the centralized Discount Engine across all coupons, gift cards, and promotions</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Global rules enforced by the centralized Discount Engine across all coupons, gift vouchers, and promotions</p>
                 </div>
 
                 {/* How it works strip */}
                 <div className="grid sm:grid-cols-2 gap-3">
                   {[
-                    { icon:'🏆', title:'Best Benefit Wins', body:'Coupon vs gift card — whichever saves the customer more is applied automatically. They never stack.' },
-                    { icon:'🚫', title:'No Stacking', body:'Only one customer benefit (coupon or gift card) applies per order. Multiple promotions cannot combine.' },
-                    { icon:'💰', title:'Gift Card = Payment', body:'Gift cards apply after discounts and can cover delivery fees. They act as a payment method, not a discount.' },
+                    { icon:'🏆', title:'Best Benefit Wins', body:'Coupon vs gift voucher — whichever saves the customer more is applied automatically. They never stack.' },
+                    { icon:'🚫', title:'No Stacking', body:'Only one customer benefit (coupon or gift voucher) applies per order. Multiple promotions cannot combine.' },
+                    { icon:'💰', title:'Gift Voucher = Payment', body:'Gift cards apply after discounts and can cover delivery fees. They act as a payment method, not a discount.' },
                     { icon:'🔒', title:'Server Revalidation', body:'All coupon rules are rechecked at order creation time on the server — a pre-check passing does not guarantee final approval.' },
                   ].map(({ icon, title, body }) => (
                     <div key={title} className="bg-blue-50 rounded-xl p-4 border border-blue-100">
@@ -1353,9 +1353,9 @@ export default function AdminSettings() {
                   <h4 className="font-semibold text-gray-800 text-sm">Discount Priority Rule</h4>
                   <div className="space-y-2">
                     {[
-                      { value:'best',   label:'Best Saving Wins (Recommended)', desc:'The engine automatically picks whichever benefit — coupon or gift card — gives the customer the larger discount.' },
-                      { value:'coupon', label:'Coupon First',                   desc:'If a valid coupon is applied, it always takes priority over a gift card, even if the gift card would save more.' },
-                      { value:'giftcard', label:'Gift Card First',              desc:'If a gift card has balance, it always takes priority over a coupon.' },
+                      { value:'best',   label:'Best Saving Wins (Recommended)', desc:'The engine automatically picks whichever benefit — coupon or gift voucher — gives the customer the larger discount.' },
+                      { value:'coupon', label:'Coupon First',                   desc:'If a valid coupon is applied, it always takes priority over a gift voucher, even if the gift voucher would save more.' },
+                      { value:'giftcard', label:'Gift Voucher First',              desc:'If a gift voucher has balance, it always takes priority over a coupon.' },
                     ].map(opt => (
                       <label key={opt.value} className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${settings.discountPriority===opt.value ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:border-gray-200'}`}>
                         <input type="radio" name="discountPriority" value={opt.value}
@@ -1427,11 +1427,11 @@ export default function AdminSettings() {
 
                 {/* Gift card covers delivery */}
                 <div className="bg-white rounded-2xl border border-gray-100 p-5">
-                  <h4 className="font-semibold text-gray-800 text-sm mb-3">Gift Card Behaviour</h4>
+                  <h4 className="font-semibold text-gray-800 text-sm mb-3">Gift Voucher Behaviour</h4>
                   <div className="flex items-center justify-between py-1">
                     <div>
-                      <p className="text-sm font-medium text-gray-700">Gift Card Covers Delivery Fee</p>
-                      <p className="text-xs text-gray-400 mt-0.5">When enabled, a gift card with sufficient balance will also cover the delivery fee (total goes to Rs. 0). This is the recommended setting.</p>
+                      <p className="text-sm font-medium text-gray-700">Gift Voucher Covers Delivery Fee</p>
+                      <p className="text-xs text-gray-400 mt-0.5">When enabled, a gift voucher with sufficient balance will also cover the delivery fee (total goes to Rs. 0). This is the recommended setting.</p>
                     </div>
                     <button
                       type="button"
@@ -1454,7 +1454,7 @@ export default function AdminSettings() {
                 <Toggle label="💌 Newsletter Subscription" desc="Allow customers to subscribe to newsletter" value={settings.enableNewsletter} onChange={()=>setSettings(p=>({...p,enableNewsletter:!p.enableNewsletter}))} />
                 <Toggle label="❤️ Wishlist" desc="Allow customers to save products to wishlist" value={settings.enableWishlist} onChange={()=>setSettings(p=>({...p,enableWishlist:!p.enableWishlist}))} />
                 <Toggle label="⭐ Product Reviews" desc="Allow customers to leave reviews" value={settings.enableReviews} onChange={()=>setSettings(p=>({...p,enableReviews:!p.enableReviews}))} />
-                <Toggle label="🎁 Gift Cards" desc="Enable gift card purchase and redemption" value={settings.enableGiftCards} onChange={()=>setSettings(p=>({...p,enableGiftCards:!p.enableGiftCards}))} />
+                <Toggle label="🎁 Gift Vouchers" desc="Enable gift voucher purchase and redemption" value={settings.enableGiftCards} onChange={()=>setSettings(p=>({...p,enableGiftCards:!p.enableGiftCards}))} />
                 <Toggle label="↩️ Returns & Refunds" desc="Allow customers to submit return requests" value={settings.enableReturns} onChange={()=>setSettings(p=>({...p,enableReturns:!p.enableReturns}))} />
                 {settings.enableReturns && (
                   <div className="ml-4">

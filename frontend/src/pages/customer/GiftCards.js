@@ -27,7 +27,7 @@ const GiftCardPreview = ({ design, amount, recipientName, message, sym }) => {
       <div className="bg-white/15 backdrop-blur-sm p-5 text-white">
         <div className="text-center mb-4">
           <p className="text-3xl font-black">{sym} {(amount || 0).toLocaleString()}</p>
-          <p className="text-white/70 text-xs mt-1">Gift Card Value</p>
+          <p className="text-white/70 text-xs mt-1">Gift Voucher Value</p>
         </div>
         {message && (
           <div className="bg-white/10 rounded-xl p-3 mb-4">
@@ -35,7 +35,7 @@ const GiftCardPreview = ({ design, amount, recipientName, message, sym }) => {
           </div>
         )}
         <div className="bg-white/20 rounded-xl p-3 text-center">
-          <p className="text-xs text-white/60 mb-1">Gift Card Code</p>
+          <p className="text-xs text-white/60 mb-1">Gift Voucher Code</p>
           <p className="font-mono font-bold text-base tracking-widest">GC-XXXX-XXXX-XXXX</p>
         </div>
       </div>
@@ -71,7 +71,7 @@ const SlipUpload = ({ cardId, cardCode, onUploaded }) => {
       await API.post(`/gift-cards/${cardId}/payment-slip`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      toast.success('✅ Payment slip uploaded! We\'ll verify and activate your gift card shortly.');
+      toast.success('✅ Payment slip uploaded! We\'ll verify and activate your gift voucher shortly.');
       onUploaded();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Upload failed. Please try again.');
@@ -173,7 +173,7 @@ export default function GiftCards() {
 
   const handlePurchase = async () => {
     const amount = form.customAmount ? Number(form.customAmount) : form.amount;
-    if (!amount || amount < 100) { toast.error('Minimum gift card value is Rs. 100'); return; }
+    if (!amount || amount < 100) { toast.error('Minimum gift voucher value is Rs. 100'); return; }
     if (!form.isSelf && !form.recipientEmail && !form.recipientPhone) {
       toast.error('Enter recipient email or phone'); return;
     }
@@ -220,14 +220,14 @@ export default function GiftCards() {
         </div>
         <div className="relative z-10">
           <div className="text-5xl mb-3">🎁</div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2" style={{ fontFamily: 'var(--font-display)' }}>Gift Cards</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2" style={{ fontFamily: 'var(--font-display)' }}>Gift Vouchers</h1>
           <p className="text-white/80 text-sm sm:text-base max-w-md mx-auto">The perfect gift for any occasion. Give someone the joy of choice.</p>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl mb-8">
-        {[['buy', '🎁 Buy a Gift Card'], ['check', '🔍 Check Balance'], ['mine', '💳 My Cards']].map(([id, label]) => (
+        {[['buy', '🎁 Buy a Gift Voucher'], ['check', '🔍 Check Balance'], ['mine', '💳 My Cards']].map(([id, label]) => (
           <button key={id} onClick={() => { setTab(id); setPurchasedCard(null); setSlipUploaded(false); }}
             className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${tab === id ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}>
             {label}
@@ -243,8 +243,8 @@ export default function GiftCards() {
             <div className="max-w-lg mx-auto space-y-5">
               <div className="rounded-2xl bg-green-50 border border-green-200 p-6 text-center">
                 <div className="text-4xl mb-2">🎉</div>
-                <h3 className="font-bold text-green-800 mb-1">Gift Card Order Placed!</h3>
-                <p className="text-sm text-green-700 mb-2">Your gift card code: <span className="font-mono font-bold">{purchasedCard.code}</span></p>
+                <h3 className="font-bold text-green-800 mb-1">Gift Voucher Order Placed!</h3>
+                <p className="text-sm text-green-700 mb-2">Your gift voucher code: <span className="font-mono font-bold">{purchasedCard.code}</span></p>
                 <p className="text-sm text-green-600">Now upload your bank transfer slip below to activate it.</p>
               </div>
 
@@ -275,7 +275,7 @@ export default function GiftCards() {
                 <div className="text-4xl mb-2">✅</div>
                 <h3 className="font-bold text-green-800 mb-1">Payment Slip Uploaded!</h3>
                 <p className="text-sm text-green-700 mb-4">
-                  Our team will verify your payment and activate gift card <strong>{purchasedCard.code}</strong> shortly.
+                  Our team will verify your payment and activate gift voucher <strong>{purchasedCard.code}</strong> shortly.
                   You and the recipient will receive email notifications once it's active.
                 </p>
                 <div className="flex gap-3 justify-center flex-wrap">
@@ -295,7 +295,7 @@ export default function GiftCards() {
               <div className="rounded-2xl border border-gray-100 p-4 text-sm" style={{ background: 'var(--card-bg)' }}>
                 <p className="font-semibold text-gray-700 mb-2">What happens next?</p>
                 <ol className="space-y-1.5 text-gray-500 list-none">
-                  {['Admin reviews your payment slip (1–2 hrs)', 'Gift card gets activated', 'You receive an email confirmation', `${purchasedCard.recipientEmail && purchasedCard.recipientEmail !== purchasedCard.purchaserEmail ? 'Recipient receives gift card by email' : 'Use your gift card at checkout'}`].map((s, i) => (
+                  {['Admin reviews your payment slip (1–2 hrs)', 'Gift card gets activated', 'You receive an email confirmation', `${purchasedCard.recipientEmail && purchasedCard.recipientEmail !== purchasedCard.purchaserEmail ? 'Recipient receives gift voucher by email' : 'Use your gift voucher at checkout'}`].map((s, i) => (
                     <li key={i} className="flex items-start gap-2">
                       <span className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white mt-0.5" style={{ background: 'var(--color-primary)' }}>{i + 1}</span>
                       {s}
@@ -406,7 +406,7 @@ export default function GiftCards() {
                     <span className="text-2xl">🏦</span>
                     <div>
                       <p className="font-semibold text-sm text-gray-800">Bank Transfer</p>
-                      <p className="text-xs text-gray-500">Upload your transfer slip to activate the gift card</p>
+                      <p className="text-xs text-gray-500">Upload your transfer slip to activate the gift voucher</p>
                     </div>
                   </div>
                 </div>
@@ -419,7 +419,7 @@ export default function GiftCards() {
                   {loading
                     ? 'Processing...'
                     : user
-                      ? `Place Gift Card Order — ${sym} ${amount.toLocaleString()}`
+                      ? `Place Gift Voucher Order — ${sym} ${amount.toLocaleString()}`
                       : 'Sign in to Purchase →'}
                 </button>
               </div>
@@ -432,7 +432,7 @@ export default function GiftCards() {
                   <div className="mt-5 bg-amber-50 border border-amber-100 rounded-xl p-4 text-xs text-amber-700">
                     <p className="font-semibold mb-2">How it works:</p>
                     <ol className="space-y-1.5 list-none">
-                      {['Place your order here', 'Transfer payment to our bank account', 'Upload your slip in My Orders', 'We verify & activate the gift card', `${form.isSelf ? 'Use it at checkout' : 'Recipient gets email with the code'}`].map((s, i) => (
+                      {['Place your order here', 'Transfer payment to our bank account', 'Upload your slip in My Orders', 'We verify & activate the gift voucher', `${form.isSelf ? 'Use it at checkout' : 'Recipient gets email with the code'}`].map((s, i) => (
                         <li key={i} className="flex items-center gap-2">
                           <span className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0" style={{ background: 'var(--color-primary)' }}>{i + 1}</span>
                           {s}
@@ -451,7 +451,7 @@ export default function GiftCards() {
       {tab === 'check' && (
         <div className="max-w-md mx-auto">
           <div className="rounded-2xl border border-gray-100 p-6" style={{ background: 'var(--card-bg)' }}>
-            <h3 className="font-bold text-gray-900 mb-4 text-center">Check Gift Card Balance</h3>
+            <h3 className="font-bold text-gray-900 mb-4 text-center">Check Gift Voucher Balance</h3>
             <div className="flex gap-2 mb-4">
               <input
                 value={checkCode}
@@ -498,14 +498,14 @@ export default function GiftCards() {
           {!user ? (
             <div className="text-center py-12">
               <div className="text-5xl mb-3">🔒</div>
-              <p className="text-gray-500 mb-4">Sign in to see your gift cards</p>
+              <p className="text-gray-500 mb-4">Sign in to see your gift vouchers</p>
               <Link to="/login?redirect=/gift-cards" className="btn-primary">Sign In</Link>
             </div>
           ) : myCards.length === 0 ? (
             <div className="text-center py-12">
               <div className="text-5xl mb-3 float">🎁</div>
-              <p className="text-gray-500 mb-4">You haven't purchased any gift cards yet</p>
-              <button onClick={() => setTab('buy')} className="btn-primary">Buy a Gift Card</button>
+              <p className="text-gray-500 mb-4">You haven't purchased any gift vouchers yet</p>
+              <button onClick={() => setTab('buy')} className="btn-primary">Buy a Gift Voucher</button>
             </div>
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">

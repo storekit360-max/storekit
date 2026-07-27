@@ -18,7 +18,7 @@ const SECTION_DEFS = {
     { id: 'newsletter',      label: '📧 Newsletter Bar',       desc: 'Email signup strip', icon: '📧' },
     { id: 'testimonials',    label: '💬 Testimonials',         desc: 'Customer review quotes', icon: '💬' },
     { id: 'brands',          label: '🏷️ Brand Logos',          desc: 'Trusted brands marquee', icon: '🏷️' },
-    { id: 'gift_cards',      label: '🎁 Gift Cards',           desc: 'Gift card promotion block', icon: '🎁' },
+    { id: 'gift_cards',      label: '🎁 Gift Vouchers',           desc: 'Gift card promotion block', icon: '🎁' },
     { id: 'seasonal',        label: '🌸 Seasonal Banner',      desc: 'Seasonal/holiday promotion', icon: '🌸' },
     { id: 'recently',        label: '🕐 Recently Viewed',      desc: 'Personalized product trail', icon: '🕐' },
     { id: 'popup_banner',    label: '💬 Popup Banner',         desc: 'Entry popup display control', icon: '💬' },

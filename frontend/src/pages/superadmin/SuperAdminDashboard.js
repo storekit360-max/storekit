@@ -39,7 +39,7 @@ const FEATURE_CATALOG = [
       { key: 'categories',    label: 'Categories',           icon: '🗂️', default: true },
       { key: 'customers',     label: 'Customers',            icon: '👥', default: true },
       { key: 'coupons',       label: 'Coupons',               icon: '🎟️', default: false },
-      { key: 'giftCards',     label: 'Gift Cards',            icon: '🎁', default: false },
+      { key: 'giftCards',     label: 'Gift Vouchers',            icon: '🎁', default: false },
       { key: 'banners',       label: 'Banners & Popups',      icon: '🖼️', default: false },
       { key: 'seasonal',      label: 'Seasonal Themes',       icon: '❄️', default: false },
       { key: 'deals',         label: 'Deals & Offers',        icon: '🔥', default: false },

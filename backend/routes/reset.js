@@ -24,7 +24,7 @@ router.get('/preview', adminAuth, async (req, res) => {
     res.json({
       toDelete: { orders, returnRequests: returns, reviews, notifications, otpRecords: otps },
       toReset: {
-        giftCards: `${giftCards} gift card(s)`,
+        giftCards: `${giftCards} gift voucher(s)`,
         coupons:   `${coupons} coupon(s)`,
         products:  `${products} product(s)`,
       },

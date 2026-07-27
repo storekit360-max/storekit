@@ -14,7 +14,7 @@ const NAV = [
   { path:'/admin/categories',   label:'Categories',                 icon:'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
   { path:'/admin/customers',    label:'Customers',                  icon:'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
   { path:'/admin/coupons',      label:'Coupons',                    icon:'M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z' },
-  { path:'/admin/gift-cards',   label:'Gift Cards',                 icon:'M12 8v13m0-13V6a4 4 0 00-4-4H5.45a2 2 0 00-1.8 1.14L2 7h10V6a4 4 0 00-4-4zm0 0V6a4 4 0 014-4h2.55a2 2 0 011.8 1.14L22 7H12V6a4 4 0 014-4z' },
+  { path:'/admin/gift-cards',   label:'Gift Vouchers',                 icon:'M12 8v13m0-13V6a4 4 0 00-4-4H5.45a2 2 0 00-1.8 1.14L2 7h10V6a4 4 0 00-4-4zm0 0V6a4 4 0 014-4h2.55a2 2 0 011.8 1.14L22 7H12V6a4 4 0 014-4z' },
   { path:'/admin/banners',      label:'Banners & Popups',           icon:'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' },
   { path:'/admin/seasonal',     label:'Seasonal',                   icon:'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z' },
   { path:'/admin/deals',        label:'Deals & Offers',             icon:'M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z' },

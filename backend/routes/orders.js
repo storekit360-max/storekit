@@ -519,7 +519,7 @@ router.post('/', orderRateLimiter, async (req, res) => {
         req.tenantId
       );
 
-    // ── 3. Resolve best customer benefit (coupon OR gift card) ────────────────
+    // ── 3. Resolve best customer benefit (coupon OR gift voucher) ────────────────
     //    Collect cart scope data for coupon eligibility checks
     const categoryIds = [...new Set(orderItems.flatMap(i => [i.category?.toString(), i.subCategory?.toString()]).filter(Boolean))];
     const productIds  = orderItems.map(i => i.product.toString());
@@ -542,8 +542,8 @@ router.post('/', orderRateLimiter, async (req, res) => {
     // have changed since then. Never trust a client-supplied "discount"
     // value — only what resolveBenefit computes here is used.
     //
-    // NEW: coupon and gift card can both be applied together.
-    //   - Coupon → discount on subtotal (product discount → coupon/benefit → gift card → final total)
+    // NEW: coupon and gift voucher can both be applied together.
+    //   - Coupon → discount on subtotal (product discount → coupon/benefit → gift voucher → final total)
     //   - Gift card → payment method applied after coupon against remaining total
     const benefit = await DiscountEngine.resolveBenefit({
       couponCode:   couponCode || null,
@@ -661,7 +661,7 @@ router.post('/', orderRateLimiter, async (req, res) => {
     const applied = await DiscountEngine.applyBenefit(benefit, order._id, userId, billingEmail, totals.giftCardDeduction);
 
     if (!applied.ok) {
-      // The coupon/gift card was consumed by a concurrent request between our
+      // The coupon/gift voucher was consumed by a concurrent request between our
       // validation and this point. Roll back the order and restore stock so
       // the customer isn't charged a price based on a benefit they didn't get.
       await Order.findOneAndDelete({ _id: order._id, tenantId: req.tenantId });
@@ -671,7 +671,7 @@ router.post('/', orderRateLimiter, async (req, res) => {
         });
       }
       const msg = applied.reason === 'giftcard_conflict'
-        ? 'This gift card no longer has sufficient balance. Please try again.'
+        ? 'This gift voucher no longer has sufficient balance. Please try again.'
         : 'This coupon is no longer available. Please remove it and try again.';
       return res.status(409).json({ message: msg });
     }

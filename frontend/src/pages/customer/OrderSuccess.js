@@ -365,7 +365,7 @@ export function OrderSuccess() {
             </div>
             <div className="border-t border-gray-100 pt-3 space-y-1 text-sm">
               {order.couponDiscount > 0 && <div className="flex justify-between text-green-600"><span>Coupon</span><span>−{sym} {order.couponDiscount?.toLocaleString()}</span></div>}
-              {order.giftCardDiscount > 0 && <div className="flex justify-between text-purple-600"><span>Gift Card</span><span>−{sym} {order.giftCardDiscount?.toLocaleString()}</span></div>}
+              {order.giftCardDiscount > 0 && <div className="flex justify-between text-purple-600"><span>Gift Voucher</span><span>−{sym} {order.giftCardDiscount?.toLocaleString()}</span></div>}
               <div className="flex justify-between text-gray-600"><span>Delivery</span><span>{sym} {order.shippingCost?.toLocaleString()}</span></div>
               <div className="flex justify-between font-bold text-gray-900 text-base pt-1 border-t border-gray-100">
                 <span>Total</span><span>{sym} {order.total?.toLocaleString()}</span>

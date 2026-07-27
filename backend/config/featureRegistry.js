@@ -3,7 +3,7 @@
 const groups = [
   { tier: 'core', label: 'Core Features', description: 'Primary store administration modules.', items: [
     ['products','Products','📦',true],['orders','Orders','🧾',true],['categories','Categories','🗂️',true],['customers','Customers','👥',true],
-    ['coupons','Coupons','🎟️',false],['giftCards','Gift Cards','🎁',false],['banners','Banners & Popups','🖼️',false],['seasonal','Seasonal Themes','❄️',false],
+    ['coupons','Coupons','🎟️',false],['giftCards','Gift Vouchers','🎁',false],['banners','Banners & Popups','🖼️',false],['seasonal','Seasonal Themes','❄️',false],
     ['deals','Deals & Offers','🔥',false],['reviews','Reviews','⭐',false],['subscribers','Subscribers','📬',false],['returns','Returns & Refunds','↩️',false],
     ['seo','SEO Tools','🔍',false],['layoutEditor','Layout Builder','🧩',false],['themeBuilder','Theme Builder','🎨',false],['animations','Animations','✨',false],
     ['socialMedia','Social Media','📱',false],['automation','Automation Rules','⚙️',false],['backup','Backup Center','💾',false],

@@ -91,7 +91,7 @@ const absoluteSlipUrl = (rel) => {
   return `${base.replace(/\/$/, '')}${rel}`;
 };
 
-// ── Email helpers for gift cards ───────────────────────────────────────────────
+// ── Email helpers for gift vouchers ───────────────────────────────────────────────
 
 // Helper: get theme from mailer (re-export pattern)
 const getT = async () => {
@@ -139,14 +139,14 @@ const gcHeader = (subtitle, t) => `
 const DESIGN_EMOJIS = { default: '🎁', birthday: '🎂', christmas: '🎄', anniversary: '💝', thankyou: '💙' };
 const DESIGN_LABELS = { default: 'Classic Gift', birthday: 'Birthday', christmas: 'Christmas', anniversary: 'Anniversary', thankyou: 'Thank You' };
 
-// 1. Admin: new gift card purchase notification
+// 1. Admin: new gift voucher purchase notification
 const gcNewPurchaseAdminHtml = async (card) => {
   const t = await getT();
   return wrapEmail(`
-    ${gcHeader('🎁 New Gift Card Purchase', t)}
+    ${gcHeader('🎁 New Gift Voucher Purchase', t)}
     <div style="padding:32px">
       <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:16px;margin-bottom:20px;text-align:center">
-        <p style="margin:0 0 4px;font-size:12px;color:#166534">New Gift Card Order</p>
+        <p style="margin:0 0 4px;font-size:12px;color:#166534">New Gift Voucher Order</p>
         <p style="margin:0;font-size:22px;font-weight:800;color:#15803d;font-family:monospace">${card.code}</p>
         <p style="margin:8px 0 0;font-size:20px;font-weight:700;color:#166534">Rs. ${card.initialValue?.toLocaleString()}</p>
       </div>
@@ -165,7 +165,7 @@ const gcNewPurchaseAdminHtml = async (card) => {
       </div>
       <a href="${t.storeUrl}/admin/gift-cards"
          style="display:inline-block;background:linear-gradient(135deg,${t.primary},${lx(t.primary)});color:white;padding:12px 24px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none">
-        View Gift Cards Dashboard →
+        View Gift Vouchers Dashboard →
       </a>
     </div>`, t);
 };
@@ -174,12 +174,12 @@ const gcNewPurchaseAdminHtml = async (card) => {
 const gcPurchaseCustomerHtml = async (card) => {
   const t = await getT();
   return wrapEmail(`
-    ${gcHeader('Gift Card Order Placed! 🎉', t)}
+    ${gcHeader('Gift Voucher Order Placed! 🎉', t)}
     <div style="padding:32px">
       <p style="color:#374151">Hi <strong>${card.purchaserName}</strong>,</p>
-      <p style="color:#6b7280;font-size:14px;margin-bottom:20px">Your gift card order has been placed. To activate it, please complete the bank transfer and upload your payment slip in <strong>My Orders</strong>.</p>
+      <p style="color:#6b7280;font-size:14px;margin-bottom:20px">Your gift voucher order has been placed. To activate it, please complete the bank transfer and upload your payment slip in <strong>My Orders</strong>.</p>
       <div style="background:#f8fafc;border-radius:10px;padding:16px;text-align:center;margin-bottom:20px">
-        <p style="margin:0 0 4px;font-size:12px;color:#6b7280">Gift Card Reference</p>
+        <p style="margin:0 0 4px;font-size:12px;color:#6b7280">Gift Voucher Reference</p>
         <p style="margin:0;font-size:22px;font-weight:800;color:${t.primary};font-family:monospace">${card.code}</p>
         <p style="margin:8px 0 0;font-size:18px;font-weight:700;color:#374151">Rs. ${card.initialValue?.toLocaleString()}</p>
       </div>
@@ -199,19 +199,19 @@ const gcPurchaseCustomerHtml = async (card) => {
          style="display:inline-block;background:linear-gradient(135deg,${t.primary},${lx(t.primary)});color:white;padding:12px 24px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none">
         Upload Payment Slip →
       </a>
-      <p style="margin-top:16px;color:#9ca3af;font-size:12px">Once your payment is verified, the gift card will be activated and the recipient will receive an email notification.</p>
+      <p style="margin-top:16px;color:#9ca3af;font-size:12px">Once your payment is verified, the gift voucher will be activated and the recipient will receive an email notification.</p>
     </div>`, t);
 };
 
-// 3. Admin: slip uploaded for gift card
+// 3. Admin: slip uploaded for gift voucher
 const gcSlipUploadedAdminHtml = async (card, slipUrl) => {
   const t = await getT();
   return wrapEmail(`
-    ${gcHeader('📎 Gift Card Payment Slip Uploaded', t)}
+    ${gcHeader('📎 Gift Voucher Payment Slip Uploaded', t)}
     <div style="padding:32px">
-      <p style="color:#374151;margin:0 0 16px">A customer has uploaded a payment slip for a gift card purchase.</p>
+      <p style="color:#374151;margin:0 0 16px">A customer has uploaded a payment slip for a gift voucher purchase.</p>
       <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:16px;margin-bottom:20px;text-align:center">
-        <p style="margin:0 0 4px;font-size:12px;color:#166534">Gift Card</p>
+        <p style="margin:0 0 4px;font-size:12px;color:#166534">Gift Voucher</p>
         <p style="margin:0;font-size:22px;font-weight:800;color:#15803d;font-family:monospace">${card.code}</p>
         <p style="margin:8px 0 0;font-size:18px;font-weight:700;color:#166534">Rs. ${card.initialValue?.toLocaleString()}</p>
       </div>
@@ -229,7 +229,7 @@ const gcSlipUploadedAdminHtml = async (card, slipUrl) => {
       ` : ''}
       <a href="${t.storeUrl}/admin/gift-cards"
          style="display:inline-block;background:linear-gradient(135deg,${t.primary},${lx(t.primary)});color:white;padding:12px 24px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none">
-        Review &amp; Approve Gift Card →
+        Review &amp; Approve Gift Voucher →
       </a>
     </div>`, t);
 };
@@ -241,29 +241,29 @@ const gcSlipReceivedCustomerHtml = async (card) => {
     ${gcHeader('Payment Slip Received ✅', t)}
     <div style="padding:32px">
       <p style="color:#374151">Hi <strong>${card.purchaserName}</strong>,</p>
-      <p style="color:#6b7280;font-size:14px">We've received your payment slip for gift card <strong style="color:${t.primary}">${card.code}</strong>. Our team will verify your payment shortly and activate the gift card.</p>
+      <p style="color:#6b7280;font-size:14px">We've received your payment slip for gift voucher <strong style="color:${t.primary}">${card.code}</strong>. Our team will verify your payment shortly and activate the gift voucher.</p>
       <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:16px;margin:20px 0;text-align:center">
-        <p style="margin:0;font-size:13px;color:#166534">⏳ Verification usually takes <strong>1–2 business hours</strong>.<br>You'll receive an email once the gift card is activated.</p>
+        <p style="margin:0;font-size:13px;color:#166534">⏳ Verification usually takes <strong>1–2 business hours</strong>.<br>You'll receive an email once the gift voucher is activated.</p>
       </div>
       <div style="background:#f8fafc;border-radius:10px;padding:14px;font-size:13px;color:#374151">
-        <strong>Gift Card:</strong> ${card.code}<br>
+        <strong>Gift Voucher:</strong> ${card.code}<br>
         <strong>Value:</strong> Rs. ${card.initialValue?.toLocaleString()}<br>
         <strong>For:</strong> ${card.recipientName || card.recipientEmail || 'Self'}
       </div>
     </div>`, t);
 };
 
-// 5. Purchaser: gift card activated (approved)
+// 5. Purchaser: gift voucher activated (approved)
 const gcActivatedPurchaserHtml = async (card) => {
   const t = await getT();
   return wrapEmail(`
-    ${gcHeader('🎉 Gift Card Activated!', t)}
+    ${gcHeader('🎉 Gift Voucher Activated!', t)}
     <div style="padding:32px">
       <p style="color:#374151">Hi <strong>${card.purchaserName}</strong>,</p>
-      <p style="color:#6b7280;font-size:14px;margin-bottom:20px">Great news! Your payment has been verified and your gift card is now <strong style="color:#16a34a">active</strong>. ${card.recipientEmail ? `We have also sent the gift card details to ${card.recipientName || card.recipientEmail}.` : ''}</p>
+      <p style="color:#6b7280;font-size:14px;margin-bottom:20px">Great news! Your payment has been verified and your gift voucher is now <strong style="color:#16a34a">active</strong>. ${card.recipientEmail ? `We have also sent the gift voucher details to ${card.recipientName || card.recipientEmail}.` : ''}</p>
       <div style="background:linear-gradient(135deg,${t.primary},${lx(t.primary)});border-radius:12px;padding:24px;text-align:center;margin-bottom:20px">
         <div style="font-size:36px;margin-bottom:8px">${DESIGN_EMOJIS[card.design] || '🎁'}</div>
-        <p style="margin:0 0 4px;font-size:12px;color:rgba(255,255,255,0.7)">Gift Card Code</p>
+        <p style="margin:0 0 4px;font-size:12px;color:rgba(255,255,255,0.7)">Gift Voucher Code</p>
         <p style="margin:0;font-size:24px;font-weight:900;color:white;font-family:monospace;letter-spacing:2px">${card.code}</p>
         <p style="margin:12px 0 0;font-size:28px;font-weight:800;color:white">Rs. ${card.balance?.toLocaleString()}</p>
         <p style="margin:4px 0 0;font-size:12px;color:rgba(255,255,255,0.7)">Available Balance</p>
@@ -276,27 +276,27 @@ const gcActivatedPurchaserHtml = async (card) => {
       </table>
       <a href="${t.storeUrl}/gift-cards"
          style="display:inline-block;background:linear-gradient(135deg,${t.primary},${lx(t.primary)});color:white;padding:12px 24px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none">
-        View My Gift Cards →
+        View My Gift Vouchers →
       </a>
       <p style="margin-top:16px;color:#9ca3af;font-size:12px;text-align:center">Thank you for shopping with ${t.storeName}!</p>
     </div>`, t);
 };
 
-// 6. Recipient: you received a gift card!
+// 6. Recipient: you received a gift voucher!
 const gcActivatedRecipientHtml = async (card) => {
   const t = await getT();
   return wrapEmail(`
-    ${gcHeader(`You've received a Gift Card! 🎁`, t)}
+    ${gcHeader(`You've received a Gift Voucher! 🎁`, t)}
     <div style="padding:32px">
       <p style="color:#374151">Hi <strong>${card.recipientName || 'there'}</strong>,</p>
-      <p style="color:#6b7280;font-size:14px;margin-bottom:20px"><strong>${card.purchaserName}</strong> has sent you a gift card from <a href="${t.storeUrl}" style="color:${t.primary};text-decoration:none">${t.storeName}</a>!</p>
+      <p style="color:#6b7280;font-size:14px;margin-bottom:20px"><strong>${card.purchaserName}</strong> has sent you a gift voucher from <a href="${t.storeUrl}" style="color:${t.primary};text-decoration:none">${t.storeName}</a>!</p>
       <div style="background:linear-gradient(135deg,${t.primary},${lx(t.primary)});border-radius:12px;padding:24px;text-align:center;margin-bottom:20px">
         <div style="font-size:40px;margin-bottom:8px">${DESIGN_EMOJIS[card.design] || '🎁'}</div>
-        <p style="margin:0;font-size:14px;color:rgba(255,255,255,0.8)">${DESIGN_LABELS[card.design] || 'Gift Card'}</p>
+        <p style="margin:0;font-size:14px;color:rgba(255,255,255,0.8)">${DESIGN_LABELS[card.design] || 'Gift Voucher'}</p>
         <p style="margin:12px 0 4px;font-size:28px;font-weight:900;color:white">Rs. ${card.balance?.toLocaleString()}</p>
-        <p style="margin:0 0 16px;font-size:12px;color:rgba(255,255,255,0.7)">Gift Card Value</p>
+        <p style="margin:0 0 16px;font-size:12px;color:rgba(255,255,255,0.7)">Gift Voucher Value</p>
         <div style="background:rgba(255,255,255,0.2);border-radius:8px;padding:12px">
-          <p style="margin:0 0 4px;font-size:11px;color:rgba(255,255,255,0.7)">Your Gift Card Code</p>
+          <p style="margin:0 0 4px;font-size:11px;color:rgba(255,255,255,0.7)">Your Gift Voucher Code</p>
           <p style="margin:0;font-size:22px;font-weight:900;color:white;font-family:monospace;letter-spacing:2px">${card.code}</p>
         </div>
       </div>
@@ -306,13 +306,13 @@ const gcActivatedRecipientHtml = async (card) => {
         <p style="margin:0;font-size:15px;color:#374151;font-style:italic">"${card.message}"</p>
       </div>` : ''}
       <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:14px;margin-bottom:20px;font-size:13px;color:#0369a1">
-        <strong>How to use your gift card:</strong><br>
+        <strong>How to use your gift voucher:</strong><br>
         1. Shop at <a href="${t.storeUrl}" style="color:${t.primary}">${t.storeUrl}</a><br>
         2. Add items to your cart<br>
         3. Enter code <strong>${card.code}</strong> at checkout<br>
         4. The value will be deducted from your total
       </div>
-      ${card.expiresAt ? `<p style="font-size:12px;color:#9ca3af;text-align:center">This gift card is valid until ${new Date(card.expiresAt).toLocaleDateString('en-LK', { day: 'numeric', month: 'long', year: 'numeric' })}.</p>` : ''}
+      ${card.expiresAt ? `<p style="font-size:12px;color:#9ca3af;text-align:center">This gift voucher is valid until ${new Date(card.expiresAt).toLocaleDateString('en-LK', { day: 'numeric', month: 'long', year: 'numeric' })}.</p>` : ''}
       <a href="${t.storeUrl}/shop"
          style="display:inline-block;background:linear-gradient(135deg,${t.primary},${lx(t.primary)});color:white;padding:14px 32px;border-radius:10px;font-weight:700;font-size:15px;text-decoration:none;display:block;text-align:center">
         Start Shopping →
@@ -320,16 +320,16 @@ const gcActivatedRecipientHtml = async (card) => {
     </div>`, t);
 };
 
-// 7. Purchaser: gift card rejected (slip not verified)
+// 7. Purchaser: gift voucher rejected (slip not verified)
 const gcRejectedPurchaserHtml = async (card, adminNote) => {
   const t = await getT();
   return wrapEmail(`
     ${gcHeader('Payment Verification Update', t)}
     <div style="padding:32px">
       <p style="color:#374151">Hi <strong>${card.purchaserName}</strong>,</p>
-      <p style="color:#6b7280;font-size:14px;margin-bottom:20px">Unfortunately, we were unable to verify your payment for gift card <strong style="color:${t.primary}">${card.code}</strong>.</p>
+      <p style="color:#6b7280;font-size:14px;margin-bottom:20px">Unfortunately, we were unable to verify your payment for gift voucher <strong style="color:${t.primary}">${card.code}</strong>.</p>
       <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:20px;text-align:center;margin-bottom:20px">
-        <p style="margin:0 0 4px;font-size:12px;color:#991b1b">Gift Card ${card.code}</p>
+        <p style="margin:0 0 4px;font-size:12px;color:#991b1b">Gift Voucher ${card.code}</p>
         <p style="margin:0;font-size:20px;font-weight:800;color:#dc2626">Payment Not Verified</p>
       </div>
       ${adminNote ? `
@@ -347,7 +347,7 @@ const gcRejectedPurchaserHtml = async (card, adminNote) => {
     </div>`, t);
 };
 
-// ── Public: browse available gift card templates ───────────────────────────────
+// ── Public: browse available gift voucher templates ───────────────────────────────
 router.get('/templates', async (req, res) => {
   try {
     const DESIGNS = [
@@ -361,16 +361,16 @@ router.get('/templates', async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ── Public: validate a gift card code ─────────────────────────────────────────
+// ── Public: validate a gift voucher code ─────────────────────────────────────────
 router.post('/validate', async (req, res) => {
   try {
     const { code } = req.body;
     if (!code) return res.status(400).json({ message: 'Code required' });
     const card = await GiftCard.findOne({ code: code.toUpperCase().trim() });
     if (!card) return res.status(404).json({ message: 'Gift card not found' });
-    if (!card.isActive) return res.status(400).json({ message: 'This gift card has not been activated yet' });
-    if (card.balance <= 0) return res.status(400).json({ message: 'This gift card has no remaining balance' });
-    if (card.expiresAt && new Date() > card.expiresAt) return res.status(400).json({ message: 'This gift card has expired' });
+    if (!card.isActive) return res.status(400).json({ message: 'This gift voucher has not been activated yet' });
+    if (card.balance <= 0) return res.status(400).json({ message: 'This gift voucher has no remaining balance' });
+    if (card.expiresAt && new Date() > card.expiresAt) return res.status(400).json({ message: 'This gift voucher has expired' });
     res.json({ valid: true, balance: card.balance, code: card.code, initialValue: card.initialValue });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -387,11 +387,11 @@ router.get('/balance/:code', async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ── Customer: purchase a gift card ────────────────────────────────────────────
+// ── Customer: purchase a gift voucher ────────────────────────────────────────────
 router.post('/purchase', auth, async (req, res) => {
   try {
     const { amount, design, recipientName, recipientEmail, recipientPhone, message, paymentMethod } = req.body;
-    if (!amount || amount < 100) return res.status(400).json({ message: 'Minimum gift card value is Rs. 100' });
+    if (!amount || amount < 100) return res.status(400).json({ message: 'Minimum gift voucher value is Rs. 100' });
 
     const code = await ensureUniqueCode();
     const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
@@ -431,8 +431,8 @@ router.post('/purchase', auth, async (req, res) => {
     // Admin in-app notification
     await Notification.create({
       type: 'gift_card',
-      title: '🎁 New Gift Card Purchase',
-      message: `${req.user.firstName} ${req.user.lastName} purchased a Rs. ${amount} gift card`,
+      title: '🎁 New Gift Voucher Purchase',
+      message: `${req.user.firstName} ${req.user.lastName} purchased a Rs. ${amount} gift voucher`,
       link: '/admin/gift-cards',
       data: { giftCardId: giftCard._id, code: giftCard.code },
     }).catch(() => {});
@@ -443,7 +443,7 @@ router.post('/purchase', auth, async (req, res) => {
     if (adminEmail && await isEmailEnabled('gift_card_purchase_admin')) {
       sendMail({
         to: adminEmail,
-        subject: `🎁 New Gift Card Purchase — ${code} | Rs. ${Number(amount).toLocaleString()}`,
+        subject: `🎁 New Gift Voucher Purchase — ${code} | Rs. ${Number(amount).toLocaleString()}`,
         html: await gcNewPurchaseAdminHtml(giftCard),
       }).catch(err => console.error('[GC PURCHASE ADMIN EMAIL]', err.message));
     }
@@ -452,7 +452,7 @@ router.post('/purchase', auth, async (req, res) => {
     if (await isEmailEnabled('gift_card_purchase_customer')) {
       sendMail({
         to: req.user.email,
-        subject: `🎁 Gift Card Order Placed — ${code}`,
+        subject: `🎁 Gift Voucher Order Placed — ${code}`,
         html: await gcPurchaseCustomerHtml(giftCard),
       }).catch(err => console.error('[GC PURCHASE CUSTOMER EMAIL]', err.message));
     }
@@ -465,7 +465,7 @@ router.post('/purchase', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ── Customer: upload payment slip for gift card ────────────────────────────────
+// ── Customer: upload payment slip for gift voucher ────────────────────────────────
 // Wrap multer in a middleware that catches its errors and returns JSON (not HTML)
 const uploadSlipMiddleware = (req, res, next) => {
   uploadSlip.single('slip')(req, res, (err) => {
@@ -502,8 +502,8 @@ router.post('/:id/payment-slip', auth, uploadSlipMiddleware, async (req, res) =>
     // Admin in-app notification
     await Notification.create({
       type: 'gift_card',
-      title: '📎 Gift Card Slip Uploaded',
-      message: `${card.purchaserName} uploaded a payment slip for gift card ${card.code} — Rs. ${card.initialValue?.toLocaleString()}`,
+      title: '📎 Gift Voucher Slip Uploaded',
+      message: `${card.purchaserName} uploaded a payment slip for gift voucher ${card.code} — Rs. ${card.initialValue?.toLocaleString()}`,
       link: '/admin/gift-cards',
       data: { giftCardId: card._id, code: card.code },
     }).catch(() => {});
@@ -514,7 +514,7 @@ router.post('/:id/payment-slip', auth, uploadSlipMiddleware, async (req, res) =>
     if (adminEmail && await isEmailEnabled('gift_card_slip_admin')) {
       sendMail({
         to: adminEmail,
-        subject: `📎 Gift Card Slip Uploaded — ${card.code}`,
+        subject: `📎 Gift Voucher Slip Uploaded — ${card.code}`,
         html: await gcSlipUploadedAdminHtml(card, slipUrl),
       }).catch(err => console.error('[GC SLIP ADMIN EMAIL]', err.message));
     }
@@ -523,16 +523,16 @@ router.post('/:id/payment-slip', auth, uploadSlipMiddleware, async (req, res) =>
     if (await isEmailEnabled('gift_card_slip_customer')) {
       sendMail({
         to: card.purchaserEmail,
-        subject: `✅ Payment Slip Received — Gift Card ${card.code}`,
+        subject: `✅ Payment Slip Received — Gift Voucher ${card.code}`,
         html: await gcSlipReceivedCustomerHtml(card),
       }).catch(err => console.error('[GC SLIP CUSTOMER EMAIL]', err.message));
     }
 
-    res.json({ success: true, message: 'Payment slip uploaded. Admin will review and activate your gift card.' });
+    res.json({ success: true, message: 'Payment slip uploaded. Admin will review and activate your gift voucher.' });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ── Customer: my purchased gift cards ─────────────────────────────────────────
+// ── Customer: my purchased gift vouchers ─────────────────────────────────────────
 router.get('/my-cards', auth, async (req, res) => {
   try {
     const cards = await GiftCard.find({ purchasedBy: req.user._id }).sort({ createdAt: -1 });
@@ -540,7 +540,7 @@ router.get('/my-cards', auth, async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ── Admin: get all gift cards ──────────────────────────────────────────────────
+// ── Admin: get all gift vouchers ──────────────────────────────────────────────────
 router.get('/admin/all', adminAuth, async (req, res) => {
   try {
     const { status, page = 1, limit = 20 } = req.query;
@@ -559,7 +559,7 @@ router.get('/admin/all', adminAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ── Admin: create gift card manually ──────────────────────────────────────────
+// ── Admin: create gift voucher manually ──────────────────────────────────────────
 router.post('/admin/create', adminAuth, async (req, res) => {
   try {
     const { amount, design, expiryDays, isActive, adminNote } = req.body;
@@ -582,7 +582,7 @@ router.post('/admin/create', adminAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ── Admin: approve gift card (slip verified) ───────────────────────────────────
+// ── Admin: approve gift voucher (slip verified) ───────────────────────────────────
 router.put('/admin/:id/approve', adminAuth, async (req, res) => {
   try {
     const { adminNote } = req.body;
@@ -595,7 +595,7 @@ router.put('/admin/:id/approve', adminAuth, async (req, res) => {
 
     await Notification.create({
       type: 'gift_card',
-      title: '✅ Gift Card Approved & Activated',
+      title: '✅ Gift Voucher Approved & Activated',
       message: `Gift card ${card.code} (Rs. ${card.initialValue?.toLocaleString()}) approved for ${card.purchaserName}`,
       link: '/admin/gift-cards',
       data: { giftCardId: card._id, code: card.code },
@@ -604,14 +604,14 @@ router.put('/admin/:id/approve', adminAuth, async (req, res) => {
     if (card.purchaserEmail && await isEmailEnabled('gift_card_activated_purchaser')) {
       sendMail({
         to: card.purchaserEmail,
-        subject: `🎉 Gift Card Activated — ${card.code} | ${(await getT()).storeName}`,
+        subject: `🎉 Gift Voucher Activated — ${card.code} | ${(await getT()).storeName}`,
         html: await gcActivatedPurchaserHtml(card),
       }).catch(err => console.error('[GC APPROVE PURCHASER EMAIL]', err.message));
     }
     if (card.recipientEmail && card.recipientEmail !== card.purchaserEmail && await isEmailEnabled('gift_card_activated_recipient')) {
       sendMail({
         to: card.recipientEmail,
-        subject: `🎁 You've received a Gift Card from ${card.purchaserName}!`,
+        subject: `🎁 You've received a Gift Voucher from ${card.purchaserName}!`,
         html: await gcActivatedRecipientHtml(card),
       }).catch(err => console.error('[GC APPROVE RECIPIENT EMAIL]', err.message));
     }
@@ -620,7 +620,7 @@ router.put('/admin/:id/approve', adminAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ── Admin: activate gift card (legacy alias) ───────────────────────────────────
+// ── Admin: activate gift voucher (legacy alias) ───────────────────────────────────
 router.put('/admin/:id/activate', adminAuth, async (req, res) => {
   try {
     const card = await GiftCard.findByIdAndUpdate(
@@ -632,7 +632,7 @@ router.put('/admin/:id/activate', adminAuth, async (req, res) => {
 
     await Notification.create({
       type: 'gift_card',
-      title: '✅ Gift Card Activated',
+      title: '✅ Gift Voucher Activated',
       message: `Gift card ${card.code} (Rs. ${card.initialValue?.toLocaleString()}) activated for ${card.purchaserName}`,
       link: '/admin/gift-cards',
       data: { giftCardId: card._id, code: card.code },
@@ -641,14 +641,14 @@ router.put('/admin/:id/activate', adminAuth, async (req, res) => {
     if (card.purchaserEmail && await isEmailEnabled('gift_card_activated_purchaser')) {
       sendMail({
         to: card.purchaserEmail,
-        subject: `🎉 Gift Card Activated — ${card.code} | ${(await getT()).storeName}`,
+        subject: `🎉 Gift Voucher Activated — ${card.code} | ${(await getT()).storeName}`,
         html: await gcActivatedPurchaserHtml(card),
       }).catch(err => console.error('[GC ACTIVATE PURCHASER EMAIL]', err.message));
     }
     if (card.recipientEmail && card.recipientEmail !== card.purchaserEmail && await isEmailEnabled('gift_card_activated_recipient')) {
       sendMail({
         to: card.recipientEmail,
-        subject: `🎁 You've received a Gift Card from ${card.purchaserName}!`,
+        subject: `🎁 You've received a Gift Voucher from ${card.purchaserName}!`,
         html: await gcActivatedRecipientHtml(card),
       }).catch(err => console.error('[GC ACTIVATE RECIPIENT EMAIL]', err.message));
     }
@@ -657,7 +657,7 @@ router.put('/admin/:id/activate', adminAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ── Admin: reject gift card slip ───────────────────────────────────────────────
+// ── Admin: reject gift voucher slip ───────────────────────────────────────────────
 router.put('/admin/:id/reject', adminAuth, async (req, res) => {
   try {
     const { rejectionNote } = req.body;
@@ -677,7 +677,7 @@ router.put('/admin/:id/reject', adminAuth, async (req, res) => {
 
     await Notification.create({
       type: 'gift_card',
-      title: '❌ Gift Card Slip Rejected',
+      title: '❌ Gift Voucher Slip Rejected',
       message: `Gift card ${card.code} slip rejected — awaiting re-upload from ${card.purchaserName}`,
       link: '/admin/gift-cards',
     }).catch(() => {});
@@ -685,7 +685,7 @@ router.put('/admin/:id/reject', adminAuth, async (req, res) => {
     if (card.purchaserEmail && await isEmailEnabled('gift_card_rejected_purchaser')) {
       sendMail({
         to: card.purchaserEmail,
-        subject: `Gift Card Payment Update — ${card.code}`,
+        subject: `Gift Voucher Payment Update — ${card.code}`,
         html: await gcRejectedPurchaserHtml(card, rejectionNote),
       }).catch(err => console.error('[GC REJECT EMAIL]', err.message));
     }
@@ -694,7 +694,7 @@ router.put('/admin/:id/reject', adminAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ── Admin: deactivate / disable gift card (legacy) ────────────────────────────
+// ── Admin: deactivate / disable gift voucher (legacy) ────────────────────────────
 router.put('/admin/:id/deactivate', adminAuth, async (req, res) => {
   try {
     const { adminNote } = req.body;
@@ -707,7 +707,7 @@ router.put('/admin/:id/deactivate', adminAuth, async (req, res) => {
 
     await Notification.create({
       type: 'gift_card',
-      title: '❌ Gift Card Rejected',
+      title: '❌ Gift Voucher Rejected',
       message: `Gift card ${card.code} payment slip rejected for ${card.purchaserName}`,
       link: '/admin/gift-cards',
     }).catch(() => {});
@@ -715,7 +715,7 @@ router.put('/admin/:id/deactivate', adminAuth, async (req, res) => {
     if (card.purchaserEmail && await isEmailEnabled('gift_card_rejected_purchaser')) {
       sendMail({
         to: card.purchaserEmail,
-        subject: `Gift Card Payment Update — ${card.code}`,
+        subject: `Gift Voucher Payment Update — ${card.code}`,
         html: await gcRejectedPurchaserHtml(card, adminNote),
       }).catch(err => console.error('[GC REJECT EMAIL]', err.message));
     }
@@ -753,7 +753,7 @@ router.put('/admin/config', adminAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ── Admin: update gift card (adjust balance, note etc.) ───────────────────────
+// ── Admin: update gift voucher (adjust balance, note etc.) ───────────────────────
 router.put('/admin/:id', adminAuth, async (req, res) => {
   try {
     const card = await GiftCard.findByIdAndUpdate(req.params.id, req.body, { new: true });
@@ -765,24 +765,24 @@ router.put('/admin/:id', adminAuth, async (req, res) => {
 const gcSlipExpiredHtml = async (card) => {
   const t = await getT();
   return wrapEmail(`
-    ${gcHeader('⏰ Gift Card Order Cancelled', t)}
+    ${gcHeader('⏰ Gift Voucher Order Cancelled', t)}
     <div style="padding:32px">
       <p style="color:#374151">Hi <strong>${card.purchaserName}</strong>,</p>
       <p style="color:#6b7280;font-size:14px;margin-bottom:20px">
-        Your gift card order <strong style="color:${t.primary}">${card.code}</strong>
+        Your gift voucher order <strong style="color:${t.primary}">${card.code}</strong>
         has been <strong style="color:#dc2626">cancelled</strong> because a payment slip was not uploaded
         within the required time period.
       </p>
       <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:16px;text-align:center;margin-bottom:20px">
         <p style="margin:0;font-size:20px;font-weight:800;color:#dc2626">Order Expired — No Slip Uploaded</p>
-        <p style="margin:8px 0 0;font-size:13px;color:#991b1b">Gift Card: ${card.code} · Rs. ${card.initialValue?.toLocaleString()}</p>
+        <p style="margin:8px 0 0;font-size:13px;color:#991b1b">Gift Voucher: ${card.code} · Rs. ${card.initialValue?.toLocaleString()}</p>
       </div>
       <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:14px;font-size:13px;color:#0369a1;margin-bottom:20px">
         If you did complete a bank transfer, please contact our support team with your transfer reference number and we'll reinstate your order.
       </div>
       <a href="${t.storeUrl}/gift-cards"
          style="display:inline-block;background:linear-gradient(135deg,${t.primary},${lx(t.primary)});color:white;padding:12px 24px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none">
-        Purchase a New Gift Card →
+        Purchase a New Gift Voucher →
       </a>
     </div>`, t);
 };
@@ -808,7 +808,7 @@ const runSlipExpiryCron = async () => {
 
       await Notification.create({
         type: 'gift_card',
-        title: '⏰ Gift Card Expired — No Slip',
+        title: '⏰ Gift Voucher Expired — No Slip',
         message: `Gift card ${card.code} (Rs. ${card.initialValue?.toLocaleString()}) from ${card.purchaserName} expired without a payment slip`,
         link: '/admin/gift-cards',
       }).catch(() => {});
@@ -816,14 +816,14 @@ const runSlipExpiryCron = async () => {
       if (card.purchaserEmail) {
         sendMail({
           to: card.purchaserEmail,
-          subject: `⏰ Gift Card Order Expired — ${card.code}`,
+          subject: `⏰ Gift Voucher Order Expired — ${card.code}`,
           html: await gcSlipExpiredHtml(card),
         }).catch(err => console.error('[GC EXPIRY EMAIL]', err.message));
       }
     }
 
     if (expired.length > 0) {
-      console.log(`[GC Cron] Expired ${expired.length} gift card(s) without slip.`);
+      console.log(`[GC Cron] Expired ${expired.length} gift voucher(s) without slip.`);
     }
   } catch (err) {
     console.error('[GC Cron Error]', err.message);

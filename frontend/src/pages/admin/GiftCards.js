@@ -180,7 +180,7 @@ function SlipModal({ card, onClose, onApprove, onReject }) {
                   APPROVED
                 </div>
                 <p className="text-xs text-green-700 font-semibold mt-1">
-                  {approving ? 'Gift card is now active — closing…' : 'This gift card has already been approved.'}
+                  {approving ? 'Gift card is now active — closing…' : 'This gift voucher has already been approved.'}
                 </p>
               </div>
             ) : (
@@ -253,7 +253,7 @@ function ConfigPanel({ onClose }) {
       <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h3 className="font-bold text-lg text-gray-900">⚙️ Gift Card Settings</h3>
+            <h3 className="font-bold text-lg text-gray-900">⚙️ Gift Voucher Settings</h3>
             <p className="text-xs text-gray-400 mt-0.5">Configure payment slip upload rules</p>
           </div>
           <button onClick={onClose}
@@ -271,7 +271,7 @@ function ConfigPanel({ onClose }) {
             <div>
               <label className="form-label">Payment Slip Upload Deadline (hours) *</label>
               <p className="text-xs text-gray-400 mb-2">
-                After a customer purchases a gift card, they must upload a bank transfer slip within this
+                After a customer purchases a gift voucher, they must upload a bank transfer slip within this
                 many hours. If they don't, the purchase is automatically cancelled and they receive an email.
               </p>
               <div className="flex gap-2 flex-wrap mb-3">
@@ -294,8 +294,8 @@ function ConfigPanel({ onClose }) {
             {/* Info box */}
             <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-xs text-blue-700 space-y-1.5">
               <p className="font-semibold">How it works:</p>
-              <p>1. Customer purchases a gift card → clock starts ticking.</p>
-              <p>2. Customer uploads their bank transfer slip in <strong>My Orders → Gift Card Purchases</strong>.</p>
+              <p>1. Customer purchases a gift voucher → clock starts ticking.</p>
+              <p>2. Customer uploads their bank transfer slip in <strong>My Orders → Gift Voucher Purchases</strong>.</p>
               <p>3. You review the slip here and <strong>Approve</strong> or <strong>Reject</strong>.</p>
               <p>4. If no slip is uploaded by the deadline, the order is cancelled and the customer gets an email.</p>
             </div>
@@ -400,13 +400,13 @@ export default function AdminGiftCards() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
-          <h2 className="font-display text-xl font-bold text-gray-900">Gift Cards</h2>
-          <p className="text-sm text-gray-500">Create and manage gift cards for the store</p>
+          <h2 className="font-display text-xl font-bold text-gray-900">Gift Vouchers</h2>
+          <p className="text-sm text-gray-500">Create and manage gift vouchers for the store</p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => setShowConfig(true)}
             className="btn-outline text-sm flex items-center gap-1.5">⚙️ Settings</button>
-          <button onClick={() => setShowCreate(true)} className="btn-primary text-sm">+ Create Gift Card</button>
+          <button onClick={() => setShowCreate(true)} className="btn-primary text-sm">+ Create Gift Voucher</button>
         </div>
       </div>
 
@@ -432,7 +432,7 @@ export default function AdminGiftCards() {
         <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-5">
           <span className="text-xl">📎</span>
           <p className="text-sm text-amber-800 font-medium flex-1">
-            <strong>{stats.slipPending} gift card{stats.slipPending > 1 ? 's' : ''}</strong> have payment slips awaiting your review.
+            <strong>{stats.slipPending} gift voucher{stats.slipPending > 1 ? 's' : ''}</strong> have payment slips awaiting your review.
             Use the <strong>Review Slip</strong> button to approve or reject.
           </p>
           <button onClick={() => setFilter('slip_uploaded')}
@@ -476,7 +476,7 @@ export default function AdminGiftCards() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-md scale-in" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <div>
-                <h3 className="font-bold text-lg text-gray-900">Create Gift Card</h3>
+                <h3 className="font-bold text-lg text-gray-900">Create Gift Voucher</h3>
                 <p className="text-xs text-gray-400 mt-0.5">Card will appear on the storefront for customers to purchase</p>
               </div>
               <button onClick={() => setShowCreate(false)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 text-gray-500">✕</button>
@@ -485,7 +485,7 @@ export default function AdminGiftCards() {
             <div className="space-y-4">
               {/* Amount */}
               <div>
-                <label className="form-label">Gift Card Value (Rs.) *</label>
+                <label className="form-label">Gift Voucher Value (Rs.) *</label>
                 <div className="flex flex-wrap gap-2 mb-2">
                   {QUICK_AMOUNTS.map(a => (
                     <button key={a} type="button"
@@ -550,13 +550,13 @@ export default function AdminGiftCards() {
               </div>
 
               <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-700">
-                💡 A unique code like <strong className="font-mono">GC-XXXX-XXXX-XXXX</strong> is auto-generated. Customers visit the Gift Cards page to purchase. Code is activated after payment.
+                💡 A unique code like <strong className="font-mono">GC-XXXX-XXXX-XXXX</strong> is auto-generated. Customers visit the Gift Vouchers page to purchase. Code is activated after payment.
               </div>
             </div>
 
             <div className="flex gap-3 mt-5 pt-4 border-t border-gray-100">
               <button onClick={createCard} disabled={saving} className="btn-primary flex-1">
-                {saving ? 'Creating...' : '🎁 Create Gift Card'}
+                {saving ? 'Creating...' : '🎁 Create Gift Voucher'}
               </button>
               <button onClick={() => setShowCreate(false)} className="btn-outline px-5">Cancel</button>
             </div>
@@ -574,9 +574,9 @@ export default function AdminGiftCards() {
         ) : cards.length === 0 ? (
           <div className="p-16 text-center">
             <div className="text-5xl mb-3">🎁</div>
-            <p className="text-gray-500 font-medium mb-1">No gift cards yet</p>
-            <p className="text-gray-400 text-sm mb-4">Create gift cards for customers to browse and purchase on the storefront</p>
-            <button onClick={() => setShowCreate(true)} className="btn-primary text-sm">Create First Gift Card</button>
+            <p className="text-gray-500 font-medium mb-1">No gift vouchers yet</p>
+            <p className="text-gray-400 text-sm mb-4">Create gift vouchers for customers to browse and purchase on the storefront</p>
+            <button onClick={() => setShowCreate(true)} className="btn-primary text-sm">Create First Gift Voucher</button>
           </div>
         ) : (
           <div className="overflow-x-auto">
