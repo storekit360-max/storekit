@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../utils/api';
+import { useTheme } from '../context/ThemeContext';
 
 /**
  * PopupBanner – Premium overlay popup shown on site entry.
@@ -8,6 +9,7 @@ import API from '../utils/api';
  */
 export default function PopupBanner() {
   const navigate = useNavigate();
+  const { settings } = useTheme();
   const [banner, setBanner] = useState(null);
   const [show,   setShow]   = useState(false);
 
@@ -52,6 +54,9 @@ export default function PopupBanner() {
   const btnCol = banner.buttonColor   || '#fff';
   const close  = () => setShow(false);
   const hasImg = !!banner.image;
+  let savedDarkness;
+  try { savedDarkness = JSON.parse(settings?.animationConfig || '{}')?.heroOverlayDarkness; } catch { savedDarkness = undefined; }
+  const popupDarkness = Math.max(0, Math.min(100, Number(savedDarkness ?? 0))) / 100;
 
   return (
     <div
@@ -95,11 +100,12 @@ export default function PopupBanner() {
               style={{ width:'100%', display:'block', maxHeight:'520px', objectFit:'cover' }}
             />
 
-            {/* Gradient overlay — dark at bottom for text legibility */}
-            <div style={{
+            {/* Popup image overlay follows Cinematic Settings. At 0% no
+                overlay is mounted, so the original image is shown directly. */}
+            {popupDarkness > 0 && <div style={{
               position:'absolute', inset:0,
-              background:'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.18) 35%, rgba(0,0,0,0.72) 70%, rgba(0,0,0,0.88) 100%)',
-            }}/>
+              background:`linear-gradient(to bottom, rgba(0,0,0,${0.08 * popupDarkness}) 0%, rgba(0,0,0,${0.18 * popupDarkness}) 35%, rgba(0,0,0,${0.72 * popupDarkness}) 70%, rgba(0,0,0,${0.88 * popupDarkness}) 100%)`,
+            }}/>} 
 
             {/* Close button — top right on image */}
             <button

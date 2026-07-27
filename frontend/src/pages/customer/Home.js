@@ -341,7 +341,7 @@ const HeroSlider = ({ banners, settings, campaign, anim }) => {
                   gray bars. The foreground banner remains fully visible. */}
               <div aria-hidden="true" className="hero-blur-fill absolute inset-0 scale-110 blur-2xl opacity-45 bg-center bg-cover"
                 style={{ backgroundImage:`url("${slide.image}")` }}/>
-              <img src={slide.image} alt="" width="1600" height="900" className="relative z-[1] w-full h-full object-contain object-center" style={{ opacity: 1, filter: 'none' }} loading="eager" decoding="async" fetchPriority="high"/>
+              <img src={slide.image} alt="" width="1600" height="900" className="relative z-[1] w-full h-full object-fill" style={{ opacity: 1, filter: 'none' }} loading="eager" decoding="async" fetchPriority="high"/>
             </>
           : (
             <div className="w-full h-full relative" style={{ background:'var(--hero-gradient)' }}>
