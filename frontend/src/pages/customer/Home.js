@@ -231,6 +231,13 @@ const HeroSlider = ({ banners, settings, campaign, anim }) => {
   const heroStats  = useMemo(() => { try { return JSON.parse(settings?.heroStats||'[]'); } catch { return []; } }, [settings?.heroStats]);
   const showStats  = settings?.heroShowStats !== false;
   const browseLabel = settings?.heroBrowseAllLabel || 'Browse All';
+  // Read the persisted value directly as well as from AnimationContext. This
+  // prevents an older cached animation context from leaving the old overlay
+  // value active on the storefront after the admin saves a new value.
+  const savedHeroDarkness = useMemo(() => {
+    try { return JSON.parse(settings?.animationConfig || '{}')?.heroOverlayDarkness; } catch { return undefined; }
+  }, [settings?.animationConfig]);
+  const heroDarkness = Math.max(0, Math.min(100, Number(savedHeroDarkness ?? anim.heroOverlayDarkness ?? 0)));
 
   const defaultSlides = useMemo(() => [{
     title:      settings?.storeName || 'StoreKit',
@@ -357,7 +364,7 @@ const HeroSlider = ({ banners, settings, campaign, anim }) => {
             </div>
           )
         }
-        {slide.image && <div className="absolute inset-0 pointer-events-none" style={{ zIndex:2, backgroundColor:`rgba(0,0,0,${Math.max(0, Math.min(100, Number(anim.heroOverlayDarkness ?? 45))) / 100})` }}/>} 
+        {slide.image && heroDarkness > 0 && <div className="absolute inset-0 pointer-events-none" style={{ zIndex:2, backgroundColor:`rgba(0,0,0,${heroDarkness / 100})` }}/>} 
       </div>
 
       {/* Content */}
