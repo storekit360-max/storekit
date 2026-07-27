@@ -267,6 +267,8 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
 
 /* ── Mobile nav ────────────────────────────────────────────── */
 .mobile-bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,0.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid rgba(0,0,0,0.06);z-index:40;padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -10px 40px rgba(0,0,0,0.09)}
+.hero-blur-fill{transition:filter .2s ease,opacity .2s ease}
+@media (max-width:640px){.hero-blur-fill{filter:none!important;opacity:1!important;transform:scale(1.01)!important}}
 @media(max-width:768px){.mobile-bottom-nav{display:flex}.has-mobile-nav{padding-bottom:calc(64px + env(safe-area-inset-bottom))}}
 @supports(padding:max(0px)){.mobile-bottom-nav{padding-bottom:max(0px,env(safe-area-inset-bottom))}}
 
