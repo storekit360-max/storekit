@@ -27,13 +27,14 @@ function slugify(value = '') {
   return String(value)
     .trim()
     .toLowerCase()
-    .replace(/&/g, ' and ')
+    .replace(/&/g, ' ')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '');
 }
 
 function buildCategoryPayload(body = {}) {
   const payload = { ...body };
+  if (typeof payload.name === 'string') payload.name = payload.name.replace(/&amp;/gi, '&').trim();
   payload.name = String(payload.name || '').trim();
   payload.slug = slugify(payload.slug || payload.name);
   payload.parent = payload.parent || null;

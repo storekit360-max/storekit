@@ -6,7 +6,9 @@ import toast from 'react-hot-toast';
 const slugify = (value = '') => String(value)
   .trim()
   .toLowerCase()
-  .replace(/&/g, ' and ')
+  // Keep ampersands out of URLs without changing the category name to
+  // “and”. Example: “Bath & Body” becomes the slug “bath-body”.
+  .replace(/&/g, ' ')
   .replace(/[^a-z0-9]+/g, '-')
   .replace(/(^-|-$)/g, '');
 
