@@ -327,7 +327,7 @@ const HeroSlider = ({ banners, settings, campaign, anim }) => {
   return (
     <section ref={sectionRef} className="relative overflow-hidden" style={{ minHeight:'clamp(440px,64vw,700px)' }}>
       {/* BG */}
-      <div ref={bgRef} className="absolute will-change-transform" style={{ inset:0, top:'-14%', height:'128%', transformOrigin:'center center' }}>
+      <div ref={bgRef} className="absolute will-change-transform" style={{ inset:0, top:'-14%', height:'128%', transformOrigin:'center center', position:'absolute' }}>
         {slide.image
           ? <img src={slide.image} alt="" width="1600" height="900" className="w-full h-full object-cover" loading="eager" decoding="async" fetchPriority="high"/>
           : (
@@ -357,7 +357,7 @@ const HeroSlider = ({ banners, settings, campaign, anim }) => {
             </div>
           )
         }
-        {slide.image && <div className="absolute inset-0" style={{ background:`linear-gradient(110deg,rgba(0,0,0,${Math.min(1, (anim.heroOverlayDarkness ?? 45) / 100)}) 0%,rgba(0,0,0,${Math.min(0.7, (anim.heroOverlayDarkness ?? 45) / 220)}) 55%,rgba(0,0,0,${Math.min(0.25, (anim.heroOverlayDarkness ?? 45) / 400)}) 100%)` }}/>} 
+        {slide.image && <div className="absolute inset-0 pointer-events-none" style={{ zIndex:2, backgroundColor:`rgba(0,0,0,${Math.max(0, Math.min(100, Number(anim.heroOverlayDarkness ?? 45))) / 100})` }}/>} 
       </div>
 
       {/* Content */}
