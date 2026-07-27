@@ -44,10 +44,11 @@ export default function StoreLoader({ settings = {}, compact = false, styleId })
   const muted = dark ? 'rgba(248,250,252,.58)' : 'rgba(17,24,39,.48)';
   const storeName = settings.storeName || 'StoreKit';
   const [logoFailed, setLogoFailed] = React.useState(false);
+  const loaderLogo = settings.loaderLogoUrl || settings.logoUrl;
   const isLogoLoader = ['logo-pulse', 'logo-shimmer'].includes(selected);
-  const showMainLogo = !compact && Boolean(settings.logoUrl) && !logoFailed;
+  const showMainLogo = !compact && Boolean(loaderLogo) && !logoFailed;
 
-  React.useEffect(() => { setLogoFailed(false); }, [settings.logoUrl]);
+  React.useEffect(() => { setLogoFailed(false); }, [loaderLogo]);
 
   return <div className={`store-loader ${compact ? 'compact' : ''}`} style={{'--lp':primary,'--la':accent,'--lbg':bg,'--lt':text,'--lm':muted}}>
     <style>{loaderCss}</style>
@@ -55,11 +56,11 @@ export default function StoreLoader({ settings = {}, compact = false, styleId })
     <div className="skl-content" role="status" aria-live="polite" aria-label={`Loading ${storeName}`}>
       {showMainLogo && (
         <div className={`skl-main-logo ${isLogoLoader ? selected : ''}`}>
-          <img src={settings.logoUrl} alt={`${storeName} logo`} onError={() => setLogoFailed(true)}/>
+          <img src={loaderLogo} alt={`${storeName} logo`} onError={() => setLogoFailed(true)}/>
         </div>
       )}
       {(compact || !isLogoLoader || !showMainLogo) && (
-        <LoaderGraphic styleId={selected} logoUrl={logoFailed ? '' : settings.logoUrl}/>
+        <LoaderGraphic styleId={selected} logoUrl={logoFailed ? '' : loaderLogo}/>
       )}
       {!compact && <>
         <span className="skl-welcome">Welcome to</span>

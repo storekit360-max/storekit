@@ -333,7 +333,7 @@ const NavLink3D = ({ to, label, isActive, emoji }) => (
 );
 
 /* ── Search with live suggestions ─────────────────────────────── */
-const SearchOverlay = ({ onClose, categories }) => {
+const SearchOverlay = ({ onClose, categories, settings }) => {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [loadingSugg, setLoadingSugg] = useState(false);
@@ -380,6 +380,7 @@ const SearchOverlay = ({ onClose, categories }) => {
       >
         <form onSubmit={handleSearch}>
           <div className="flex items-center gap-3 p-4 border-b border-gray-100">
+            {(settings?.searchLogoUrl || settings?.logoUrl) && <img src={settings.searchLogoUrl || settings.logoUrl} alt={settings.storeName || 'Store'} className="h-7 max-w-[120px] object-contain flex-shrink-0" loading="eager" decoding="async" />}
             {loadingSugg ? (
               <svg className="w-5 h-5 text-gray-400 flex-shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
@@ -551,10 +552,10 @@ const Header = ({ settings, campaign }) => {
             onMouseLeave={e => { e.currentTarget.querySelector('.logo-inner') && (e.currentTarget.querySelector('.logo-inner').style.transform = 'rotateY(0deg) scale(1)'); }}
           >
             <div className="logo-inner transition-transform duration-300" style={{transformStyle:'preserve-3d'}}>
-              {settings?.logoUrl ? (
+              {settings?.navbarLogoUrl || settings?.logoUrl ? (
                 /* Logo height driven by admin logoSize setting via CSS variable */
                 <img
-                  src={settings.logoUrl}
+                  src={settings.navbarLogoUrl || settings.logoUrl}
                   alt={settings.storeName || 'StoreKit'}
                   className="sz-logo-img"
                   style={{
@@ -784,7 +785,7 @@ const Header = ({ settings, campaign }) => {
       </div>
 
       {searchOpen && (
-        <SearchOverlay onClose={() => setSearchOpen(false)} categories={categories} />
+        <SearchOverlay onClose={() => setSearchOpen(false)} categories={categories} settings={settings} />
       )}
     </header>
   );
@@ -858,7 +859,8 @@ const Footer = ({ settings }) => {
   const [socialAccounts, setSocialAccounts] = React.useState([]);
   const [logoFailed, setLogoFailed] = React.useState(false);
 
-  React.useEffect(() => { setLogoFailed(false); }, [settings?.logoUrl]);
+  const footerLogo = settings?.footerLogoUrl || settings?.logoUrl;
+  React.useEffect(() => { setLogoFailed(false); }, [footerLogo]);
 
   React.useEffect(() => {
     API.get('/pages?footer=true').then(r=>setFooterPages(r.data||[])).catch(()=>{});
@@ -873,9 +875,9 @@ const Footer = ({ settings }) => {
           {/* Brand */}
           <div className="sz-footer-brand col-span-2 sm:col-span-1">
             <div className="flex items-center gap-2 mb-3">
-              {settings?.logoUrl && !logoFailed
+              {footerLogo && !logoFailed
                 ? <img
-                    src={settings.logoUrl}
+                    src={footerLogo}
                     alt={storeName}
                     onError={() => setLogoFailed(true)}
                     style={{height:'56px',maxWidth:'180px',objectFit:'contain',objectPosition:'left center'}}

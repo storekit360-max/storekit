@@ -120,7 +120,7 @@ export default function AdminSettings() {
     codEnabled:true, bankTransferEnabled:true,
     bankName:'', bankAccountName:'', bankAccountNumber:'', bankBranch:'',
     theme:'default', primaryColor:'', secondaryColor:'', darkBgColor:'', darkMode:false,
-    fontStyle:'default', logoUrl:'', faviconUrl:'', logoSize:48, customCSS:'',
+    fontStyle:'default', logoUrl:'', navbarLogoUrl:'', loaderLogoUrl:'', footerLogoUrl:'', searchLogoUrl:'', faviconUrl:'', logoSize:48, customCSS:'',
     metaTitle:'', metaDescription:'', googleAnalytics:'', facebookPixel:'',
     lowStockAlert:5, orderNotificationEmail:'', cancelWindowMinutes:60, autoConfirmOrders:false,
     autoDecisionEnabled:false, autoDecisionMinutes:60, autoDecisionAction:'approve',
@@ -1032,6 +1032,10 @@ export default function AdminSettings() {
                   <div className="grid sm:grid-cols-2 gap-5">
                     <ImageUpload label="Store Logo" hint="Recommended: 200×60px PNG or SVG" value={settings.logoUrl} onChange={url=>setSettings(p=>({...p,logoUrl:url}))} />
                     <ImageUpload label="Favicon" hint="32×32px .ico or .png" value={settings.faviconUrl} onChange={url=>setSettings(p=>({...p,faviconUrl:url}))} />
+                    <ImageUpload label="Navbar Logo (optional)" hint="Used only in the storefront header. Falls back to Store Logo." value={settings.navbarLogoUrl} onChange={url=>setSettings(p=>({...p,navbarLogoUrl:url}))} />
+                    <ImageUpload label="Loading Screen Logo (optional)" hint="Used by the storefront loader. Falls back to Store Logo." value={settings.loaderLogoUrl} onChange={url=>setSettings(p=>({...p,loaderLogoUrl:url}))} />
+                    <ImageUpload label="Footer Logo (optional)" hint="Used only in the storefront footer. Falls back to Store Logo." value={settings.footerLogoUrl} onChange={url=>setSettings(p=>({...p,footerLogoUrl:url}))} />
+                    <ImageUpload label="Search Result Logo (optional)" hint="Used in search branding/results. Falls back to Store Logo." value={settings.searchLogoUrl} onChange={url=>setSettings(p=>({...p,searchLogoUrl:url}))} />
                   </div>
 
                   {/* Logo Size Control */}
