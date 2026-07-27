@@ -544,7 +544,7 @@ router.post('/forgot-password', async (req, res, next) => {
     try {
       await sendMail({
         to:      user.email,
-        subject: `${otp} — Your StoreKit Password Reset OTP`,
+        subject: `${otp} — Your ${tenant?.storeName || 'Store'} Password Reset OTP`,
         html:    await otpEmailHtml(otp, user.firstName, { tenantId: user.tenantId, tenant }),
         tenantId: user.tenantId,
         tenant,

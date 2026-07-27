@@ -121,6 +121,15 @@ const sendMail = async ({ to, subject, html, tenantId, tenant }) => {
       return { skipped: true, reason: 'staging_disabled' };
     }
     const theme = await getTheme({ tenantId, tenant }).catch(() => ({ storeName: 'StoreKit', primary: '#15803d' }));
+    // Tenant-facing mail must never expose the platform brand in its subject.
+    // Platform/admin notifications that do not carry tenant context retain
+    // their own StoreKit subject branding.
+    const effectiveSubject = theme.storeName && theme.storeName !== 'StoreKit'
+      ? String(subject || '').replace(/\bStoreKit\b/gi, theme.storeName)
+      : subject;
+    const effectiveHtml = theme.storeName && theme.storeName !== 'StoreKit'
+      ? String(html || '').replace(/\bStoreKit\b/gi, theme.storeName)
+      : html;
     const smtp = await resolvedIntegration('smtp').catch(() => null);
     const smtpConfig = smtp ? { ...smtp.config, ...smtp.secrets } : {};
 
@@ -130,8 +139,8 @@ const sendMail = async ({ to, subject, html, tenantId, tenant }) => {
       if (process.env.NODE_ENV !== 'production') {
         console.log(`[MAIL] Sending via SMTP | from:${from} → to:${to}`);
       }
-      const info = await createSmtpTransport(smtpConfig).sendMail({ from, to, subject, html, replyTo });
-      console.log(`[MAIL SENT] To:${to} | ${subject} | id:${info?.messageId}`);
+      const info = await createSmtpTransport(smtpConfig).sendMail({ from, to, subject: effectiveSubject, html: effectiveHtml, replyTo });
+      console.log(`[MAIL SENT] To:${to} | ${effectiveSubject} | id:${info?.messageId}`);
       return info;
     }
 
@@ -145,7 +154,7 @@ const sendMail = async ({ to, subject, html, tenantId, tenant }) => {
       console.log(`[MAIL] Sending via Resend | from:${from} → to:${to}`);
     }
 
-    const { data, error } = await resend.emails.send({ from, to, subject, html, replyTo });
+    const { data, error } = await resend.emails.send({ from, to, subject: effectiveSubject, html: effectiveHtml, replyTo });
 
     if (error) {
       // Resend returns structured errors — surface them clearly
@@ -153,7 +162,7 @@ const sendMail = async ({ to, subject, html, tenantId, tenant }) => {
       throw new Error(msg);
     }
 
-    console.log(`[MAIL SENT] To:${to} | ${subject} | id:${data?.id}`);
+    console.log(`[MAIL SENT] To:${to} | ${effectiveSubject} | id:${data?.id}`);
     return data;
   } catch (e) {
     console.error('[MAIL ERROR]', e.message);
