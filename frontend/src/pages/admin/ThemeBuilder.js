@@ -164,6 +164,25 @@ const TemplateCard = ({ id, template, active, onSelect }) => {
 
 const themeGradient = (theme) => theme?.gradient || `linear-gradient(135deg, ${theme?.primaryDark || '#4338ca'} 0%, ${theme?.primary || '#6366f1'} 52%, ${theme?.accent || '#22d3ee'} 100%)`;
 
+const HERO_BOTTOM_STYLES = [
+  ['none', 'Rectangle'], ['wave', 'Wave'], ['soft-wave', 'Soft Wave'], ['double-wave', 'Double Wave'],
+  ['curve', 'Curve'], ['arch', 'Arch'], ['slant', 'Slant'], ['diagonal', 'Diagonal'],
+  ['triangle', 'Triangle'], ['mountain', 'Mountain'], ['chevron', 'Chevron'], ['zigzag', 'Zigzag'],
+  ['steps', 'Steps'], ['notch', 'Notch'], ['scallop', 'Scallop'], ['pill', 'Pill'],
+  ['blob', 'Blob'], ['inset-rounded', 'Inset Rounded'], ['cut-corners', 'Cut Corners'], ['ticket', 'Ticket'],
+];
+
+const HERO_CLIPS = {
+  wave: 'ellipse(75% 65% at 50% 0%)', 'soft-wave': 'ellipse(85% 75% at 50% 0%)', curve: 'ellipse(65% 70% at 50% 0%)',
+  arch: 'ellipse(60% 100% at 50% 0%)', slant: 'polygon(0 0,100% 0,100% 78%,0 100%)', diagonal: 'polygon(0 0,100% 0,100% 62%,0 100%)',
+  triangle: 'polygon(0 0,100% 0,50% 100%)', mountain: 'polygon(0 0,25% 55%,50% 20%,75% 55%,100% 0,100% 100%,0 100%)',
+  chevron: 'polygon(0 0,100% 0,100% 65%,50% 100%,0 65%)', zigzag: 'polygon(0 0,100% 0,100% 70%,80% 100%,60% 70%,40% 100%,20% 70%,0 100%)',
+  steps: 'polygon(0 0,100% 0,100% 70%,75% 70%,75% 100%,50% 100%,50% 70%,25% 70%,25% 100%,0 100%)',
+  notch: 'polygon(0 0,100% 0,100% 100%,58% 100%,50% 65%,42% 100%,0 100%)', scallop: 'ellipse(90% 75% at 50% 0%)',
+  pill: 'inset(0 4% 0 4% round 999px)', blob: 'ellipse(70% 80% at 50% 0%)', 'inset-rounded': 'inset(0 3% 0 3% round 28px)',
+  'cut-corners': 'polygon(0 0,100% 0,100% 82%,92% 100%,8% 100%,0 82%)', ticket: 'polygon(0 0,100% 0,100% 78%,94% 85%,100% 92%,100% 100%,0 100%,0 92%,6% 85%,0 78%)',
+};
+
 const ThemeCard = ({ id, theme, active, onSelect }) => (
   <div onClick={() => onSelect(id)}
     className={`relative cursor-pointer rounded-2xl overflow-hidden border-2 transition-all ${active ? 'border-primary shadow-lg scale-105' : 'border-transparent hover:border-gray-200'}`}>
@@ -204,6 +223,7 @@ export default function ThemeBuilder() {
   const [templateFilter, setTemplateFilter] = useState('all');
   const [selectedLoader, setSelectedLoader] = useState(settings?.loaderStyle || 'classic-ring');
   const [loadingText, setLoadingText] = useState(settings?.loadingText || 'Preparing your shopping experience');
+  const [heroBottomStyle, setHeroBottomStyle] = useState(settings?.heroBottomStyle || 'wave');
 
   useEffect(() => {
     if (!settings) return;
@@ -227,6 +247,7 @@ export default function ThemeBuilder() {
     });
     setSelectedLoader(settings.loaderStyle || 'classic-ring');
     setLoadingText(settings.loadingText || 'Preparing your shopping experience');
+    setHeroBottomStyle(settings.heroBottomStyle || 'wave');
   }, [settings]);
 
   const applyPreview = useCallback((themeId, font, colors, dark, template = selectedTemplate) => {
@@ -353,6 +374,7 @@ export default function ThemeBuilder() {
         customCSS,
         loaderStyle: selectedLoader,
         loadingText,
+        heroBottomStyle,
       };
       const { data } = await API.put('/settings', payload);
       const saved = data?.settings || { ...settings, ...payload };
@@ -384,6 +406,7 @@ export default function ThemeBuilder() {
   const tabs = [
     { id: 'themes', label: '🎨 Themes', icon: '🎨' },
     { id: 'templates', label: '🧩 Templates', icon: '🧩' },
+    { id: 'hero', label: '〰️ Hero Shape', icon: '〰️' },
     { id: 'fonts', label: '🔤 Fonts', icon: '🔤' },
     { id: 'colors', label: '🖌️ Colors', icon: '🖌️' },
     { id: 'mode', label: '🌙 Mode', icon: '🌙' },
@@ -490,6 +513,28 @@ export default function ThemeBuilder() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {displayTemplates.map(([id, template]) => template && (
               <TemplateCard key={id} id={id} template={template} active={selectedTemplate === id} onSelect={handleTemplateSelect} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── FONTS TAB ── */}
+      {/* ── HERO SHAPE TAB ── */}
+      {activeTab === 'hero' && (
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
+            <p className="text-sm font-semibold text-blue-900">Hero banner bottom shape</p>
+            <p className="text-xs text-blue-700 mt-1">Choose how the bottom edge of your storefront hero banner is displayed.</p>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {HERO_BOTTOM_STYLES.map(([id, label]) => (
+              <button key={id} type="button" onClick={() => setHeroBottomStyle(id)}
+                className={`text-left rounded-2xl border-2 p-2 transition-all ${heroBottomStyle === id ? 'border-primary bg-primary/5 shadow-md' : 'border-gray-100 bg-white hover:border-gray-200'}`}>
+                <div className="h-16 rounded-xl overflow-hidden bg-gray-100 relative">
+                  <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${customColors.primary}, ${customColors.accent})`, clipPath: id === 'none' ? 'none' : HERO_CLIPS[id] }} />
+                </div>
+                <div className="flex items-center justify-between px-1 pt-2"><span className="text-xs font-semibold text-gray-700">{label}</span>{heroBottomStyle === id && <span className="text-primary font-bold">✓</span>}</div>
+              </button>
             ))}
           </div>
         </div>
