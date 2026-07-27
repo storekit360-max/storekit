@@ -69,8 +69,8 @@ function PasswordStrengthMeter({ password }) {
 // ─── Shared UI helpers ────────────────────────────────────────────────────────
 const Logo = ({ settings }) => (
   <Link to="/" className="inline-flex items-center gap-2 mb-6">
-    {settings?.logoUrl ? (
-      <img src={settings.logoUrl} alt={settings?.storeName || 'Store'} className="h-10 object-contain" />
+    {(settings?.loaderLogoUrl || settings?.logoUrl) ? (
+      <img src={settings.loaderLogoUrl || settings.logoUrl} alt={settings?.storeName || 'Store'} style={{ height: `${settings?.loaderLogoSize || 86}px`, maxWidth: 'min(260px, 75vw)', objectFit: 'contain' }} />
     ) : (
       <>
         <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg" style={{ background: 'var(--theme-gradient)' }}>
@@ -170,10 +170,11 @@ function GoogleSignInButton({ onSuccess, disabled, label = 'Continue with Google
 
     const popup = window.open(
       bridgeUrl.toString(),
-      'storekit-google-signin',
+      `storekit-google-signin-${requestId}`,
       'popup=yes,width=480,height=650,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes'
     );
     if (!popup) {
+      setLoading(false);
       toast.error('Please allow popups to continue with Google.');
       return;
     }
