@@ -336,7 +336,7 @@ const HeroSlider = ({ banners, settings, campaign, anim }) => {
       {/* BG */}
       <div ref={bgRef} className="absolute will-change-transform" style={{ inset:0, top:'-14%', height:'128%', transformOrigin:'center center', position:'absolute' }}>
         {slide.image
-          ? <img src={slide.image} alt="" width="1600" height="900" className="w-full h-full object-cover" loading="eager" decoding="async" fetchPriority="high"/>
+          ? <img src={slide.image} alt="" width="1600" height="900" className="w-full h-full object-cover" style={{ opacity: 1, filter: 'none' }} loading="eager" decoding="async" fetchPriority="high"/>
           : (
             <div className="w-full h-full relative" style={{ background:'var(--hero-gradient)' }}>
               {/* Animated orbs */}
@@ -364,7 +364,9 @@ const HeroSlider = ({ banners, settings, campaign, anim }) => {
             </div>
           )
         }
-        {slide.image && heroDarkness > 0 && <div className="absolute inset-0 pointer-events-none" style={{ zIndex:2, backgroundColor:`rgba(0,0,0,${heroDarkness / 100})` }}/>} 
+        {/* No overlay element is mounted at 0%. The image is intentionally
+            rendered directly so templates cannot add residual darkness. */}
+        {slide.image && heroDarkness > 0 ? <div className="absolute inset-0 pointer-events-none" style={{ zIndex:2, backgroundColor:`rgba(0,0,0,${heroDarkness / 100})` }}/> : null}
       </div>
 
       {/* Content */}
