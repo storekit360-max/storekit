@@ -137,6 +137,7 @@ export default function AnimationSettings() {
           <Toggle label="Dot Grid Pattern" desc="Subtle dot grid overlay" value={local.heroDotGrid} onChange={() => set('heroDotGrid', !local.heroDotGrid)}/>
           <Toggle label="Scanlines Effect" desc="CRT-style scanline overlay (cyberpunk)" value={local.heroScanlines} onChange={() => set('heroScanlines', !local.heroScanlines)}/>
           <Toggle label="Wave Bottom" desc="SVG wave cut between hero and content" value={local.heroWave} onChange={() => set('heroWave', !local.heroWave)}/>
+          <Slider label="Hero Overlay Darkness" desc="0% = no darkness; 100% = maximum darkness" value={local.heroOverlayDarkness ?? 45} min={0} max={100} step={5} unit="%" onChange={v => set('heroOverlayDarkness', v)}/>
           <Toggle label="Auto-play Slider" value={local.heroAutoplay} onChange={() => set('heroAutoplay', !local.heroAutoplay)}/>
           <Slider label="Slide Interval" desc="Time between auto-slide (ms)" value={local.heroInterval} min={2000} max={12000} step={500} unit="ms" onChange={v => set('heroInterval', v)}/>
           {local.heroOrbs && <Slider label="Orb Count" value={local.heroOrbCount} min={1} max={6} step={1} onChange={v => set('heroOrbCount', v)}/>}

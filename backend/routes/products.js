@@ -1180,7 +1180,7 @@ router.get('/', normalizeImagesMiddleware(), async (req, res) => {
     let sortObj = { createdAt: -1 };
     if (sort === 'price_asc')  sortObj = { price: 1 };
     if (sort === 'price_desc') sortObj = { price: -1 };
-    if (sort === 'popular')    sortObj = { soldCount: -1 };
+    if (sort === 'popular' || sort === 'best-selling')    sortObj = { soldCount: -1 };
     if (sort === 'rating')     sortObj = { 'ratings.average': -1 };
     const total    = await Product.countDocuments(filter);
     const products = await Product.find(filter)

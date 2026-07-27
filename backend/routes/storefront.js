@@ -56,10 +56,11 @@ router.get('/home', async (req, res, next) => {
     const now = new Date();
     const productFilter = { tenantId, isActive: true };
 
-    const [featured, newArrivals, onSale, categories, brandProducts, banners] = await Promise.all([
+    const [featured, newArrivals, onSale, bestSelling, categories, brandProducts, banners] = await Promise.all([
       Product.find({ ...productFilter, isFeatured: true }).select(PRODUCT_FIELDS).populate('category', 'name slug').sort({ createdAt: -1 }).limit(limit).lean(),
       Product.find(productFilter).select(PRODUCT_FIELDS).populate('category', 'name slug').sort({ createdAt: -1 }).limit(limit).lean(),
       Product.find({ ...productFilter, isOnSale: true }).select(PRODUCT_FIELDS).populate('category', 'name slug').sort({ createdAt: -1 }).limit(8).lean(),
+      Product.find(productFilter).select(PRODUCT_FIELDS).populate('category', 'name slug').sort({ soldCount: -1, updatedAt: -1 }).limit(limit).lean(),
       Category.find({ tenantId, isActive: true, parent: null }).sort({ sortOrder: 1, name: 1 }).limit(12).lean(),
       Product.find({ ...productFilter, brand: { $exists: true, $nin: [null, ''] } })
         .select('brand thumbnail images soldCount updatedAt').sort({ soldCount: -1, updatedAt: -1 }).limit(500).lean(),
@@ -72,6 +73,7 @@ router.get('/home', async (req, res, next) => {
       featured: normalizedProducts(featured),
       newArrivals: normalizedProducts(newArrivals),
       onSale: normalizedProducts(onSale),
+      bestSelling: normalizedProducts(bestSelling),
       categories: categories.map(normalizeEntityImages),
       brands: buildBrands(brandProducts.map(normalizeProductImages), 16),
       heroBanners: normalizedBanners.filter(banner => banner.position === 'hero'),

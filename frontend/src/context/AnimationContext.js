@@ -12,6 +12,7 @@ export const ANIMATION_DEFAULTS = {
   heroDotGrid:         false,
   heroScanlines:       false,
   heroWave:            true,
+  heroOverlayDarkness: 45,
   heroTextStyle:       '3d',          // 3d | slide | fade | typewriter
   heroAutoplay:        true,
   heroInterval:        6000,

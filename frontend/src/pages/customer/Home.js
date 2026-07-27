@@ -357,7 +357,7 @@ const HeroSlider = ({ banners, settings, campaign, anim }) => {
             </div>
           )
         }
-        {slide.image && <div className="absolute inset-0" style={{ background:'linear-gradient(110deg,rgba(0,0,0,0.82) 0%,rgba(0,0,0,0.45) 55%,rgba(0,0,0,0.12) 100%)' }}/>}
+        {slide.image && <div className="absolute inset-0" style={{ background:`linear-gradient(110deg,rgba(0,0,0,${Math.min(1, (anim.heroOverlayDarkness ?? 45) / 100)}) 0%,rgba(0,0,0,${Math.min(0.7, (anim.heroOverlayDarkness ?? 45) / 220)}) 55%,rgba(0,0,0,${Math.min(0.25, (anim.heroOverlayDarkness ?? 45) / 400)}) 100%)` }}/>} 
       </div>
 
       {/* Content */}
@@ -886,6 +886,7 @@ export default function Home() {
   const [featured,    setFeatured]    = useState(() => initialHomeData?.featured || []);
   const [newArrivals, setNewArrivals] = useState(() => initialHomeData?.newArrivals || []);
   const [onSale,      setOnSale]      = useState(() => initialHomeData?.onSale || []);
+  const [bestSelling, setBestSelling] = useState(() => initialHomeData?.bestSelling || []);
   const [categories,  setCategories]  = useState(() => initialHomeData?.categories || []);
   const [brands,      setBrands]      = useState(() => initialHomeData?.brands || []);
   const [heroBanners, setHeroBanners] = useState(() => initialHomeData?.heroBanners || []);
@@ -929,14 +930,16 @@ export default function Home() {
         API.get(`/products?featured=true&limit=${homepageProductLimit}`),
         API.get(`/products?limit=${homepageProductLimit}`),
         API.get('/products?onSale=true&limit=8'),
+        API.get(`/products?sort=best-selling&limit=${homepageProductLimit}`),
         API.get('/categories?limit=12'),
         API.get('/products/brands?limit=16'),
         API.get('/banners?position=hero'),
         API.get('/banners?position=promo'),
-      ]).then(([feat,newest,sale,cats,brandRes,hero,promo]) => ({
+      ]).then(([feat,newest,sale,best,cats,brandRes,hero,promo]) => ({
         featured: feat.data.products || [],
         newArrivals: newest.data.products || [],
         onSale: sale.data.products || [],
+        bestSelling: best.data.products || [],
         categories: cats.data || [],
         brands: brandRes.data.brands || [],
         heroBanners: hero.data || [],
@@ -953,6 +956,7 @@ export default function Home() {
       setFeatured(nextHomeData.featured);
       setNewArrivals(nextHomeData.newArrivals);
       setOnSale(nextHomeData.onSale);
+      setBestSelling(nextHomeData.bestSelling || []);
       setCategories(nextHomeData.categories);
       setBrands(nextHomeData.brands);
       setHeroBanners(nextHomeData.heroBanners);
@@ -1049,6 +1053,12 @@ export default function Home() {
       <section key="bestsellers" className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <SectionHeading title={S('sectionSaleTitle','🔥 Flash Deals')} subtitle={S('sectionSaleSubtitle','Limited time discounts')} link="/shop?onSale=true" linkLabel="All Deals →"/>
         <AnimatedGrid products={onSale} settings={settings}/>
+      </section>
+    ),
+    best_selling: bestSelling.length>0 && (
+      <section key="best_selling" className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <SectionHeading title={S('sectionBestSellingTitle','🏆 Best Selling Products')} subtitle={S('sectionBestSellingSubtitle','Popular products customers are buying now')} link="/shop?sort=best-selling" linkLabel="View All →"/>
+        <AnimatedGrid products={bestSelling} settings={settings}/>
       </section>
     ),
     seasonal: campaign?.couponCode && (
