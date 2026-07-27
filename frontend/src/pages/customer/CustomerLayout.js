@@ -931,7 +931,7 @@ const Footer = ({ settings }) => {
           <div>
             <h4 className="text-white font-bold mb-3 text-xs uppercase tracking-widest">Contact</h4>
             <div className="space-y-2">
-              {settings?.storeAddress && <p className="text-sm">📍 {settings.storeAddress}</p>}
+              {settings?.storeAddress && <p className="text-sm whitespace-pre-line break-words">📍 {settings.storeAddress}</p>}
               {contactPhone && <a href={`tel:${telephoneHref}`} className="block text-sm hover:text-white transition-colors">📞 {contactPhone}</a>}
               {contactEmail && <a href={`mailto:${contactEmail}`} className="block text-sm hover:text-white transition-colors break-all">✉️ {contactEmail}</a>}
               {!settings?.storeAddress && !contactPhone && !contactEmail && <p className="text-sm" style={{color:'#64748b'}}>Contact details can be added in Store Settings.</p>}

@@ -154,7 +154,7 @@ export default function AdminSettings() {
     globalMaxDiscountPct:0,         // 0 = disabled; otherwise cap all coupon discounts at N% of subtotal
     globalMinProfitMarginPct:0,     // 0 = disabled; minimum profit margin % to preserve
     giftCardCoversDelivery:true,    // true = gift card balance can absorb delivery fee
-    heroStyle:'gradient', headerStyle:'default', footerStyle:'default',
+    heroStyle:'gradient', heroBottomStyle:'wave', headerStyle:'default', footerStyle:'default',
     customHeaderCode:'', customFooterCode:'',
     termsUrl:'', privacyUrl:'',
     announcementEnabled:true, announcementText:'', announcementBg:'#15803d', announcementTextColor:'#ffffff', announcementLink:'',
@@ -449,7 +449,7 @@ export default function AdminSettings() {
                   <F label="Currency Code" value={settings.currency} onChange={e=>setSettings(p=>({...p,currency:e.target.value}))} placeholder="LKR" />
                   <F label="Currency Symbol" value={settings.currencySymbol} onChange={e=>setSettings(p=>({...p,currencySymbol:e.target.value}))} placeholder="Rs." />
                 </div>
-                <div><label className="form-label">Address</label><textarea value={settings.storeAddress||''} onChange={e=>setSettings(p=>({...p,storeAddress:e.target.value}))} rows={2} className="form-input resize-none"/></div>
+                <div><label className="form-label">Address</label><textarea value={settings.storeAddress||''} onChange={e=>setSettings(p=>({...p,storeAddress:e.target.value}))} rows={5} maxLength={500} placeholder="Ceylon Herbs Ayurvedic (Pvt) Ltd\n123 Main Street\nColombo, Sri Lanka" className="form-input resize-y whitespace-pre-wrap"/><p className="text-xs text-gray-400 mt-1">Line breaks are preserved in the storefront footer.</p></div>
                 <div className="border-t pt-4">
                   <p className="text-sm font-semibold text-gray-700 mb-3">Social Media Links</p>
                   <div className="grid sm:grid-cols-2 gap-3">
@@ -1237,6 +1237,7 @@ export default function AdminSettings() {
                   </label>
                   <div className="mt-3"><label className="form-label">Browse All Button Label</label>
                     <input value={settings.heroBrowseAllLabel||'Browse All'} onChange={e=>setSettings(p=>({...p,heroBrowseAllLabel:e.target.value}))} className="form-input"/></div>
+                  <div className="mt-3"><label className="form-label">Hero Bottom Shape</label><select value={settings.heroBottomStyle||'wave'} onChange={e=>setSettings(p=>({...p,heroBottomStyle:e.target.value}))} className="form-input"><option value="none">None / rectangular</option>{['wave','soft-wave','double-wave','curve','arch','slant','diagonal','angled','triangle','mountain','chevron','zigzag','steps','notch','scallop','pill','blob','inset-rounded','cut-corners','ticket'].map(style=><option key={style} value={style}>{style.replaceAll('-',' ').replace(/\b\w/g,c=>c.toUpperCase())}</option>)}</select><p className="text-xs text-gray-400 mt-1">Choose from 20 modern hero-bottom styles. The shape uses the store background color.</p></div>
                 </div>
 
                 {/* Trust Badges */}

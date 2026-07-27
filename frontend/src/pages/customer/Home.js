@@ -426,12 +426,10 @@ const HeroSlider = ({ banners, settings, campaign, anim }) => {
         </>
       )}
 
-      {/* Wave */}
-      {anim.heroWave && (
+      {/* Configurable hero bottom shape */}
+      {(anim.heroWave || settings?.heroBottomStyle) && settings?.heroBottomStyle !== 'none' && (
         <div className="absolute bottom-0 left-0 right-0 z-10">
-          <svg viewBox="0 0 1440 90" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style={{ display:'block', height:90 }}>
-            <path d="M0 90L48 78C96 66 192 42 288 33C384 24 480 30 576 36C672 42 768 48 864 45C960 42 1056 30 1152 24C1248 18 1344 18 1392 18L1440 18V90H0Z" fill="var(--body-bg)"/>
-          </svg>
+          {(settings?.heroBottomStyle || 'wave') === 'wave' ? <svg viewBox="0 0 1440 90" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style={{ display:'block', height:90 }}><path d="M0 90L48 78C96 66 192 42 288 33C384 24 480 30 576 36C672 42 768 48 864 45C960 42 1056 30 1152 24C1248 18 1344 18 1392 18L1440 18V90H0Z" fill="var(--body-bg)"/></svg> : <div style={{height:settings?.heroBottomStyle==='pill'?34:70,background:'var(--body-bg)',clipPath:{'soft-wave':'ellipse(75% 80% at 50% 100%)','double-wave':'ellipse(70% 75% at 30% 100%)','curve':'ellipse(80% 85% at 50% 100%)','arch':'ellipse(55% 100% at 50% 100%)','slant':'polygon(0 45%,100% 0,100% 100%,0 100%)','diagonal':'polygon(0 0,100% 35%,100% 100%,0 100%)','angled':'polygon(0 30%,100% 0,100% 100%,0 100%)','triangle':'polygon(50% 0,100% 100%,0 100%)','mountain':'polygon(0 65%,25% 20%,50% 65%,75% 15%,100% 65%,100% 100%,0 100%)','chevron':'polygon(50% 45%,100% 0,100% 100%,0 100%,0 0)','zigzag':'polygon(0 35%,10% 0,20% 35%,30% 0,40% 35%,50% 0,60% 35%,70% 0,80% 35%,90% 0,100% 35%,100% 100%,0 100%)','steps':'polygon(0 0,25% 0,25% 25%,50% 25%,50% 50%,75% 50%,75% 75%,100% 75%,100% 100%,0 100%)','notch':'polygon(0 0,42% 0,50% 35%,58% 0,100% 0,100% 100%,0 100%)','scallop':'circle(90% at 50% 100%)','pill':'inset(0 8% round 40px)','blob':'ellipse(75% 90% at 50% 100%)','inset-rounded':'inset(0 2% round 28px 28px 0 0)','cut-corners':'polygon(0 25%,4% 0,96% 0,100% 25%,100% 100%,0 100%)','ticket':'polygon(0 0,3% 8%,0 16%,3% 24%,0 32%,3% 40%,0 48%,3% 56%,0 64%,3% 72%,0 80%,3% 88%,0 100%,100% 100%,97% 88%,100% 80%,97% 72%,100% 64%,97% 56%,100% 48%,97% 40%,100% 32%,97% 24%,100% 16%,97% 8%,100% 0)' }[settings?.heroBottomStyle||'wave']||'none'}}/>}
         </div>
       )}
     </section>

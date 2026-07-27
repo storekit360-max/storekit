@@ -43,6 +43,7 @@ const tenantSchema = new mongoose.Schema({
     metaDescription: { type: String, default: '' },
     storeTagline: { type: String, default: '' },
     heroBrowseAllLabel: { type: String, default: 'Browse All' },
+    heroBottomStyle: { type: String, default: 'wave' },
     heroStats: { type: String, default: '[]' },
     siteUrl: { type: String, default: '' },
     siteLanguage: { type: String, default: 'en' },
