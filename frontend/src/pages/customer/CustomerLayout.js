@@ -858,6 +858,8 @@ const Footer = ({ settings }) => {
   // keep the contact block enabled by default.
   const footerContactSection = settings?.layout_builder?.footer?.find?.(section => section.id === 'contact_info');
   const showFooterContact = footerContactSection ? footerContactSection.enabled !== false : true;
+  const footerNewsletterSection = settings?.layout_builder?.footer?.find?.(section => section.id === 'newsletter_foot');
+  const showFooterNewsletter = footerNewsletterSection ? footerNewsletterSection.enabled !== false : settings?.enableNewsletter !== false;
   const telephoneHref = String(contactPhone).replace(/[^+\d]/g, '');
   const [footerPages, setFooterPages] = React.useState([]);
   const [socialAccounts, setSocialAccounts] = React.useState([]);
@@ -944,7 +946,7 @@ const Footer = ({ settings }) => {
         </div>
 
         {/* Newsletter */}
-        {settings?.enableNewsletter !== false && (
+        {showFooterNewsletter && (
           <div className="border-t border-white/8 pt-8 mb-8">
             <div className="max-w-md">
               <p className="text-white font-bold mb-1 text-sm">📬 Stay Updated</p>
