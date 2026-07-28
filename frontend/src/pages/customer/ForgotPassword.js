@@ -175,8 +175,8 @@ export default function ForgotPassword() {
         {/* Header */}
         <div className="text-center mb-8">
           <Link to="/" className="inline-flex items-center gap-2 mb-6">
-            {settings?.logoUrl ? (
-              <img src={settings.logoUrl} alt={storeName} className="h-10 max-w-[180px] object-contain" />
+            {(settings?.loaderLogoUrl || settings?.logoUrl) ? (
+              <img src={settings.loaderLogoUrl || settings.logoUrl} alt={storeName} style={{ height: `${settings?.loaderLogoSize || 86}px`, maxWidth: 'min(260px, 75vw)', objectFit: 'contain' }} />
             ) : (
               <>
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg" style={{ background: 'var(--theme-gradient)' }}>
