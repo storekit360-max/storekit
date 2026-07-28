@@ -287,6 +287,24 @@ const wrapper = (content, theme) => `<!DOCTYPE html><html><body style="font-fami
     ${footer(theme)}
   </div></body></html>`;
 
+// ── Newsletter subscription confirmation email ───────────────────────────────
+const subscriberConfirmationHtml = async (name = '', options = {}) => {
+  const t = await getTheme(options);
+  const safeName = String(name || '').replace(/[<>]/g, '');
+  return wrapper(`
+    ${header('Subscription Confirmed 🎉', t)}
+    <div style="padding:32px">
+      <p style="color:#374151;margin:0 0 12px">${safeName ? `Hi <strong>${safeName}</strong>,` : 'Hello,'}</p>
+      <p style="color:#6b7280;font-size:14px;line-height:1.7;margin:0 0 18px">
+        Thank you for subscribing to ${t.storeName}. Your subscription was successful.
+      </p>
+      <div style="background:${lighten(t.primary)};border-radius:12px;padding:18px;margin:20px 0;color:#fff">
+        <p style="margin:0;font-weight:700">What you can expect</p>
+        <p style="margin:8px 0 0;font-size:14px;line-height:1.6">New products, special offers and store announcements from ${t.storeName}.</p>
+      </div>
+    </div>`, t);
+};
+
 // ── OTP email ─────────────────────────────────────────────────────────────────
 const otpEmailHtml = async (otp, name, options = {}) => {
   const t = await getTheme(options);
@@ -1036,6 +1054,7 @@ module.exports = {
   getAdminEmail,
   clearThemeCache,
   otpEmailHtml,
+  subscriberConfirmationHtml,
   orderConfirmHtml,
   newOrderAdminHtml,
   slipUploadedAdminHtml,
