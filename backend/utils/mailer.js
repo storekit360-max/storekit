@@ -226,7 +226,7 @@ const getTheme = async ({ tenantId, tenant } = {}) => {
           emailFromAddress: settings.emailFromAddress || '',
           emailReplyTo:     settings.emailReplyTo || settings.storeEmail || '',
           resendApiKey:     settings.resendApiKey || '',
-          logoUrl:          settings.emailLogoUrl || settings.logoUrl || theme.logoUrl || '',
+          logoUrl:          settings.logoUrl || theme.logoUrl || '',
         };
         _themeCache.set(cacheKey, { at: now, value });
         return value;
