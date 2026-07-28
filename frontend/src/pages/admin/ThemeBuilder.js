@@ -224,7 +224,7 @@ export default function ThemeBuilder() {
   const [selectedLoader, setSelectedLoader] = useState(settings?.loaderStyle || 'classic-ring');
   const [loadingText, setLoadingText] = useState(settings?.loadingText || 'Preparing your shopping experience');
   const [heroBottomStyle, setHeroBottomStyle] = useState(settings?.heroBottomStyle || 'wave');
-  const [heroMobileShape, setHeroMobileShape] = useState(settings?.heroMobileShape || 'rectangle');
+  const [heroMobileShape, setHeroMobileShape] = useState(settings?.heroMobileShape || 'square');
 
   useEffect(() => {
     if (!settings) return;
@@ -249,7 +249,7 @@ export default function ThemeBuilder() {
     setSelectedLoader(settings.loaderStyle || 'classic-ring');
     setLoadingText(settings.loadingText || 'Preparing your shopping experience');
     setHeroBottomStyle(settings.heroBottomStyle || 'wave');
-    setHeroMobileShape(settings.heroMobileShape || 'rectangle');
+    setHeroMobileShape(settings.heroMobileShape || 'square');
   }, [settings]);
 
   const applyPreview = useCallback((themeId, font, colors, dark, template = selectedTemplate) => {
@@ -384,7 +384,11 @@ export default function ThemeBuilder() {
       writeCache(saved);
       applyTheme(saved);
       toast.success('Theme saved & applied!');
-      refreshTheme();
+      // Keep the selected mobile shape visible while the shared theme context
+      // refreshes; otherwise its previous cached value can briefly overwrite
+      // the just-saved selection.
+      await refreshTheme();
+      setHeroMobileShape(payload.heroMobileShape);
     } catch {
       toast.error('Failed to save theme');
     }
