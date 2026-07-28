@@ -159,6 +159,7 @@ const sendMail = async ({ to, subject, html, tenantId, tenant, attachments = [] 
       filename: attachment.filename,
       content: Buffer.isBuffer(attachment.content) ? attachment.content.toString('base64') : attachment.content,
       contentType: attachment.contentType,
+      contentId: attachment.cid,
     }));
     const { data, error } = await resend.emails.send({ from, to, subject: effectiveSubject, html: effectiveHtml, replyTo, ...(resendAttachments.length ? { attachments: resendAttachments } : {}) });
 
