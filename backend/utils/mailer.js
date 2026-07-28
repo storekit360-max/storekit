@@ -115,7 +115,7 @@ const getSmtpFromAddress = (theme, config = {}) => (
 );
 
 // ── sendMail ──────────────────────────────────────────────────────────────────
-const sendMail = async ({ to, subject, html, tenantId, tenant }) => {
+const sendMail = async ({ to, subject, html, tenantId, tenant, attachments = [] }) => {
   try {
     if (process.env.APP_ENV === 'staging' && process.env.EMAIL_ENABLED !== 'true') {
       console.log('[MAIL] Staging delivery disabled');
@@ -140,7 +140,7 @@ const sendMail = async ({ to, subject, html, tenantId, tenant }) => {
       if (process.env.NODE_ENV !== 'production') {
         console.log(`[MAIL] Sending via SMTP | from:${from} → to:${to}`);
       }
-      const info = await createSmtpTransport(smtpConfig).sendMail({ from, to, subject: effectiveSubject, html: effectiveHtml, replyTo });
+      const info = await createSmtpTransport(smtpConfig).sendMail({ from, to, subject: effectiveSubject, html: effectiveHtml, replyTo, attachments });
       console.log(`[MAIL SENT] To:${to} | ${effectiveSubject} | id:${info?.messageId}`);
       return info;
     }
@@ -155,7 +155,12 @@ const sendMail = async ({ to, subject, html, tenantId, tenant }) => {
       console.log(`[MAIL] Sending via Resend | from:${from} → to:${to}`);
     }
 
-    const { data, error } = await resend.emails.send({ from, to, subject: effectiveSubject, html: effectiveHtml, replyTo });
+    const resendAttachments = attachments.map((attachment) => ({
+      filename: attachment.filename,
+      content: Buffer.isBuffer(attachment.content) ? attachment.content.toString('base64') : attachment.content,
+      contentType: attachment.contentType,
+    }));
+    const { data, error } = await resend.emails.send({ from, to, subject: effectiveSubject, html: effectiveHtml, replyTo, ...(resendAttachments.length ? { attachments: resendAttachments } : {}) });
 
     if (error) {
       // Resend returns structured errors — surface them clearly
@@ -302,7 +307,7 @@ const subscriberConfirmationHtml = async (name = '', options = {}) => {
   const t = await getTheme(options);
   const safeName = String(name || '').replace(/[<>]/g, '');
   return wrapper(`
-    ${header('Subscription Confirmed 🎉', t)}
+    ${header('Subscription Confirmed 🎉', { ...t, logoUrl: options.logoSrc || t.logoUrl })}
     <div style="padding:32px">
       <p style="color:#374151;margin:0 0 12px">${safeName ? `Hi <strong>${safeName}</strong>,` : 'Hello,'}</p>
       <p style="color:#6b7280;font-size:14px;line-height:1.7;margin:0 0 18px">
