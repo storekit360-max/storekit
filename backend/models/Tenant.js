@@ -78,6 +78,7 @@ const tenantSchema = new mongoose.Schema({
     layout_builder: { type: mongoose.Schema.Types.Mixed, default: {} },
     loaderStyle: { type: String, default: 'classic-ring' },
     loadingText: { type: String, default: 'Preparing your shopping experience' },
+    heroMobileShape: { type: String, enum: ['square', 'rectangle'], default: 'square' },
     marketingTrackingEnabled: { type: Boolean, default: true },
     enableNewsletter: { type: Boolean, default: true },
     merchantCountryCode: { type: String, default: 'LK' },
