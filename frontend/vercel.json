@@ -14,6 +14,14 @@
   ],
   "rewrites": [
     {
+      "source": "/favicon.ico",
+      "destination": "https://storekit1-production.up.railway.app/api/settings/favicon.ico"
+    },
+    {
+      "source": "/favicon.png",
+      "destination": "https://storekit1-production.up.railway.app/api/settings/favicon.png"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://storekit1-production.up.railway.app/api/:path*"
     },

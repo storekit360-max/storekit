@@ -703,6 +703,7 @@ function injectMeta(html, { title, desc, canonical, ogImage, ogType = 'website',
   <meta name="description" content="${xe(desc)}">
   <meta name="robots" content="${xe(robots)}">
   ${verification ? `<meta name="google-site-verification" content="${xe(verification)}">` : ''}
+  <link rel="icon" href="${xe(new URL('/favicon.ico', canonical).toString())}">
   <meta name="keywords" content="${xe(keywords || '')}">
   <link rel="canonical" href="${xe(canonical)}">
   <meta property="og:title" content="${xe(title)}">
