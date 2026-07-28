@@ -218,6 +218,10 @@ const getTheme = async ({ tenantId, tenant } = {}) => {
       if (row) {
         const settings = row.settings || {};
         const theme = row.theme || {};
+        const publicDomain = String(settings.siteUrl || row.domains?.find(d => d.active !== false)?.domain || '').trim();
+        const publicBase = publicDomain
+          ? (/^https?:\/\//i.test(publicDomain) ? publicDomain : `https://${publicDomain}`).replace(/\/$/, '')
+          : '';
         const value = {
           primary:          theme.primaryColor || settings.primaryColor || '#15803d',
           storeName:        row.storeName || settings.storeName || 'StoreKit',
@@ -226,7 +230,9 @@ const getTheme = async ({ tenantId, tenant } = {}) => {
           emailFromAddress: settings.emailFromAddress || '',
           emailReplyTo:     settings.emailReplyTo || settings.storeEmail || '',
           resendApiKey:     settings.resendApiKey || '',
-          logoUrl:          settings.logoUrl || theme.logoUrl || '',
+          // Use the public tenant endpoint so email clients can fetch the
+          // configured Store Logo even when its stored URL is relative/private.
+          logoUrl:          publicBase ? `${publicBase}/api/settings/logo.png` : (settings.logoUrl || theme.logoUrl || ''),
         };
         _themeCache.set(cacheKey, { at: now, value });
         return value;

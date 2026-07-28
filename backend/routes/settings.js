@@ -148,7 +148,7 @@ async function getLogoUrl(req) {
   const tenant = await findTenantFromRequest(req);
   if (tenant) {
     const settings = toPlain(tenant.settings);
-    return settings.faviconUrl || settings.logoUrl || null;
+    return settings.logoUrl || settings.faviconUrl || null;
   }
   const row = await Settings.findOne({ key: 'faviconUrl', tenantId: null }) || await Settings.findOne({ key: 'logoUrl', tenantId: null });
   return row?.value || null;
@@ -171,6 +171,16 @@ router.get('/favicon.ico', async (req, res) => {
     if (!logoUrl) return res.status(404).send('No favicon configured');
     return redirectOrProxy(logoUrl, cloudinaryTransform(logoUrl, 'w_48,h_48,c_pad,b_white,f_png'), res);
   } catch (err) { return res.status(500).send(err.message); }
+});
+
+// Public tenant Store Logo endpoint used by email clients. It intentionally
+// prefers the Store Logo over the square favicon asset.
+router.get('/logo.png', async (req, res) => {
+  try {
+    const logoUrl = await getLogoUrl(req);
+    if (!logoUrl) return res.status(404).send('No store logo configured');
+    return redirectOrProxy(logoUrl, cloudinaryTransform(logoUrl, 'w_600,h_180,c_pad,b_white,f_png'), res);
+  } catch (err) { res.status(500).send(err.message); }
 });
 
 router.get('/favicon.png', async (req, res) => {
