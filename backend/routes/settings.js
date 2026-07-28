@@ -319,7 +319,9 @@ router.put('/', adminAuth, async (req, res) => {
           // may paste either the token or the complete meta tag; normalize it
           // once here so every tenant page emits valid verification markup.
           if (key === 'googleSearchConsole') {
-            const raw = String(value || '').trim();
+            const raw = String(value || '').trim()
+              .replace(/&quot;/gi, '"').replace(/&#34;/gi, '"')
+              .replace(/&#39;|&apos;/gi, "'").replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&amp;/gi, '&');
             nextSettings[key] = raw.match(/content\s*=\s*["']([^"']+)["']/i)?.[1]?.trim() || raw.replace(/^['"]|['"]$/g, '');
           } else {
             nextSettings[key] = value;

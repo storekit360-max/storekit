@@ -23,7 +23,9 @@ function absoluteUrl(value, siteUrl) {
 }
 
 function googleVerificationToken(value) {
-  const raw = String(value || '').trim();
+  const raw = String(value || '').trim()
+    .replace(/&quot;/gi, '"').replace(/&#34;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'").replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&amp;/gi, '&');
   if (!raw) return '';
   const match = raw.match(/content\s*=\s*["']([^"']+)["']/i);
   return String(match?.[1] || raw).replace(/^['"]|['"]$/g, '').trim();
