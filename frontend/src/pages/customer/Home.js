@@ -332,7 +332,7 @@ const HeroSlider = ({ banners, settings, campaign, anim }) => {
   const orbCount = Math.min(anim.heroOrbCount||4, 4);
 
   return (
-    <section ref={sectionRef} className="relative overflow-hidden" style={{ minHeight:'clamp(440px,64vw,700px)' }}>
+    <section ref={sectionRef} className="hero-slider-frame relative overflow-hidden" style={{ height:'clamp(300px,56.25vw,700px)', minHeight:0 }}>
       {/* BG */}
       <div ref={bgRef} className="absolute will-change-transform" style={{ inset:0, top:'-14%', height:'128%', transformOrigin:'center center', position:'absolute' }}>
         {slide.image
@@ -376,7 +376,7 @@ const HeroSlider = ({ banners, settings, campaign, anim }) => {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 flex items-center" style={{ minHeight:'clamp(440px,64vw,700px)' }}>
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 flex items-center h-full">
         <div className="max-w-2xl" style={{ transformStyle:'preserve-3d' }}>
           {/* Live badge */}
           <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 mb-5 border border-white/20"
