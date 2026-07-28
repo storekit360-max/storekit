@@ -505,7 +505,7 @@ export default function ThemeBuilder() {
             <p className="text-sm font-semibold text-gray-800">Mobile hero layout</p>
             <p className="text-xs text-gray-500 mt-1 mb-3">Choose the mobile banner shape used by your storefront.</p>
             <div className="grid sm:grid-cols-2 gap-3">
-              {[['rectangle','▭ New Rectangle','Wide desktop-style banner'],['square','□ Old Square','Original taller square banner']].map(([id,label,desc]) => (
+              {[['rectangle','▭ Rectangle','Wide desktop-style banner'],['square','□ Square','Taller square banner']].map(([id,label,desc]) => (
                 <button key={id} type="button" onClick={() => setHeroMobileShape(id)} className={`text-left rounded-xl border-2 p-3 ${heroMobileShape === id ? 'border-primary bg-primary/5' : 'border-gray-100'}`}>
                   <span className="block text-sm font-semibold text-gray-800">{heroMobileShape === id ? '✓ ' : ''}{label}</span>
                   <span className="block text-xs text-gray-500 mt-1">{desc}</span>

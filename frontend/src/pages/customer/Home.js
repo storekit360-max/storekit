@@ -332,7 +332,7 @@ const HeroSlider = ({ banners, settings, campaign, anim }) => {
   const orbCount = Math.min(anim.heroOrbCount||4, 4);
 
   return (
-    <section ref={sectionRef} className={`hero-slider-frame relative overflow-hidden ${heroDarkness === 0 ? 'hero-darkness-0' : ''} ${settings?.heroMobileShape === 'square' ? 'hero-mobile-square' : ''}`} style={{ height:'clamp(300px,56.25vw,700px)', minHeight:0 }}>
+    <section ref={sectionRef} className={`hero-slider-frame relative overflow-hidden ${heroDarkness === 0 ? 'hero-darkness-0' : ''} ${settings?.heroMobileShape === 'square' ? 'hero-mobile-square' : ''}`} style={{ height:'clamp(300px,56.25vw,700px)', minHeight:0, '--hero-mobile-ratio': settings?.heroMobileShape === 'square' ? '1 / 1' : '16 / 9' }}>
       {/* BG */}
       <div ref={bgRef} className="absolute will-change-transform" style={{ inset:0, top:'-14%', height:'128%', transformOrigin:'center center', position:'absolute' }}>
         {slide.image
