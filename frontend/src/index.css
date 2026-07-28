@@ -272,6 +272,7 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
 .hero-slider-frame{aspect-ratio:16/9}
 @media (max-width:640px){
   .hero-slider-frame{height:auto!important;min-height:0!important;aspect-ratio:16/9}
+  .hero-slider-frame.hero-mobile-square{aspect-ratio:1/1}
   .hero-slider-frame h1{font-size:clamp(1.35rem,7vw,2.25rem)!important;line-height:1.05!important}
   .hero-slider-frame .space-y-4{gap:.55rem!important}
   .hero-slider-frame .mb-5{margin-bottom:.65rem!important}

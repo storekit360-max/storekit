@@ -224,6 +224,7 @@ export default function ThemeBuilder() {
   const [selectedLoader, setSelectedLoader] = useState(settings?.loaderStyle || 'classic-ring');
   const [loadingText, setLoadingText] = useState(settings?.loadingText || 'Preparing your shopping experience');
   const [heroBottomStyle, setHeroBottomStyle] = useState(settings?.heroBottomStyle || 'wave');
+  const [heroMobileShape, setHeroMobileShape] = useState(settings?.heroMobileShape || 'rectangle');
 
   useEffect(() => {
     if (!settings) return;
@@ -248,6 +249,7 @@ export default function ThemeBuilder() {
     setSelectedLoader(settings.loaderStyle || 'classic-ring');
     setLoadingText(settings.loadingText || 'Preparing your shopping experience');
     setHeroBottomStyle(settings.heroBottomStyle || 'wave');
+    setHeroMobileShape(settings.heroMobileShape || 'rectangle');
   }, [settings]);
 
   const applyPreview = useCallback((themeId, font, colors, dark, template = selectedTemplate) => {
@@ -375,6 +377,7 @@ export default function ThemeBuilder() {
         loaderStyle: selectedLoader,
         loadingText,
         heroBottomStyle,
+        heroMobileShape,
       };
       const { data } = await API.put('/settings', payload);
       const saved = data?.settings || { ...settings, ...payload };
@@ -497,6 +500,18 @@ export default function ThemeBuilder() {
           <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
             <p className="text-sm font-semibold text-blue-900">Storefront UI Templates</p>
             <p className="text-xs text-blue-700 mt-1">Templates change the storefront visual system with CSS only: cards, radius, shadows, density, hero feel and product-grid style. No backend API, database, auth or checkout logic is changed.</p>
+          </div>
+          <div className="bg-white border border-gray-100 rounded-2xl p-4">
+            <p className="text-sm font-semibold text-gray-800">Mobile hero layout</p>
+            <p className="text-xs text-gray-500 mt-1 mb-3">Choose the mobile banner shape used by your storefront.</p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {[['rectangle','▭ New Rectangle','Wide desktop-style banner'],['square','□ Old Square','Original taller square banner']].map(([id,label,desc]) => (
+                <button key={id} type="button" onClick={() => setHeroMobileShape(id)} className={`text-left rounded-xl border-2 p-3 ${heroMobileShape === id ? 'border-primary bg-primary/5' : 'border-gray-100'}`}>
+                  <span className="block text-sm font-semibold text-gray-800">{heroMobileShape === id ? '✓ ' : ''}{label}</span>
+                  <span className="block text-xs text-gray-500 mt-1">{desc}</span>
+                </button>
+              ))}
+            </div>
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1">
             <button onClick={() => setTemplateFilter('all')}
