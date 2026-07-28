@@ -43,6 +43,7 @@ const sanitizeFromName = (value) => (
 );
 
 const formatAddress = (name, email) => `${sanitizeFromName(name)} <${extractEmailAddress(email)}>`;
+const escapeAttribute = (value) => String(value || '').replace(/[&"<>]/g, (char) => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;' }[char]));
 
 const createSmtpTransport = (config = {}) => nodemailer.createTransport({
   host: config.host || process.env.EMAIL_HOST,
@@ -225,6 +226,7 @@ const getTheme = async ({ tenantId, tenant } = {}) => {
           emailFromAddress: settings.emailFromAddress || '',
           emailReplyTo:     settings.emailReplyTo || settings.storeEmail || '',
           resendApiKey:     settings.resendApiKey || '',
+          logoUrl:          settings.emailLogoUrl || settings.logoUrl || theme.logoUrl || '',
         };
         _themeCache.set(cacheKey, { at: now, value });
         return value;
@@ -245,6 +247,7 @@ const getTheme = async ({ tenantId, tenant } = {}) => {
       emailFromName:    map.emailFromName || map.storeName || 'StoreKit',
       emailFromAddress: map.emailFromAddress || '',
       emailReplyTo:     map.emailReplyTo || map.storeEmail || '',
+      logoUrl:          map.emailLogoUrl || map.logoUrl || '',
     };
     _themeCache.set(cacheKey, { at: now, value });
     return value;
@@ -272,6 +275,7 @@ const lighten = (hex) => {
 
 const header = (subtitle, theme) => `
   <div style="background:linear-gradient(135deg,${theme.primary},${lighten(theme.primary)});padding:32px;text-align:center">
+    ${theme.logoUrl ? `<img src="${escapeAttribute(theme.logoUrl)}" alt="${escapeAttribute(theme.storeName)}" style="display:block;max-width:220px;max-height:72px;width:auto;height:auto;margin:0 auto 16px;border-radius:8px;background:#fff;padding:8px;object-fit:contain">` : ''}
     <h1 style="color:white;margin:0;font-size:26px;font-family:sans-serif">${theme.storeName}</h1>
     <p style="color:rgba(255,255,255,0.85);margin:6px 0 0;font-size:14px;font-family:sans-serif">${subtitle}</p>
   </div>`;
