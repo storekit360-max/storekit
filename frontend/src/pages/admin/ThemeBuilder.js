@@ -249,7 +249,8 @@ export default function ThemeBuilder() {
     setSelectedLoader(settings.loaderStyle || 'classic-ring');
     setLoadingText(settings.loadingText || 'Preparing your shopping experience');
     setHeroBottomStyle(settings.heroBottomStyle || 'wave');
-    setHeroMobileShape(settings.heroMobileShape || 'square');
+    // Do not overwrite a newly selected shape during the settings refresh
+    // triggered by Save & Apply. The save handler restores the saved value.
   }, [settings]);
 
   const applyPreview = useCallback((themeId, font, colors, dark, template = selectedTemplate) => {
