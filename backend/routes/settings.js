@@ -315,7 +315,15 @@ router.put('/', adminAuth, async (req, res) => {
           nextSettings.storePhone = value;
           nextSettings.phone = value;
         } else {
-          nextSettings[key] = value;
+          // Google accepts only the token in the meta content attribute. Admins
+          // may paste either the token or the complete meta tag; normalize it
+          // once here so every tenant page emits valid verification markup.
+          if (key === 'googleSearchConsole') {
+            const raw = String(value || '').trim();
+            nextSettings[key] = raw.match(/content\s*=\s*["']([^"']+)["']/i)?.[1]?.trim() || raw.replace(/^['"]|['"]$/g, '');
+          } else {
+            nextSettings[key] = value;
+          }
         }
       }
 
