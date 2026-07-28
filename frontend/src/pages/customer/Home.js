@@ -332,7 +332,7 @@ const HeroSlider = ({ banners, settings, campaign, anim }) => {
   const orbCount = Math.min(anim.heroOrbCount||4, 4);
 
   return (
-    <section ref={sectionRef} className="hero-slider-frame relative overflow-hidden" style={{ height:'clamp(300px,56.25vw,700px)', minHeight:0 }}>
+    <section ref={sectionRef} className={`hero-slider-frame relative overflow-hidden ${heroDarkness === 0 ? 'hero-darkness-0' : ''}`} style={{ height:'clamp(300px,56.25vw,700px)', minHeight:0 }}>
       {/* BG */}
       <div ref={bgRef} className="absolute will-change-transform" style={{ inset:0, top:'-14%', height:'128%', transformOrigin:'center center', position:'absolute' }}>
         {slide.image
@@ -379,7 +379,7 @@ const HeroSlider = ({ banners, settings, campaign, anim }) => {
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 flex items-center h-full">
         <div className="max-w-2xl" style={{ transformStyle:'preserve-3d' }}>
           {/* Live badge */}
-          <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 mb-5 border border-white/20"
+          <div className="hero-glass inline-flex items-center gap-2 rounded-full px-4 py-2 mb-5 border border-white/20"
             style={{ background:'rgba(255,255,255,0.1)', backdropFilter:'blur(16px)' }}>
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute h-full w-full rounded-full bg-green-400 opacity-75"/>
@@ -403,11 +403,11 @@ const HeroSlider = ({ banners, settings, campaign, anim }) => {
             )}
             <div className="flex flex-wrap gap-3 pt-1">
               <MagneticButton onClick={() => navigate(slide.link||'/shop')}
-                className="btn-primary text-sm sm:text-base px-8 sm:px-10 py-4 inline-flex items-center gap-2">
+                className="hero-cta btn-primary text-sm sm:text-base px-8 sm:px-10 py-4 inline-flex items-center gap-2">
                 {slide.buttonText||'Shop Now'}
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path d="M5 12h14M12 5l7 7-7 7"/></svg>
               </MagneticButton>
-              <Link to="/shop" className="btn-ghost text-sm sm:text-base px-7 py-4">{browseLabel}</Link>
+              <Link to="/shop" className="hero-glass hero-secondary btn-ghost text-sm sm:text-base px-7 py-4">{browseLabel}</Link>
             </div>
             {!slide.image && showStats && heroStats.length>0 && (
               <div className="flex gap-8 pt-3">
