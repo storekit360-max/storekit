@@ -701,6 +701,7 @@ router.post('/product', adminAuth, async (req, res) => {
         price:            scraped.price       || '',
         salePrice:        scraped.salePrice   || '',
         shortDescription: scraped.shortDescription || '',
+        storeName:        req.tenant?.storeName || '',
       });
     } catch (aiErr) {
       console.warn('[Scraper] AI description generation skipped:', aiErr.message);
@@ -715,6 +716,7 @@ router.post('/product', adminAuth, async (req, res) => {
           brand:     scraped.brand   || '',
           price:     scraped.price   || '',
           salePrice: scraped.salePrice || '',
+          storeName: req.tenant?.storeName || '',
         });
       } catch (aiErr) {
         console.warn('[Scraper] AI short description generation skipped:', aiErr.message);
@@ -919,6 +921,7 @@ router.post('/bulk', adminAuth, async (req, res) => {
           price:            scraped.price       || '',
           salePrice:        scraped.salePrice   || '',
           shortDescription: scraped.shortDescription || '',
+          storeName:        req.tenant?.storeName || '',
         });
       } catch (aiErr) {
         console.warn('[Bulk Scraper] AI description skipped:', aiErr.message);
@@ -933,6 +936,7 @@ router.post('/bulk', adminAuth, async (req, res) => {
             brand:     scraped.brand     || '',
             price:     scraped.price     || '',
             salePrice: scraped.salePrice || '',
+            storeName: req.tenant?.storeName || '',
           });
         } catch (aiErr) {
           console.warn('[Bulk Scraper] AI short description skipped:', aiErr.message);

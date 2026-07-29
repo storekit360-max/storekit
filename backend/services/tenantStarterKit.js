@@ -363,8 +363,18 @@ function aiPrompt(brief) {
     `Brand tone: ${brief.brandTone}`,
     `Currency: ${brief.currency}`,
     'Return ONLY JSON with: summary; settings {storeTagline,metaTitle,metaDescription,heroBrowseAllLabel,heroStats:[{value,label}]}; theme {primaryColor,accentColor,darkColor,storeTemplate,fontFamily}; categories (4-6 objects with name,slug,description); exactly 12 products (first 6 Featured and next 6 New Arrivals) with name,categorySlug,shortDescription,description,price,salePrice or null,stock,sku,brand,tags,isFeatured,weight; and exactly one banner for each position: hero, promo, sidebar, running_top, popup, flash_sale, product_page, category_page, global.',
-    'Use realistic but clearly editable starter products, sensible prices, concise SEO copy, relative links only, no HTML, no image URLs, and no claims that cannot be verified.',
+    'Use realistic but clearly editable starter products, sensible prices, concise SEO copy, relative links only, no HTML, no image URLs, and no claims that cannot be verified. Never mention StoreKit or Store Kit in customer-facing copy; use the exact supplied store name when the merchant is mentioned.',
   ].filter(Boolean).join('\n');
+}
+
+function replacePlatformBrand(value, storeName) {
+  const name = String(storeName || 'the store').trim() || 'the store';
+  if (typeof value === 'string') return value.replace(/\bstore\s*kit\b/gi, name);
+  if (Array.isArray(value)) return value.map(item => replacePlatformBrand(item, name));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, replacePlatformBrand(item, name)]));
+  }
+  return value;
 }
 
 async function fetchWithTimeout(url, options, timeoutMs = 15000) {
@@ -426,7 +436,7 @@ async function generateStarterKit(rawBrief = {}) {
   const brief = sanitizeBrief(rawBrief);
   try {
     const candidate = await callConfiguredAi(brief);
-    return { starterKit: normalizeStarterKit(candidate, brief, 'ai'), warnings: [] };
+    return { starterKit: normalizeStarterKit(replacePlatformBrand(candidate, brief.storeName), brief, 'ai'), warnings: [] };
   } catch (error) {
     const starterKit = normalizeStarterKit(buildFallbackStarterKit(brief), brief, 'fallback');
     const configured = !!(process.env.OPENROUTER_API_KEY || process.env.GEMINI_API_KEY);

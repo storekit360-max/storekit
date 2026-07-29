@@ -979,6 +979,7 @@ export default function Home() {
       writeHomeDataCache(nextHomeData);
       window.__STOREKIT_HOME_LOADED_ONCE__ = true;
       setDbReady(true);
+      window.dispatchEvent(new Event('storekit:home-ready'));
     }).catch(() => {
       if (cancelled) return;
       // Keep the single welcome loader visible and retry with a bounded delay;

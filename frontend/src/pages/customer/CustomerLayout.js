@@ -478,7 +478,14 @@ const Header = ({ settings, campaign }) => {
   const [navHovered, setNavHovered] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const [homeDataReady, setHomeDataReady] = useState(() => Boolean(window.__STOREKIT_HOME_LOADED_ONCE__));
   const headerRef = useRef(null);
+
+  useEffect(() => {
+    const onHomeReady = () => setHomeDataReady(true);
+    window.addEventListener('storekit:home-ready', onHomeReady);
+    return () => window.removeEventListener('storekit:home-ready', onHomeReady);
+  }, []);
 
   /*
    * FIX: clamp logo height so it fits in the header.
@@ -505,6 +512,14 @@ const Header = ({ settings, campaign }) => {
   })();
   const announcementBg = campaign?.announcementBg || settings?.announcementBg || 'var(--theme-gradient)';
   const announcementLink = settings?.announcementLink || null;
+
+  const isStoreHome = location.pathname === '/store';
+  if (isStoreHome && !homeDataReady) {
+    return <>
+      <StoreLoader settings={settings || window.__STOREKIT_BOOTSTRAP_SETTINGS__ || {}} />
+      <div style={{ display: 'none' }} aria-hidden="true"><Outlet /></div>
+    </>;
+  }
 
   return (
     <header

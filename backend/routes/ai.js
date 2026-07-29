@@ -3611,6 +3611,15 @@ function extractJSON(raw, type = 'object') {
   return JSON.parse(raw.slice(start, end + 1));
 }
 
+function tenantStoreName(req) {
+  return String(req.tenant?.storeName || '').trim() || 'the store';
+}
+
+function enforceTenantBrand(text, storeName) {
+  const name = String(storeName || 'the store').trim() || 'the store';
+  return String(text || '').replace(/\bstore\s*kit\b/gi, name);
+}
+
 /* ══════════════════════════════════════════════════════════════════
    POST /api/ai/autofill  →  { brand, shortDescription }
    shortDescription is SEO-optimised: 110-155 chars, buying-intent,
@@ -3622,6 +3631,7 @@ router.post('/autofill', async (req, res) => {
     return res.status(400).json({ message: 'Product name too short' });
 
   const n = name.trim();
+  const storeName = tenantStoreName(req);
 
   const ctxLines = [
     existingBrand && `Brand: ${existingBrand}`,
@@ -3632,7 +3642,7 @@ router.post('/autofill', async (req, res) => {
   const systemMsg = 'You are an expert e-commerce SEO copywriter for a Sri Lankan online store. You output ONLY valid JSON. No markdown. No explanation.';
 
   const userMsg = [
-    `Generate autofill fields for this product on storekit.local (Sri Lanka e-commerce).`,
+    `Generate autofill fields for this product for the store named "${storeName}" (Sri Lanka e-commerce).`,
     ``,
     `Product name: "${n}"`,
     ctxLines ? `Context:\n${ctxLines}` : '',
@@ -3649,7 +3659,8 @@ router.post('/autofill', async (req, res) => {
     `- Open with the key feature or benefit — NOT the product name`,
     `- Include ONE buying-intent phrase: "buy online in Sri Lanka", "best price in Sri Lanka", or "fast delivery across Sri Lanka"`,
     `- Mention a real spec or use-case that differentiates this product`,
-    `- End with: "Fast delivery across Sri Lanka." or "Order now at StoreKit."`,
+    `- End with: "Fast delivery across Sri Lanka." or "Order now at ${storeName}."`,
+    `- Never mention StoreKit, Store Kit, or any platform name. Use exactly "${storeName}" if naming the store.`,
     `- Plain English only — no markdown, no asterisks, no ALL CAPS, no emoji`,
     `- Do NOT open with the brand name or product name`,
     `- Do NOT use vague filler like "high quality", "perfect for everyone"`,
@@ -3665,7 +3676,7 @@ router.post('/autofill', async (req, res) => {
     const raw    = await callAI(systemMsg, userMsg, 500);
     const parsed = extractJSON(raw, 'object');
 
-    const shortDescription = (parsed.shortDescription || '').trim();
+    const shortDescription = enforceTenantBrand(parsed.shortDescription, storeName).trim();
     if (shortDescription.length < 50) {
       console.warn('[AI /autofill] shortDescription too short (' + shortDescription.length + ' chars):', shortDescription);
     }
@@ -3804,6 +3815,7 @@ router.post('/description', async (req, res) => {
   const { name, category, brand, sku, price, salePrice, shortDescription, tags } = req.body;
   if (!name || name.trim().length < 3)
     return res.status(400).json({ message: 'Product name too short' });
+  const storeName = tenantStoreName(req);
 
   const ctxLines = [
     brand            && `Brand: ${brand}`,
@@ -3817,7 +3829,7 @@ router.post('/description', async (req, res) => {
   const systemMsg = 'You are an expert e-commerce copywriter for a Sri Lankan online store. You output ONLY valid HTML for a product description. No markdown, no code fences, no explanation, no <html>/<body> wrapper — just the inner HTML fragment.';
 
   const userMsg = [
-    `Write a long-form product description for "${name.trim()}" for storekit.local.`,
+    `Write a long-form product description for "${name.trim()}" for the store named "${storeName}".`,
     ctxLines ? `\nProduct context:\n${ctxLines}` : '',
     ``,
     `Return ONLY an HTML fragment using EXACTLY this structure and tags (fill in real content, keep the section order and headings):`,
@@ -3847,6 +3859,7 @@ router.post('/description', async (req, res) => {
     `- Use EXACTLY these h4 tags with their style attributes as shown above — do not change or omit the style attribute.`,
     `- Use the exact tag names <h3>, <p>, <h4>, <ul>, <li> only — no extra attributes, classes, or wrapper divs except the style on h4.`,
     `- Do not invent specific technical specs that weren't provided — keep features plausible and generic to the product type if details are missing.`,
+    `- Never mention StoreKit, Store Kit, or any platform name. Use exactly "${storeName}" if naming the store.`,
     `- Output must start with <h3> and contain nothing before or after the HTML fragment.`,
   ].filter(s => s !== undefined).join('\n');
 
@@ -3861,7 +3874,7 @@ router.post('/description', async (req, res) => {
 
     const start = html.indexOf('<h3');
     if (start === -1) throw new Error('AI did not return expected HTML structure');
-    html = html.slice(start).trim();
+    html = enforceTenantBrand(html.slice(start).trim(), storeName);
 
     res.json({ description: html });
   } catch (err) {
@@ -4138,7 +4151,7 @@ router.post('/assistant', async (req, res) => {
  *   const { generateProductDescription } = require('./ai');
  *   const html = await generateProductDescription({ name, brand, sku, price });
  * ─────────────────────────────────────────────────────────────────────────── */
-async function generateProductDescription({ name = '', category = '', brand = '', sku = '', price = '', salePrice = '', shortDescription = '', tags = [] } = {}) {
+async function generateProductDescription({ name = '', category = '', brand = '', sku = '', price = '', salePrice = '', shortDescription = '', tags = [], storeName = '' } = {}) {
   if (!name || name.trim().length < 3) throw new Error('Product name too short');
 
   // Auto-generate brand if not provided — extract it from product name via AI
@@ -4154,6 +4167,7 @@ async function generateProductDescription({ name = '', category = '', brand = ''
     }
   }
 
+  const resolvedStoreName = String(storeName || 'the store').trim() || 'the store';
   const ctxLines = [
     brand            && `Brand: ${brand}`,
     category         && `Category: ${category}`,
@@ -4166,7 +4180,7 @@ async function generateProductDescription({ name = '', category = '', brand = ''
   const systemMsg = 'You are an expert e-commerce copywriter for a Sri Lankan online store. You output ONLY valid HTML for a product description. No markdown, no code fences, no explanation, no <html>/<body> wrapper — just the inner HTML fragment.';
 
   const userMsg = [
-    `Write a long-form product description for "${name.trim()}" for storekit.local.`,
+    `Write a long-form product description for "${name.trim()}" for the store named "${resolvedStoreName}".`,
     ctxLines ? `\nProduct context:\n${ctxLines}` : '',
     '',
     'Return ONLY an HTML fragment using EXACTLY this structure and tags (fill in real content, keep the section order and headings):',
@@ -4209,7 +4223,7 @@ async function generateProductDescription({ name = '', category = '', brand = ''
 
   const start = html.indexOf('<h3');
   if (start === -1) throw new Error('AI did not return expected HTML structure');
-  return html.slice(start).trim();
+  return enforceTenantBrand(html.slice(start).trim(), resolvedStoreName);
 }
 
 /* ── generateProductSpecs — exported helper for scrape.js ───────────────────
@@ -4291,9 +4305,10 @@ async function generateBrand(name = '') {
  * prompt rules as the /api/ai/autofill endpoint.
  * Returns a string (empty string if AI unavailable).
  * ─────────────────────────────────────────────────────────────────────────── */
-async function generateShortDescription({ name = '', brand = '', category = '', price = '', salePrice = '' } = {}) {
+async function generateShortDescription({ name = '', brand = '', category = '', price = '', salePrice = '', storeName = '' } = {}) {
   if (!name || name.trim().length < 3) return '';
   try {
+    const resolvedStoreName = String(storeName || 'the store').trim() || 'the store';
     const ctxLines = [
       brand    && `Brand: ${brand}`,
       category && `Category: ${category}`,
@@ -4303,7 +4318,7 @@ async function generateShortDescription({ name = '', brand = '', category = '', 
     const systemMsg = 'You are an expert e-commerce SEO copywriter for a Sri Lankan online store. You output ONLY valid JSON. No markdown. No explanation.';
 
     const userMsg = [
-      `Generate autofill fields for this product on storekit.local (Sri Lanka e-commerce).`,
+      `Generate autofill fields for this product for the store named "${resolvedStoreName}" (Sri Lanka e-commerce).`,
       ``,
       `Product name: "${name.trim()}"`,
       ctxLines ? `Context:\n${ctxLines}` : '',
@@ -4320,7 +4335,7 @@ async function generateShortDescription({ name = '', brand = '', category = '', 
       `- Open with the key feature or benefit — NOT the product name`,
       `- Include ONE buying-intent phrase: "buy online in Sri Lanka", "best price in Sri Lanka", or "fast delivery across Sri Lanka"`,
       `- Mention a real spec or use-case that differentiates this product`,
-      `- End with: "Fast delivery across Sri Lanka." or "Order now at StoreKit."`,
+      `- End with: "Fast delivery across Sri Lanka." or "Order now at ${resolvedStoreName}."`,
       `- Plain English only — no markdown, no asterisks, no ALL CAPS, no emoji`,
       `- Do NOT open with the brand name or product name`,
       `- Do NOT use vague filler like "high quality", "perfect for everyone"`,
@@ -4334,7 +4349,7 @@ async function generateShortDescription({ name = '', brand = '', category = '', 
 
     const raw    = await callAI(systemMsg, userMsg, 500);
     const parsed = extractJSON(raw, 'object');
-    const sd     = (parsed.shortDescription || '').trim();
+    const sd     = enforceTenantBrand(parsed.shortDescription, resolvedStoreName).trim();
     if (sd.length < 50) {
       console.warn('[AI generateShortDescription] too short (' + sd.length + ' chars):', sd);
     }

@@ -38,6 +38,24 @@ const Modal = ({ title, onClose, children, wide }) => (
 );
 
 /* ── Rich Text Editor ── */
+function normalizeRichHtml(html) {
+  if (!html) return '';
+  const decoder = document.createElement('textarea');
+  decoder.innerHTML = String(html);
+  const decoded = decoder.value;
+  const doc = new DOMParser().parseFromString(decoded, 'text/html');
+  doc.body.querySelectorAll('*').forEach(node => {
+    [...node.attributes].forEach(attr => {
+      if (attr.name === 'href' && node.tagName === 'A') return;
+      if (attr.name === 'style' && /^H[1-6]$/.test(node.tagName)) {
+        const safe = attr.value.match(/(?:margin-top|margin-bottom)\s*:\s*[0-9.]+(?:em|rem|px)\s*;?/gi);
+        safe?.length ? node.setAttribute('style', safe.join(' ')) : node.removeAttribute('style');
+      } else node.removeAttribute(attr.name);
+    });
+  });
+  return doc.body.innerHTML;
+}
+
 function RichEditor({ value, onChange }) {
   const editorRef = useRef(null);
   const lastVal   = useRef(null);
@@ -46,14 +64,17 @@ function RichEditor({ value, onChange }) {
     if (!editorRef.current) return;
     if (value !== lastVal.current) {
       lastVal.current = value;
-      editorRef.current.innerHTML = value || '';
+      const normalized = normalizeRichHtml(value);
+      editorRef.current.innerHTML = normalized;
+      if (normalized !== value) onChange(normalized);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   const fire = () => {
     if (!editorRef.current) return;
-    const html = editorRef.current.innerHTML;
+    const html = normalizeRichHtml(editorRef.current.innerHTML);
+    editorRef.current.innerHTML = html;
     lastVal.current = html;
     onChange(html);
   };
