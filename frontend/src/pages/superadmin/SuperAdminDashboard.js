@@ -484,7 +484,7 @@ export default function SuperAdminDashboard() {
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-900 overflow-hidden">
+    <div className="superadmin-shell flex h-screen bg-slate-50 text-slate-900 overflow-hidden">
       <a href="#superadmin-main" className="fixed left-3 top-3 z-[11000] -translate-y-20 rounded-lg bg-indigo-700 px-4 py-2 text-sm font-bold text-white transition focus:translate-y-0">Skip to main content</a>
       {tenantDeletion && (
         <TenantDeletionDialog
@@ -636,7 +636,7 @@ export default function SuperAdminDashboard() {
           </div>
         )}
 
-        <main id="superadmin-main" tabIndex="-1" className="flex-1 overflow-y-auto p-4 lg:p-6">
+        <main id="superadmin-main" tabIndex="-1" className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-3 sm:p-4 lg:p-6">
           <ModuleErrorBoundary resetKey={activeTab}><Suspense fallback={<div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500" role="status">Loading Control Center module…</div>}>
           {activeTab === 'overview' && (
             <AdvancedOverview
