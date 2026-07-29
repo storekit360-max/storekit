@@ -23,9 +23,9 @@ function planIdFor(integration, cycle) {
 
 async function publicConfig(cycle) {
   const integration = await resolvedIntegration('paypal');
-  if (!integration.enabled || !integration.config || !integration.secrets.clientId) return { enabled: false };
+  if (!integration.enabled || !integration.config || !integration.secrets.clientId) return { enabled: false, planConfigured: false };
   const ids = planIdFor(integration, cycle);
-  return { enabled: ids.length > 0, clientId: integration.secrets.clientId, environment: String(integration.config.environment || 'sandbox').toLowerCase(), planId: ids[0] || '', currency: integration.config.currency || 'USD' };
+  return { enabled: true, planConfigured: ids.length > 0, clientId: integration.secrets.clientId, environment: String(integration.config.environment || 'sandbox').toLowerCase(), planId: ids[0] || '', currency: integration.config.currency || 'USD' };
 }
 
 async function getSubscription(subscriptionId) {

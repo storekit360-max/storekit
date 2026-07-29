@@ -58,7 +58,7 @@ export default function Billing() {
   useEffect(() => { loadAll(); }, []);
 
   useEffect(() => {
-    if (!paypalConfig?.enabled || !paypalConfig.clientId || paypalRendered.current) return undefined;
+    if (!paypalConfig?.enabled || !paypalConfig.planConfigured || !paypalConfig.clientId || paypalRendered.current) return undefined;
     const render = () => {
       if (!window.paypal || !document.getElementById('paypal-subscription-buttons')) return;
       paypalRendered.current = true;
@@ -179,7 +179,7 @@ export default function Billing() {
       {!isFree && (
         <div className="bg-white rounded-2xl border border-slate-200 p-6">
           <h2 className="text-base font-bold text-slate-900 mb-4">Submit a Payment</h2>
-          {paypalConfig?.enabled && <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 p-4"><p className="text-sm font-bold text-slate-800">Pay securely with PayPal</p><p className="mt-1 text-xs text-slate-500">Pay by PayPal or eligible card. Your subscription will renew automatically through PayPal.</p><div id="paypal-subscription-buttons" className="mt-3" /></div>}
+          {paypalConfig?.enabled && <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 p-4"><p className="text-sm font-bold text-slate-800">Pay securely with PayPal</p><p className="mt-1 text-xs text-slate-500">Pay by PayPal or eligible card. Your subscription will renew automatically through PayPal.</p>{paypalConfig.planConfigured ? <div id="paypal-subscription-buttons" className="mt-3" /> : <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs font-semibold text-amber-800">PayPal is connected, but the recurring plan ID for this billing cycle has not been configured by Super Admin yet.</p>}</div>}
           <form onSubmit={submitPayment} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <label className="grid gap-1.5 text-xs font-semibold text-slate-600">
               Payment Method

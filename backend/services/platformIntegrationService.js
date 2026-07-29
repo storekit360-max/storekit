@@ -92,7 +92,9 @@ async function resolvedIntegration(providerKey) {
 async function testProvider(providerKey) {
   const resolved = await resolvedIntegration(providerKey);
   const { provider, config, secrets } = resolved;
-  const missing = provider.secretFields.filter(field => !secrets[field]);
+  // webhookId is generated automatically after PayPal credentials are saved;
+  // it must not block the initial credential connection test.
+  const missing = provider.secretFields.filter(field => !secrets[field] && !(provider.key === 'paypal' && field === 'webhookId'));
   if (missing.length) throw new Error(`Missing required secret fields: ${missing.join(', ')}`);
   if (provider.key === 'stripe') await new Stripe(secrets.secretKey).balance.retrieve();
   else if (provider.key === 'paypal') {

@@ -22,7 +22,7 @@ router.put('/:provider', requirePlatformPermission('infrastructure.manage'), req
     if (req.params.provider === 'paypal' && req.body?.enabled === true) {
       const resolved = await resolvedIntegration('paypal');
       const origin = String(req.get('origin') || '').replace(/\/$/, '');
-      const configuredBase = String(process.env.PUBLIC_APP_URL || process.env.FRONTEND_URL || origin || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+      const configuredBase = String(process.env.PUBLIC_APP_URL || process.env.FRONTEND_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : '') || origin || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
       const webhook = await registerPayPalWebhook({ clientId: resolved.secrets.clientId, clientSecret: resolved.secrets.clientSecret, environment: resolved.config.environment, webhookUrl: `${configuredBase}/api/billing/paypal/webhook` });
       responseIntegration = await saveIntegration('paypal', { enabled: true, config: req.body.config || {}, secrets: { webhookId: webhook.id } }, req.user._id);
     }
@@ -35,6 +35,15 @@ router.post('/:provider/test', requirePlatformPermission('infrastructure.manage'
   const started = Date.now();
   try {
     if (!registry.byKey.has(req.params.provider)) return res.status(404).json({ message: 'Unsupported integration provider' });
+    if (req.params.provider === 'paypal') {
+      const resolved = await resolvedIntegration('paypal');
+      const origin = String(req.get('origin') || '').replace(/\/$/, '');
+      const configuredBase = String(process.env.PUBLIC_APP_URL || process.env.FRONTEND_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : '') || origin || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+      if (resolved.enabled && resolved.secrets.clientId && resolved.secrets.clientSecret && !resolved.secrets.webhookId) {
+        const webhook = await registerPayPalWebhook({ clientId: resolved.secrets.clientId, clientSecret: resolved.secrets.clientSecret, environment: resolved.config.environment, webhookUrl: `${configuredBase}/api/billing/paypal/webhook` });
+        await saveIntegration('paypal', { enabled: true, config: resolved.config, secrets: { webhookId: webhook.id } }, req.user._id);
+      }
+    }
     const result = await testProvider(req.params.provider);
     const lastTest = { status: result.status, testedAt: new Date(), durationMs: Date.now() - started, message: result.message, testedBy: req.user._id };
     await PlatformIntegration.findOneAndUpdate({ provider: req.params.provider }, { $set: { lastTest } }, { upsert: true, runValidators: true });
