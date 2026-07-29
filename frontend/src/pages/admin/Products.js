@@ -44,6 +44,9 @@ function normalizeRichHtml(html) {
   decoder.innerHTML = String(html);
   const decoded = decoder.value;
   const doc = new DOMParser().parseFromString(decoded, 'text/html');
+  // Repair a common AI typo before parsing: a paragraph sometimes receives
+  // a heading closing tag (for example ...value proposition.</h4>).
+  doc.body.innerHTML = doc.body.innerHTML.replace(/<p([^>]*)>([\s\S]*?)<\/h[1-6]>/gi, '<p$1>$2</p>');
   doc.body.querySelectorAll('*').forEach(node => {
     [...node.attributes].forEach(attr => {
       if (attr.name === 'href' && node.tagName === 'A') return;
@@ -150,7 +153,8 @@ function RichEditor({ value, onChange }) {
           <input type="color" className="w-0 h-0 opacity-0 absolute" onChange={e=>exec('hiliteColor',e.target.value)} />
         </label>
       </div>
-      <div ref={editorRef} contentEditable suppressContentEditableWarning onInput={fire}
+      <div ref={editorRef} contentEditable suppressContentEditableWarning
+        onMouseDown={e=>e.stopPropagation()} onClick={e=>e.stopPropagation()} onInput={fire}
         className="min-h-[180px] p-3 text-sm text-gray-800 outline-none overflow-y-auto"
         style={{maxHeight:'340px',lineHeight:'1.7'}} />
     </div>
