@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import API from '../../utils/api';
 import toast from 'react-hot-toast';
 
@@ -30,18 +30,22 @@ export default function Billing() {
   const [form, setForm] = useState({ method: 'bank_transfer', reference: '', couponCode: '', note: '' });
   const [proofFile, setProofFile] = useState(null);
   const [quote, setQuote] = useState(null);
+  const [paypalConfig, setPaypalConfig] = useState(null);
+  const paypalRendered = useRef(false);
 
   async function loadAll() {
     setLoading(true);
     try {
-      const [statusRes, paymentsRes] = await Promise.all([
+      const [statusRes, paymentsRes, paypalRes] = await Promise.all([
         API.get('/billing/status'),
         API.get('/billing/payments'),
+        API.get('/billing/paypal/config').catch(() => ({ data: { enabled: false } })),
       ]);
       setTenant(statusRes.data.tenant);
       setPlan(statusRes.data.plan);
       setBilling(statusRes.data.billing);
       setPayments(paymentsRes.data || []);
+      setPaypalConfig(paypalRes.data || { enabled: false });
       const quoteRes = await API.post('/billing/quote', {});
       setQuote(quoteRes.data);
     } catch (err) {
@@ -52,6 +56,34 @@ export default function Billing() {
   }
 
   useEffect(() => { loadAll(); }, []);
+
+  useEffect(() => {
+    if (!paypalConfig?.enabled || !paypalConfig.clientId || paypalRendered.current) return undefined;
+    const render = () => {
+      if (!window.paypal || !document.getElementById('paypal-subscription-buttons')) return;
+      paypalRendered.current = true;
+      window.paypal.Buttons({
+        style: { layout: 'vertical', shape: 'rect', label: 'subscribe' },
+        createSubscription: (_data, actions) => actions.subscription.create({ plan_id: paypalConfig.planId }),
+        onApprove: async data => {
+          setSubmitting(true);
+          try { await API.post('/billing/paypal/confirm', { subscriptionId: data.subscriptionID }); toast.success('PayPal subscription activated successfully'); await loadAll(); }
+          catch (err) { toast.error(err.response?.data?.message || 'PayPal subscription could not be confirmed'); }
+          finally { setSubmitting(false); }
+        },
+        onError: error => { paypalRendered.current = false; console.error('[PAYPAL_SUBSCRIPTION]', error); toast.error('PayPal payment could not be completed'); },
+      }).render('#paypal-subscription-buttons');
+    };
+    const existing = document.getElementById('paypal-subscriptions-sdk');
+    if (existing) { render(); return undefined; }
+    const script = document.createElement('script');
+    script.id = 'paypal-subscriptions-sdk';
+    script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(paypalConfig.clientId)}&vault=true&intent=subscription`;
+    script.onload = render;
+    script.onerror = () => toast.error('PayPal checkout could not load');
+    document.body.appendChild(script);
+    return undefined;
+  }, [paypalConfig]);
 
   async function submitPayment(e) {
     e.preventDefault();
@@ -96,7 +128,7 @@ export default function Billing() {
     <div className="p-4 sm:p-6 space-y-6 max-w-4xl">
       <div>
         <h1 className="text-xl font-bold text-slate-900">Billing & Subscription</h1>
-        <p className="text-sm text-slate-500 mt-1">Manage your plan and payments.</p>
+            <p className="text-sm text-slate-500 mt-1">Manage your plan and payments.</p>
       </div>
 
       {tenant.status === 'suspended' && (
@@ -147,6 +179,7 @@ export default function Billing() {
       {!isFree && (
         <div className="bg-white rounded-2xl border border-slate-200 p-6">
           <h2 className="text-base font-bold text-slate-900 mb-4">Submit a Payment</h2>
+          {paypalConfig?.enabled && <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 p-4"><p className="text-sm font-bold text-slate-800">Pay securely with PayPal</p><p className="mt-1 text-xs text-slate-500">Pay by PayPal or eligible card. Your subscription will renew automatically through PayPal.</p><div id="paypal-subscription-buttons" className="mt-3" /></div>}
           <form onSubmit={submitPayment} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <label className="grid gap-1.5 text-xs font-semibold text-slate-600">
               Payment Method

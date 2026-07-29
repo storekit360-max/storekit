@@ -3,7 +3,7 @@
 const express = require('express');
 const PlatformIntegration = require('../../models/PlatformIntegration');
 const registry = require('../../config/integrationRegistry');
-const { listIntegrations, providerErrorMessage, saveIntegration, testProvider } = require('../../services/platformIntegrationService');
+const { listIntegrations, providerErrorMessage, registerPayPalWebhook, resolvedIntegration, saveIntegration, testProvider } = require('../../services/platformIntegrationService');
 const { requirePlatformPermission } = require('../../services/platformAuthorizationService');
 const { requireRecentStepUp } = require('../../middleware/stepUp');
 
@@ -18,8 +18,16 @@ router.put('/:provider', requirePlatformPermission('infrastructure.manage'), req
   try {
     const before = (await listIntegrations()).find(item => item.provider === req.params.provider) || null;
     const integration = await saveIntegration(req.params.provider, req.body || {}, req.user._id);
+    let responseIntegration = integration;
+    if (req.params.provider === 'paypal' && req.body?.enabled === true) {
+      const resolved = await resolvedIntegration('paypal');
+      const origin = String(req.get('origin') || '').replace(/\/$/, '');
+      const configuredBase = String(process.env.PUBLIC_APP_URL || process.env.FRONTEND_URL || origin || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+      const webhook = await registerPayPalWebhook({ clientId: resolved.secrets.clientId, clientSecret: resolved.secrets.clientSecret, environment: resolved.config.environment, webhookUrl: `${configuredBase}/api/billing/paypal/webhook` });
+      responseIntegration = await saveIntegration('paypal', { enabled: true, config: req.body.config || {}, secrets: { webhookId: webhook.id } }, req.user._id);
+    }
     req.audit.set({ action: 'integration.update', resource: 'integration', resourceId: req.params.provider, changes: { oldValue: before, newValue: integration, changedFields: ['enabled', 'config', 'secretFields'] } });
-    res.json(integration);
+    res.json(responseIntegration);
   } catch (error) { res.status(400).json({ message: error.message }); }
 });
 

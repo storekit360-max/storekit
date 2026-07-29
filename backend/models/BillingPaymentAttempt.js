@@ -6,7 +6,7 @@ const schema = new mongoose.Schema({
   tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true, index: true },
   paymentId: { type: mongoose.Schema.Types.ObjectId, ref: 'TenantPayment', default: null, index: true },
   invoiceId: { type: mongoose.Schema.Types.ObjectId, ref: 'SubscriptionInvoice', default: null },
-  provider: { type: String, enum: ['manual', 'stripe', 'system'], required: true },
+  provider: { type: String, enum: ['manual', 'stripe', 'paypal', 'system'], required: true },
   providerAttemptId: { type: String, default: undefined, trim: true },
   attemptNumber: { type: Number, min: 1, default: 1 },
   amount: { type: Number, required: true, min: 0 },

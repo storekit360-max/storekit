@@ -370,6 +370,7 @@ safeMount('/api/admin/billing', require('./routes/adminBilling'), tenantScope, a
 safeMount('/api/admin/runtime-flags', require('./routes/adminRuntimeFlags'), tenantContextOnly);
 safeMount('/api/admin', require('./routes/admin'), tenantScope, auditLog);
 safeMount('/api/admin/reset', require('./routes/reset'));
+safeMount('/api/billing/paypal', require('./routes/paypalBilling'));
 safeMount('/api/billing', require('./routes/billing'), tenantScope);
 
 // ─── Other routes ─────────────────────────────────────────────────────────────

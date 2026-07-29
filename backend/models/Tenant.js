@@ -148,6 +148,7 @@ const tenantSchema = new mongoose.Schema({
     lastDeactivatedBy: { type: String, default: '' },
     stripeCustomerId: { type: String, default: '', trim: true },
     stripeSubscriptionId: { type: String, default: '', trim: true },
+    paypalSubscriptionId: { type: String, default: '', trim: true },
     dunningAttempt: { type: Number, default: 0, min: 0 },
     lastDunningAt: { type: Date, default: null },
   },

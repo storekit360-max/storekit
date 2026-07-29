@@ -20,7 +20,7 @@ const subscriptionInvoiceSchema = new mongoose.Schema({
   periodEnd: Date,
   notes: String,
   paymentId: { type: mongoose.Schema.Types.ObjectId, ref: 'TenantPayment', default: null },
-  provider: { type: String, enum: ['manual', 'stripe'], default: 'manual' },
+  provider: { type: String, enum: ['manual', 'stripe', 'paypal'], default: 'manual' },
   providerInvoiceId: { type: String, default: undefined, trim: true },
   hostedInvoiceUrl: { type: String, default: '', trim: true },
   refundedAmount: { type: Number, default: 0, min: 0 },

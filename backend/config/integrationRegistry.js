@@ -2,6 +2,7 @@
 
 const providers = [
   { key: 'stripe', label: 'Stripe', category: 'billing', configFields: ['portalReturnUrl'], secretFields: ['secretKey'], env: { secretKey: 'STRIPE_SECRET_KEY', portalReturnUrl: 'STRIPE_PORTAL_RETURN_URL' }, testMode: 'remote' },
+  { key: 'paypal', label: 'PayPal Subscriptions', category: 'billing', configFields: ['environment', 'currency', 'monthlyPlanIds', 'yearlyPlanIds'], secretFields: ['clientId', 'clientSecret', 'webhookId'], env: { clientId: 'PAYPAL_CLIENT_ID', clientSecret: 'PAYPAL_CLIENT_SECRET', webhookId: 'PAYPAL_WEBHOOK_ID', environment: 'PAYPAL_ENVIRONMENT', currency: 'PAYPAL_CURRENCY', monthlyPlanIds: 'PAYPAL_MONTHLY_PLAN_IDS', yearlyPlanIds: 'PAYPAL_YEARLY_PLAN_IDS' }, testMode: 'remote' },
   { key: 'cloudinary', label: 'Cloudinary', category: 'storage', configFields: ['cloudName'], secretFields: ['apiKey', 'apiSecret'], env: { cloudName: 'CLOUDINARY_CLOUD_NAME', apiKey: 'CLOUDINARY_API_KEY', apiSecret: 'CLOUDINARY_API_SECRET' }, testMode: 'remote' },
   { key: 'resend', label: 'Resend', category: 'email', configFields: ['fromAddress'], secretFields: ['apiKey'], env: { apiKey: 'RESEND_API_KEY', fromAddress: 'EMAIL_FROM' }, testMode: 'remote' },
   { key: 'smtp', label: 'SMTP', category: 'email', configFields: ['host', 'port', 'secure', 'username', 'fromAddress'], secretFields: ['password'], env: { host: 'EMAIL_HOST', port: 'EMAIL_PORT', username: 'EMAIL_USER', password: 'EMAIL_PASS', fromAddress: 'EMAIL_FROM' }, testMode: 'remote' },

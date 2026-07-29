@@ -9,6 +9,30 @@ const registry = require('../config/integrationRegistry');
 const { decryptPlatformSecret, encryptPlatformSecret } = require('../utils/platformSecretCrypto');
 const { searchGoogleAds } = require('./googleAdsClient');
 
+async function paypalAccessToken(clientId, clientSecret, environment = 'sandbox') {
+  const base = String(environment).toLowerCase() === 'live' ? 'https://api-m.paypal.com' : 'https://api-m.sandbox.paypal.com';
+  const response = await axios.post(`${base}/v1/oauth2/token`, 'grant_type=client_credentials', {
+    auth: { username: clientId, password: clientSecret },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000,
+  });
+  return { token: response.data.access_token, base };
+}
+
+async function registerPayPalWebhook({ clientId, clientSecret, environment = 'sandbox', webhookUrl }) {
+  if (!webhookUrl || !/^https:\/\//i.test(webhookUrl)) throw new Error('A public HTTPS webhook URL is required for PayPal');
+  const { token, base } = await paypalAccessToken(clientId, clientSecret, environment);
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const events = [
+    'PAYMENT.SALE.COMPLETED', 'BILLING.SUBSCRIPTION.CANCELLED', 'BILLING.SUBSCRIPTION.EXPIRED',
+    'BILLING.SUBSCRIPTION.SUSPENDED', 'BILLING.SUBSCRIPTION.PAYMENT.FAILED', 'PAYMENT.SALE.REVERSED', 'PAYMENT.SALE.DENIED',
+  ].map(name => ({ name }));
+  const listed = await axios.get(`${base}/v1/notifications/webhooks`, { headers, timeout: 15000 });
+  const existing = (listed.data?.webhooks || []).find(item => item.url === webhookUrl);
+  if (existing?.id) return { id: existing.id, url: webhookUrl, created: false };
+  const created = await axios.post(`${base}/v1/notifications/webhooks`, { url: webhookUrl, event_types: events }, { headers, timeout: 15000 });
+  return { id: created.data?.id, url: webhookUrl, created: true };
+}
+
 const resolvedCache = new Map();
 const RESOLVED_CACHE_MS = 30000;
 
@@ -71,6 +95,10 @@ async function testProvider(providerKey) {
   const missing = provider.secretFields.filter(field => !secrets[field]);
   if (missing.length) throw new Error(`Missing required secret fields: ${missing.join(', ')}`);
   if (provider.key === 'stripe') await new Stripe(secrets.secretKey).balance.retrieve();
+  else if (provider.key === 'paypal') {
+    const result = await paypalAccessToken(secrets.clientId, secrets.clientSecret, config.environment);
+    await axios.get(`${result.base}/v1/identity/oauth2/userinfo?schema=paypalv1.1`, { headers: { Authorization: `Bearer ${result.token}` }, timeout: 10000 });
+  }
   else if (provider.key === 'cloudinary') { cloudinary.config({ cloud_name: config.cloudName, api_key: secrets.apiKey, api_secret: secrets.apiSecret }); await cloudinary.api.ping(); }
   else if (provider.key === 'resend') await axios.get('https://api.resend.com/domains', { headers: { Authorization: `Bearer ${secrets.apiKey}` }, timeout: 10000 });
   else if (provider.key === 'smtp') await nodemailer.createTransport({ host: config.host, port: Number(config.port || 587), secure: config.secure === true || String(config.secure) === 'true', auth: { user: config.username, pass: secrets.password }, connectionTimeout: 10000 }).verify();
@@ -114,4 +142,4 @@ function providerErrorMessage(error) {
     .slice(0, 500);
 }
 
-module.exports = { cleanConfig, listIntegrations, providerErrorMessage, publicIntegration, resolvedIntegration, saveIntegration, testProvider };
+module.exports = { cleanConfig, listIntegrations, paypalAccessToken, providerErrorMessage, publicIntegration, registerPayPalWebhook, resolvedIntegration, saveIntegration, testProvider };

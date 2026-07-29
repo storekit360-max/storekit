@@ -9,6 +9,7 @@ const Tenant = require('../models/Tenant');
 const TenantPayment = require('../models/TenantPayment');
 const subscriptionService = require('../services/subscriptionService');
 const billingLifecycle = require('../services/billingLifecycleService');
+const paypalBilling = require('../services/paypalBillingService');
 
 const router = express.Router();
 
@@ -50,6 +51,39 @@ function tenantScoped(req, res, next) {
 }
 
 router.use(auth, tenantScoped);
+
+router.get('/paypal/config', async (req, res, next) => {
+  try {
+    const tenant = await Tenant.findById(req.user.tenantId).populate('plan');
+    const config = await paypalBilling.publicConfig(tenant?.billing?.billingCycle || tenant?.plan?.billingCycle || 'monthly');
+    res.json(config);
+  } catch (error) { next(error); }
+});
+
+router.post('/paypal/confirm', async (req, res, next) => {
+  try {
+    const subscriptionId = String(req.body?.subscriptionId || '').trim();
+    if (!subscriptionId) return res.status(400).json({ message: 'PayPal subscription ID is required' });
+    const tenant = await Tenant.findById(req.user.tenantId).populate('plan');
+    if (!tenant?.plan) return res.status(409).json({ message: 'Tenant plan is not configured' });
+    const cycle = tenant.billing?.billingCycle || tenant.plan.billingCycle || 'monthly';
+    const config = await paypalBilling.publicConfig(cycle);
+    if (!config.enabled) return res.status(409).json({ message: 'PayPal subscription plan is not configured' });
+    const subscription = await paypalBilling.getSubscription(subscriptionId);
+    if (subscription.data?.status !== 'ACTIVE' && subscription.data?.status !== 'APPROVAL_PENDING') return res.status(400).json({ message: `PayPal subscription is ${subscription.data?.status || 'invalid'}` });
+    if (subscription.data?.plan_id !== config.planId) return res.status(400).json({ message: 'PayPal plan does not match the selected StoreKit billing cycle' });
+    const start = new Date();
+    const end = new Date(start);
+    if (cycle === 'yearly') end.setUTCFullYear(end.getUTCFullYear() + 1); else end.setUTCMonth(end.getUTCMonth() + 1);
+    const quote = await subscriptionService.quoteSubscription(tenant._id);
+    const currency = String(config.currency || quote.currency || '').toUpperCase();
+    if (String(quote.currency || '').toUpperCase() !== currency) return res.status(409).json({ message: `PayPal currency ${currency} must match this plan currency (${quote.currency})` });
+    const payment = await TenantPayment.create({ tenant: tenant._id, plan: tenant.plan._id, amount: quote.total, subtotal: quote.subtotal, discountAmount: quote.discountAmount, taxAmount: quote.taxAmount, currency, billingCycle: cycle, periodStart: start, periodEnd: end, method: 'paypal', reference: subscriptionId, provider: 'paypal', providerPaymentId: subscriptionId, status: 'pending', quoteSnapshot: { ...quote, paypalSubscriptionId: subscriptionId } });
+    const result = await billingLifecycle.approveManualPayment(payment._id, req.user._id);
+    await Tenant.findByIdAndUpdate(tenant._id, { $set: { 'billing.paypalSubscriptionId': subscriptionId } });
+    res.status(201).json({ subscriptionId, payment: result.payment, invoice: result.invoice, billing: (await Tenant.findById(tenant._id).lean())?.billing });
+  } catch (error) { next(error); }
+});
 
 // GET /api/billing/status — current plan, subscription state, next payment info
 router.get('/status', async (req, res, next) => {

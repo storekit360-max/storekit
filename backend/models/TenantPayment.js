@@ -32,7 +32,7 @@ const tenantPaymentSchema = new mongoose.Schema({
   note:      { type: String, default: '', trim: true },
 
   status: { type: String, enum: ['pending', 'processing', 'approved', 'rejected', 'failed', 'refunded', 'partially_refunded'], default: 'pending', index: true },
-  provider: { type: String, enum: ['manual', 'stripe'], default: 'manual', index: true },
+  provider: { type: String, enum: ['manual', 'stripe', 'paypal'], default: 'manual', index: true },
   providerPaymentId: { type: String, default: undefined, trim: true },
   idempotencyKey: { type: String, default: undefined, trim: true },
   invoice: { type: mongoose.Schema.Types.ObjectId, ref: 'SubscriptionInvoice', default: null },
