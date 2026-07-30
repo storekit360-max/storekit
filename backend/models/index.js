@@ -64,6 +64,7 @@ const bannerSchema = new mongoose.Schema({
   tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null, index: true },
   title: String,
   subtitle: String,
+  textColor: { type: String, default: '#ffffff' },
   image: String,
   link: String,
   buttonText: { type: String, default: 'Shop Now' },

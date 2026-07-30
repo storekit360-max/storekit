@@ -33,6 +33,7 @@ const TABS = [
 
 const EMPTY_FORM = {
   title: '', subtitle: '', image: '', link: '', buttonText: 'Shop Now',
+  textColor: '#ffffff',
   buttonColor: '#ffffff', buttonBgColor: '#3b82f6',
   runningText: '', runningSpeed: 30, runningBgColor: '#1e293b', runningTextColor: '#ffffff', runningIcon: '🔥',
   popupDelay: 3, popupFrequency: 'once_per_session', popupWidth: 'md',
@@ -156,6 +157,15 @@ const BannerForm = ({ form, setForm, onSave, onCancel, saving, type }) => {
         <>
           <div><label className="form-label">Subtitle</label>
             <input value={form.subtitle} onChange={e => f('subtitle', e.target.value)} className="form-input" /></div>
+
+          <div>
+            <label className="form-label">Banner Text Color</label>
+            <div className="flex gap-2 items-center">
+              <input type="color" value={form.textColor || '#ffffff'} onChange={e => f('textColor', e.target.value)} className="h-10 w-12 rounded-lg border border-gray-200 cursor-pointer" />
+              <input value={form.textColor || '#ffffff'} onChange={e => f('textColor', e.target.value)} className="form-input flex-1 font-mono text-sm" placeholder="#ffffff" />
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Applies to the title, subtitle, and banner text on the storefront.</p>
+          </div>
 
           <div>
             <label className="form-label">Banner Image</label>

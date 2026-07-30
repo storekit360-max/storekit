@@ -66,11 +66,11 @@ export default function PositionBanner({ position, positions, productSlug = '', 
         {!compact && bannerPosition === 'flash_sale' && <p className="text-[10px] sm:text-xs font-black uppercase tracking-[0.18em] text-amber-200">⚡ {banner.flashSaleText || 'Limited-time offer'}</p>}
         <h2
           className="font-black text-white truncate"
-          style={{fontSize: compact ? '15px' : '20px', lineHeight: compact ? '20px' : '26px', margin: 0}}
+          style={{fontSize: compact ? '15px' : '20px', lineHeight: compact ? '20px' : '26px', margin: 0, color: banner.textColor || '#fff'}}
         >
           {compact && bannerPosition === 'flash_sale' ? '⚡ ' : ''}{banner.title}
         </h2>
-        {!compact && banner.subtitle && <p className="mt-1 text-white/80 line-clamp-1" style={{fontSize:'13px',lineHeight:'18px',marginBottom:0}}>{banner.subtitle}</p>}
+        {!compact && banner.subtitle && <p className="mt-1 line-clamp-1" style={{fontSize:'13px',lineHeight:'18px',marginBottom:0,color:banner.textColor || '#fff',opacity:0.82}}>{banner.subtitle}</p>}
       </div>
       {banner.link && (
         <span

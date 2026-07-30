@@ -133,7 +133,7 @@ export default function PopupBanner() {
                 <p style={{
                   display:'inline-block',
                   fontSize:'11px', fontWeight:700, letterSpacing:'0.18em', textTransform:'uppercase',
-                  color:'rgba(255,255,255,0.7)',
+                  color:banner.textColor || 'rgba(255,255,255,0.7)',
                   marginBottom:'8px',
                 }}>{banner.subtitle}</p>
               )}
@@ -141,7 +141,7 @@ export default function PopupBanner() {
               {banner.title && (
                 <h2 style={{
                   fontSize:'clamp(22px,4vw,32px)', fontWeight:900,
-                  color:'#fff', lineHeight:1.15,
+                  color:banner.textColor || '#fff', lineHeight:1.15,
                   marginBottom:'18px',
                   textShadow:'0 2px 12px rgba(0,0,0,0.4)',
                   letterSpacing:'-0.02em',

@@ -391,13 +391,13 @@ const HeroSlider = ({ banners, settings, campaign, anim }) => {
           </div>
 
           <div ref={textRef} className="space-y-4 sm:space-y-5">
-            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black text-white leading-[1.01]"
+            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black leading-[1.01]"
               style={{ fontFamily:'var(--font-display)', letterSpacing:'-0.04em',
-                textShadow:slide.image?'0 4px 32px rgba(0,0,0,0.5)':'0 2px 40px rgba(0,0,0,0.25)' }}>
+                color: slide.textColor || '#fff', textShadow:slide.image?'0 4px 32px rgba(0,0,0,0.5)':'0 2px 40px rgba(0,0,0,0.25)' }}>
               {slide.title}
             </h1>
             {slide.subtitle && (
-              <p className="text-white/80 text-base sm:text-xl leading-relaxed max-w-lg">
+              <p className="text-base sm:text-xl leading-relaxed max-w-lg" style={{color:slide.textColor || '#fff', opacity:0.82}}>
                 {slide.subtitle}
               </p>
             )}
