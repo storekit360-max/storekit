@@ -915,7 +915,10 @@ export default function Home() {
   // settingsReady: true once we have settings from cache or API.
   // Prevents newsletter / payment sections from flashing on first render.
   const settingsReady = settings !== null;
-  const homepageProductLimit = Math.max(1, Math.min(12, Number(settings?.homepageProductLimit || 8)));
+  // Keep the featured grid filled on desktop (four columns). Older tenants may
+  // still have the starter value of 6 saved in their settings, which leaves a
+  // visibly incomplete second row even when the catalogue has more products.
+  const homepageProductLimit = Math.max(8, Math.min(12, Number(settings?.homepageProductLimit || 8)));
 
   // Sync sectionOrder from ThemeContext settings (no extra API call needed)
   useEffect(() => {

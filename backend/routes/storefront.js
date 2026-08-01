@@ -57,7 +57,9 @@ router.get('/home', async (req, res, next) => {
     const productFilter = { tenantId, isActive: true };
 
     const [featured, newArrivals, onSale, bestSelling, categories, brandProducts, banners] = await Promise.all([
-      Product.find({ ...productFilter, isFeatured: true }).select(PRODUCT_FIELDS).populate('category', 'name slug').sort({ createdAt: -1 }).limit(limit).lean(),
+      // Keep explicitly featured products first, then use other active products
+      // to complete the grid when fewer products are flagged as Featured.
+      Product.find(productFilter).select(PRODUCT_FIELDS).populate('category', 'name slug').sort({ isFeatured: -1, createdAt: -1 }).limit(limit).lean(),
       Product.find(productFilter).select(PRODUCT_FIELDS).populate('category', 'name slug').sort({ createdAt: -1 }).limit(limit).lean(),
       Product.find({ ...productFilter, isOnSale: true }).select(PRODUCT_FIELDS).populate('category', 'name slug').sort({ createdAt: -1 }).limit(8).lean(),
       Product.find(productFilter).select(PRODUCT_FIELDS).populate('category', 'name slug').sort({ soldCount: -1, updatedAt: -1 }).limit(limit).lean(),
