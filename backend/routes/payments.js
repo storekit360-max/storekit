@@ -228,7 +228,10 @@ router.put('/admin/:gateway', adminAuth, async (req, res) => {
     const { isEnabled, isLive, displayName, description, logo, config } = req.body;
     const result = await PaymentGateway.findOneAndUpdate(
       { tenantId, gateway },
-      { tenantId, gateway, isEnabled, isLive, displayName, description, logo, config, updatedAt: Date.now() },
+      {
+        $set: { isEnabled: Boolean(isEnabled), isLive: Boolean(isLive), displayName, description, logo, config: config || {}, updatedAt: Date.now() },
+        $setOnInsert: { tenantId, gateway },
+      },
       { upsert: true, new: true }
     );
     res.json(result);
