@@ -456,7 +456,10 @@ const TrustBar = ({ settings }) => {
   const ref = useRef(null);
   const { config } = useAnimation();
   const badges = useMemo(() => {
-    try { return JSON.parse(settings?.trustBadges||'[]').filter(b=>b.enabled!==false); }
+    try {
+      const parsed = Array.isArray(settings?.trustBadges) ? settings.trustBadges : JSON.parse(settings?.trustBadges || '[]');
+      return (Array.isArray(parsed) ? parsed : []).filter(b=>b.enabled!==false);
+    }
     catch { return []; }
   }, [settings?.trustBadges]);
 
@@ -961,7 +964,7 @@ export default function Home() {
         categories: Array.isArray(cats.data) ? cats.data : (Array.isArray(cats.data?.categories) ? cats.data.categories : []),
         brands: brandRes.data.brands || [],
         heroBanners: hero.data || [],
-        promoBanners: promo.data || [],
+        promoBanners: Array.isArray(promo.data) ? promo.data : [],
       }));
 
     const loadHome = () => API.get(`/storefront/home?limit=${homepageProductLimit}`, { cacheTTL: 30 * 1000 })
@@ -978,7 +981,7 @@ export default function Home() {
       setCategories(Array.isArray(nextHomeData.categories) ? nextHomeData.categories : []);
       setBrands(nextHomeData.brands);
       setHeroBanners(nextHomeData.heroBanners);
-      setPromoBanners(nextHomeData.promoBanners);
+      setPromoBanners(Array.isArray(nextHomeData.promoBanners) ? nextHomeData.promoBanners : []);
       writeHomeDataCache(nextHomeData);
       window.__STOREKIT_HOME_LOADED_ONCE__ = true;
       setDbReady(true);

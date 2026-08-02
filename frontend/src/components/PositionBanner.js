@@ -13,7 +13,11 @@ export default function PositionBanner({ position, positions, productSlug = '', 
     let active = true;
     const endpoint = `/banners?positions=${encodeURIComponent(requestedPositions.join(','))}`;
     const load = (force = false) => API.get(endpoint, force ? { skipCache: true } : { cacheTTL: 30 * 1000 })
-      .then(response => { if (active) setBanners(response.data || []); })
+      .then(response => {
+        if (!active) return;
+        const rows = Array.isArray(response.data) ? response.data : (Array.isArray(response.data?.banners) ? response.data.banners : []);
+        setBanners(rows);
+      })
       .catch(() => {});
     const resize = () => setIsMobile(window.innerWidth < 640);
     const refresh = () => load(true);

@@ -269,7 +269,7 @@ export default function DealsSection({ settings }) {
       try {
         const { default: API } = await import('../utils/api');
         const { data } = await API.get('/deals');
-        if (!cancelled) setDeals(data);
+        if (!cancelled) setDeals(Array.isArray(data) ? data : (Array.isArray(data?.deals) ? data.deals : []));
       } catch {} finally { if (!cancelled) setLoading(false); }
     };
     load();

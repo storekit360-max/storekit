@@ -22,7 +22,8 @@ export default function RunningBanner() {
       })
       .then(r => {
         if (!activeRequest) return;
-        const active = (r.data || []).filter(b => {
+        const rows = Array.isArray(r.data) ? r.data : (Array.isArray(r.data?.banners) ? r.data.banners : []);
+        const active = rows.filter(b => {
           if (!b.isActive) return false;
           const now = Date.now();
           if (b.startDate && new Date(b.startDate) > now) return false;

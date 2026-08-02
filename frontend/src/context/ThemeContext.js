@@ -522,7 +522,10 @@ export const ThemeProvider = ({ children }) => {
         document.documentElement.classList.add('storekit-theme-ready');
         return;
       }
-      if (err?.response?.data?.code === 'STORE_NOT_FOUND' || err?.response?.status === 404) {
+      // A plain 404 usually means an out-of-date proxy/deployment route, not
+      // that the tenant is unavailable. Preserve cached/default settings so a
+      // storefront remains usable while the API retries.
+      if (err?.response?.data?.code === 'STORE_NOT_FOUND') {
         clearThemeLocalCache();
         setSettings(null);
         setStoreStatus({

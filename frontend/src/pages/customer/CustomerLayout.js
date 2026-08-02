@@ -889,8 +889,8 @@ const Footer = ({ settings }) => {
   React.useEffect(() => { setLogoFailed(false); }, [footerLogo]);
 
   React.useEffect(() => {
-    API.get('/pages?footer=true').then(r=>setFooterPages(r.data||[])).catch(()=>{});
-    API.get('/social-media/public').then(r=>setSocialAccounts(r.data||[])).catch(()=>{});
+    API.get('/pages?footer=true').then(r=>setFooterPages(Array.isArray(r.data) ? r.data : [])).catch(()=>setFooterPages([]));
+    API.get('/social-media/public').then(r=>setSocialAccounts(Array.isArray(r.data) ? r.data : [])).catch(()=>setSocialAccounts([]));
   }, []);
 
   return (
