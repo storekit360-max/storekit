@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import useSEO, { trackAddToCart, trackViewItem } from '../../hooks/useSEO';
 import { WhatsAppProductInquiry } from '../../components/WhatsAppWidget';
 import PositionBanner from '../../components/PositionBanner';
+import InstallmentQuote from '../../components/InstallmentQuote';
 
 const effectivePrice = product => product?.isOnSale
   && Number(product.salePrice) > 0
@@ -600,6 +601,7 @@ export default function ProductDetail() {
 
           {/* Short desc */}
           {product.shortDescription && <p className="text-gray-600 leading-relaxed text-xs sm:text-sm lg:text-base">{product.shortDescription}</p>}
+          <InstallmentQuote productId={product._id} />
 
           {/* Stock */}
           <div className="stock-indicator flex items-center gap-2">

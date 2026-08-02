@@ -193,7 +193,7 @@ router.get('/gateways', async (req, res) => {
         // an online gateway appear as another manual COD method.
         displayName:         GATEWAY_NAMES[g.gateway],
         description:         g.description,
-        logo:                g.logo,
+        logo:                g.logo || g.config?.logoUrl || '',
         isLive:              g.isLive,
         supportedCurrencies: g.supportedCurrencies,
         // Only expose the public/non-secret key

@@ -14,6 +14,7 @@ import {
 } from '../../components/Cinematic';
 import toast from 'react-hot-toast';
 import DealsSection from '../../components/DealsSection';
+import InstallmentQuote from '../../components/InstallmentQuote';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -194,8 +195,9 @@ const ProductCard = ({ product, settings, priority = false }) => {
             <span className="font-black text-base sm:text-lg" style={{ fontFamily:'var(--font-display)', color:'var(--color-dark)' }}>
               {sym} {price?.toLocaleString()}
             </span>
-            {isOnSale && <span className="text-xs text-gray-400 line-through ml-1.5 hidden sm:inline">{sym} {product.price?.toLocaleString()}</span>}
+        {isOnSale && <span className="text-xs text-gray-400 line-through ml-1.5 hidden sm:inline">{sym} {product.price?.toLocaleString()}</span>}
           </div>
+          <InstallmentQuote productId={product._id} className="absolute left-3 right-3" />
           {hasVars ? (
             <Link to={`/product/${product.slug}`} className="flex-shrink-0 text-xs px-3 py-1.5 rounded-xl font-bold text-white transition-all hover:-translate-y-0.5 hover:shadow-lg"
               style={{ background:'var(--theme-gradient)' }}>Select</Link>
