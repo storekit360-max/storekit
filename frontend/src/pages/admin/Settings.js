@@ -973,10 +973,12 @@ export default function AdminSettings() {
                           <div className="grid sm:grid-cols-2 gap-3">
                             {preset.fields.map(field => (
                               <div key={field.key}>
+                                {gwKey === 'payzy' && field.key === 'logoUrl' ? <ImageUpload label={field.label} hint="Upload an image or enter a public HTTPS URL." value={cfg.logoUrl || ''} onChange={url => setGwConfigs(p => ({ ...p, [gwKey]: { ...p[gwKey], logoUrl: url } }))} /> : <>
                                 <label className="form-label text-xs">{field.label}</label>
                                 <input type={field.type} value={cfg[field.key]||''} onChange={e=>setGwConfigs(p=>({...p,[gwKey]:{...p[gwKey],[field.key]:e.target.value}}))}
                                   className="form-input text-sm" placeholder={field.type==='password'?'••••••••':''}/>
                                 {field.hint && <p className="text-xs text-gray-400 mt-0.5">{field.hint}</p>}
+                                </>}
                               </div>
                             ))}
                           </div>
@@ -995,22 +997,20 @@ export default function AdminSettings() {
 
             {tab === 'installments' && (
               <div>
-                <h3 className="font-semibold text-gray-900 mb-1">Payzy Installment Plans</h3>
+                <h3 className="font-semibold text-gray-900 mb-1">Installment Plans</h3>
                 <p className="text-sm text-gray-400 mb-5">Plans are stored per tenant and calculated server-side for every product card.</p>
                 <div className="space-y-3">
                   {installmentPlans.map((plan, index) => (
                     <div key={index} className="grid sm:grid-cols-6 gap-2 items-end border border-gray-100 rounded-xl p-3">
-                      {['provider','name','months','interestRate','providerLogo'].map(key => (
-                        <div key={key} className={key === 'providerLogo' ? 'sm:col-span-2' : ''}>
-                          <label className="form-label text-xs">{key === 'interestRate' ? 'Interest %' : key === 'providerLogo' ? 'Provider Logo URL' : key[0].toUpperCase() + key.slice(1)}</label>
-                          <input type={['months','interestRate'].includes(key) ? 'number' : 'text'} value={plan[key] || ''} onChange={e => setInstallmentPlans(p => p.map((x,i) => i === index ? {...x, [key]: ['months','interestRate'].includes(key) ? Number(e.target.value) : e.target.value} : x))} className="form-input text-sm" />
-                        </div>
-                      ))}
+                      <div><label className="form-label text-xs">Provider</label><select value={plan.provider || ''} onChange={e => setInstallmentPlans(p => p.map((x,i) => i === index ? {...x, provider:e.target.value} : x))} className="form-input text-sm"><option value="">Select provider</option><option value="Payzy">Payzy</option><option value="KOKO">KOKO</option></select></div>
+                      <div><label className="form-label text-xs">Plan Name</label><input value={plan.name || ''} onChange={e => setInstallmentPlans(p => p.map((x,i) => i === index ? {...x, name:e.target.value} : x))} className="form-input text-sm" /></div>
+                      <div><label className="form-label text-xs">Months</label><input type="number" min="1" value={plan.months || ''} onChange={e => setInstallmentPlans(p => p.map((x,i) => i === index ? {...x, months:Number(e.target.value)} : x))} className="form-input text-sm" /></div>
+                      <div><label className="form-label text-xs">Interest %</label><input type="number" min="0" step="0.01" value={plan.interestRate ?? ''} onChange={e => setInstallmentPlans(p => p.map((x,i) => i === index ? {...x, interestRate:Number(e.target.value)} : x))} className="form-input text-sm" /></div>
                       <div className="flex items-center gap-2"><label className="text-xs">Active</label><input type="checkbox" checked={plan.active !== false} onChange={e => setInstallmentPlans(p => p.map((x,i) => i === index ? {...x, active:e.target.checked} : x))} /><button className="text-red-500 text-sm" onClick={() => setInstallmentPlans(p => p.filter((_,i) => i !== index))}>Remove</button></div>
                     </div>
                   ))}
                 </div>
-                <div className="flex gap-3 mt-5"><button className="btn-outline text-sm" onClick={() => setInstallmentPlans(p => [...p, {provider:'',name:'',months:3,interestRate:0,providerLogo:'',active:true}])}>+ Add Plan</button><button className="btn-primary text-sm" onClick={saveInstallments}>Save Installment Plans</button></div>
+                <div className="flex gap-3 mt-5"><button className="btn-outline text-sm" onClick={() => setInstallmentPlans(p => [...p, {provider:'Payzy',name:'',months:3,interestRate:0,active:true}])}>+ Add Plan</button><button className="btn-primary text-sm" onClick={saveInstallments}>Save Installment Plans</button></div>
               </div>
             )}
 
