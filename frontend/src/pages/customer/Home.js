@@ -958,7 +958,7 @@ export default function Home() {
         newArrivals: newest.data.products || [],
         onSale: sale.data.products || [],
         bestSelling: best.data.products || [],
-        categories: cats.data || [],
+        categories: Array.isArray(cats.data) ? cats.data : (Array.isArray(cats.data?.categories) ? cats.data.categories : []),
         brands: brandRes.data.brands || [],
         heroBanners: hero.data || [],
         promoBanners: promo.data || [],
@@ -975,7 +975,7 @@ export default function Home() {
       setNewArrivals(nextHomeData.newArrivals);
       setOnSale(nextHomeData.onSale);
       setBestSelling(nextHomeData.bestSelling || []);
-      setCategories(nextHomeData.categories);
+      setCategories(Array.isArray(nextHomeData.categories) ? nextHomeData.categories : []);
       setBrands(nextHomeData.brands);
       setHeroBanners(nextHomeData.heroBanners);
       setPromoBanners(nextHomeData.promoBanners);

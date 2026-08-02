@@ -498,7 +498,12 @@ const Header = ({ settings, campaign }) => {
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 30);
     window.addEventListener('scroll', onScroll, {passive:true});
-    API.get('/categories?limit=6').then(r => setCategories(r.data || [])).catch(()=>{});
+    API.get('/categories?limit=6').then(r => {
+      // Older/API-proxy responses may wrap the list; never let a malformed
+      // tenant response reach `.slice()` in the header/search UI.
+      const rows = Array.isArray(r.data) ? r.data : (Array.isArray(r.data?.categories) ? r.data.categories : []);
+      setCategories(rows);
+    }).catch(()=>setCategories([]));
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
