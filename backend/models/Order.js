@@ -118,6 +118,7 @@ orderSchema.add({
     callbackProcessedAt: Date,
     notificationsSentAt: Date,
     stockRestoredAt: Date,
+    installmentPlan: { type: mongoose.Schema.Types.Mixed },
   },
 });
 

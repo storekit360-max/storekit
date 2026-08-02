@@ -94,13 +94,21 @@ router.get('/installment-quote/:productId', async (req, res) => {
   } catch (e) { res.status(500).json({ message: 'Could not load installment quote' }); }
 });
 
+router.get('/installment-plans', async (req, res) => {
+  try {
+    const gateway = await PaymentGateway.findOne({ tenantId: req.tenantId, gateway: 'payzy', isEnabled: true }).lean();
+    const plans = (gateway?.config?.installmentPlans || []).filter(p => p.active !== false && Number(p.months) > 0).map(p => ({ provider: p.provider || 'Payzy', name: p.name || `${p.months} months`, months: Number(p.months), interestRate: Number(p.interestRate || 0) }));
+    res.json({ plans });
+  } catch (e) { res.status(500).json({ message: 'Could not load installment plans' }); }
+});
+
 router.post('/payzy/create-checkout', paymentInitLimiter, async (req, res) => {
   let order;
   try {
     const gw = await PaymentGateway.findOne({ tenantId: req.tenantId, gateway: 'payzy', isEnabled: true });
     const cfg = payzyConfig(gw); const secret = cfg.secretKey || cfg.secretApiKey;
     if (!gw || !cfg.shopId || !secret) return res.status(400).json({ message: 'Payzy is not configured' });
-    const { items, billing = {}, shipping = {}, shipToDifferentAddress, notes, deliveryService, couponCode } = req.body;
+    const { items, billing = {}, shipping = {}, shipToDifferentAddress, notes, deliveryService, couponCode, installmentPlan } = req.body;
     if (!Array.isArray(items) || !items.length) return res.status(400).json({ message: 'No items in order' });
     const orderItems = [];
     for (const item of items) {
@@ -126,7 +134,7 @@ router.post('/payzy/create-checkout', paymentInitLimiter, async (req, res) => {
     }
     const v = { x_test_mode: testMode, x_shopid: String(cfg.shopId), x_amount: Number(total).toFixed(2), x_order_id: String(order.orderNumber), x_response_url: `${backendBase}/api/payments/payzy/response`, x_first_name: sanitise(billing.firstName, 60), x_last_name: sanitise(billing.lastName, 60), x_company: sanitise(cfg.companyName || '', 100), x_address: sanitise(billing.street, 200), x_country: sanitise(billing.country || 'Sri Lanka', 60), x_state: sanitise(billing.state, 60), x_city: sanitise(billing.city, 60), x_zip: sanitise(billing.zip, 20), x_phone: sanitise(billing.phone, 30), x_email: sanitise(billing.email, 120), x_ship_to_first_name: sanitise((shipping || billing).firstName, 60), x_ship_to_last_name: sanitise((shipping || billing).lastName, 60), x_ship_to_company: '', x_ship_to_address: sanitise((shipping || billing).street, 200), x_ship_to_country: sanitise((shipping || billing).country || 'Sri Lanka', 60), x_ship_to_state: sanitise((shipping || billing).state, 60), x_ship_to_city: sanitise((shipping || billing).city, 60), x_ship_to_zip: sanitise((shipping || billing).zip, 20), x_freight: Number(delivery.fee || 0).toFixed(2), x_platform: 'custom', x_version: '1.0', signed_field_names: PAYZY_FIELDS.join(',') };
     v.signature = payzySignature(v, secret);
-    order.payzy = { signedRequest: v, signedFieldNames: v.signed_field_names }; await order.save();
+    order.payzy = { signedRequest: v, signedFieldNames: v.signed_field_names, installmentPlan: installmentPlan || undefined }; await order.save();
     const endpoint = gw.isLive ? 'https://api.payzy.lk/checkout/custom-checkout' : 'https://api.payzypay.xyz/checkout/custom-checkout';
     const response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(v) });
     const data = await response.json().catch(() => ({})); const url = payzyUrl(data);

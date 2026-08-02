@@ -493,6 +493,8 @@ export default function Checkout() {
   const [agreedTerms,      setAgreedTerms]      = useState(false);
   const [notes,            setNotes]            = useState('');
   const [gateways,         setGateways]         = useState([]);
+  const [installmentPlans, setInstallmentPlans] = useState([]);
+  const [selectedInstallmentPlan, setSelectedInstallmentPlan] = useState(null);
   const [deliveryServices, setDeliveryServices] = useState([]);
   const [selectedDelivery, setSelectedDelivery] = useState('');
   const [payHereData,      setPayHereData]      = useState(null);
@@ -561,6 +563,7 @@ export default function Checkout() {
       });
       setGateways(Array.from(unique.values()));
     }).catch(() => setGateways([]));
+    API.get('/payments/installment-plans').then(r => setInstallmentPlans(Array.isArray(r.data?.plans) ? r.data.plans : [])).catch(() => setInstallmentPlans([]));
     API.get('/delivery').then(r => {
       const svcs = r.data?.services || r.data || [];
       setDeliveryServices(svcs);
@@ -696,6 +699,7 @@ export default function Checkout() {
     submitting.current = true;
     if (!agreedTerms)                    { submitting.current = false; toast.error('Please agree to terms and conditions'); return; }
     if (total > 0 && !paymentMethod)     { submitting.current = false; toast.error('Please select a payment method'); return; }
+    if (paymentMethod === 'payzy' && installmentPlans.length > 0 && !selectedInstallmentPlan) { submitting.current = false; toast.error('Please select an installment plan'); return; }
 
     if (!user) {
       try {
@@ -730,6 +734,7 @@ export default function Checkout() {
         giftCard:    giftCardData ? giftCardCode : undefined,
         notes,
         deliveryService: selectedDelivery || undefined,
+        installmentPlan: selectedInstallmentPlan || undefined,
       };
 
       // ── Handle PayHere — get hash from backend WITHOUT creating the order yet ──
@@ -1427,6 +1432,16 @@ export default function Checkout() {
                     </div>
                   ))}
                 </div>
+                {paymentMethod === 'payzy' && installmentPlans.length > 0 && (
+                  <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4">
+                    <label className="block text-sm font-bold text-violet-900 mb-2">Choose an installment plan</label>
+                    <select value={selectedInstallmentPlan ? JSON.stringify(selectedInstallmentPlan) : ''} onChange={e => setSelectedInstallmentPlan(e.target.value ? JSON.parse(e.target.value) : null)} className="form-input bg-white">
+                      <option value="">Select an installment plan</option>
+                      {installmentPlans.map(plan => <option key={`${plan.provider}-${plan.months}`} value={JSON.stringify(plan)}>{plan.provider} — {plan.name} ({plan.months} months, {plan.interestRate}% interest)</option>)}
+                    </select>
+                    <p className="text-xs text-violet-700 mt-2">Your selected plan will be carried into Payzy checkout.</p>
+                  </div>
+                )}
               </div>
             )}
 
