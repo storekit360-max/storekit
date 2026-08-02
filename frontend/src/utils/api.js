@@ -17,7 +17,11 @@ import axios from 'axios';
  *   Increased to 45s to safely cover Instagram (≤12s) and any other slow ops.
  */
 const API = axios.create({
-  baseURL: (process.env.REACT_APP_API_URL || '/api').replace(/\/$/, ''),
+  // Always use the same-origin API path. Vercel rewrites /api to Railway in
+  // production and the local dev server proxies it, so tenant stores never
+  // make browser requests directly to the Railway hostname (and never depend
+  // on cross-origin CORS configuration).
+  baseURL: '/api',
   timeout: 45000,
   withCredentials: true,
 });

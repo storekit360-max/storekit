@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-const apiBase = (process.env.REACT_APP_API_URL || '/api').replace(/\/$/, '');
+const apiBase = '/api';
 
 export default function useSupportRealtime(path, onEvent) {
   const callback = useRef(onEvent);

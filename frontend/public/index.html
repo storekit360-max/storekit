@@ -32,9 +32,13 @@
             if (version) localStorage.setItem(VERSION_KEY, version);
           } catch (_) {}
           clearOldRuntime();
+          // Reload without exposing an internal deployment marker in the
+          // customer-facing URL or analytics/referrer data.
           var url = new URL(window.location.href);
-          url.searchParams.set('__storekit_v', version || String(now));
-          window.setTimeout(function () { window.location.replace(url.toString()); }, 120);
+          url.searchParams.delete('__storekit_v');
+          window.setTimeout(function () {
+            window.location.replace(url.pathname + (url.search || '') + (url.hash || ''));
+          }, 120);
         }
 
         function checkVersion(reloadOnChange) {
@@ -211,10 +215,9 @@
       try{var raw=localStorage.getItem(cacheKey);if(raw)cached=JSON.parse(raw);}catch(e){}
       if(cached) applySettings(cached);
 
-      var envApi='%REACT_APP_API_URL%';
-      if(!envApi||envApi.indexOf('%REACT_APP_')===0) envApi='/api';
-      envApi=envApi.replace(/\/$/,'');
-      var settingsUrl=envApi+'/settings';
+      // Keep browser requests same-origin so Vercel rewrites them to Railway.
+      // This prevents every tenant storefront from depending on Railway CORS.
+      var settingsUrl='/api/settings';
       window.__szApiFetched=false;
 
       var controller=null, timeout=null;
