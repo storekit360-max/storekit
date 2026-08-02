@@ -134,7 +134,9 @@ const allowedOrigins = [
 // Cache custom-domain CORS decisions briefly to avoid a MongoDB query on every
 // API request while still allowing newly mapped tenant domains to propagate.
 const tenantOriginCache = new Map();
-const TENANT_ORIGIN_CACHE_TTL = 5 * 60 * 1000;
+// Keep this short so a newly verified/activated custom domain becomes usable
+// quickly without requiring a Railway restart or a manual CORS env update.
+const TENANT_ORIGIN_CACHE_TTL = 60 * 1000;
 
 async function isMappedTenantOrigin(origin) {
   try {
@@ -144,9 +146,20 @@ async function isMappedTenantOrigin(origin) {
     const cached = tenantOriginCache.get(domain);
     if (cached && Date.now() - cached.at < TENANT_ORIGIN_CACHE_TTL) return cached.allowed;
     const Tenant = require('./models/Tenant');
+    const candidates = [domain, `www.${domain}`];
+    const escapedDomain = domain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const exists = await Tenant.exists({
       status: 'active',
-      domains: { $elemMatch: { domain: { $in: [domain, `www.${domain}`] }, active: true } },
+      $or: [
+        // Current tenants store one or more verified storefront domains here.
+        { domains: { $elemMatch: { domain: { $in: candidates }, active: true } } },
+        // Retain compatibility with older tenant records that only used the
+        // original top-level domain field.
+        { domain: { $in: candidates } },
+        // Some older tenants kept the public URL in settings instead of the
+        // domain registry. Accept both bare domains and stored http(s) URLs.
+        { 'settings.siteUrl': new RegExp(`^https?:\\/\\/(www\\.)?${escapedDomain}(?:\\/|$)`, 'i') },
+      ],
     });
     const allowed = Boolean(exists);
     tenantOriginCache.set(domain, { allowed, at: Date.now() });
