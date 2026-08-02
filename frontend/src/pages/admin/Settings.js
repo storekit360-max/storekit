@@ -13,6 +13,7 @@ const TABS = [
   { id:'whatsapp', label:'💬 WhatsApp', group:'ops' },
   { id:'payment', label:'💳 Payment', group:'ops' },
   { id:'gateways', label:'🔌 Gateways', group:'ops' },
+  { id:'installments', label:'🧾 Installments', group:'ops' },
   { id:'appearance', label:'🎨 Theme', group:'design' },
   { id:'fonts', label:'🔤 Fonts', group:'design' },
   { id:'pages', label:'📄 Pages', group:'design' },
@@ -38,6 +39,7 @@ const GATEWAY_PRESETS = {
   payhere: { name: 'PayHere', logo: '💳', color: '#0066cc', fields: [{ key:'merchantId', label:'Merchant ID', type:'text' }, { key:'merchantSecret', label:'Merchant Secret', type:'password' }, { key:'appId', label:'App ID (optional)', type:'text' }, { key:'appSecret', label:'App Secret (optional)', type:'password' }] },
   stripe: { name: 'Stripe', logo: '💜', color: '#635bff', fields: [{ key:'publicKey', label:'Publishable Key', type:'text', hint:'pk_test_... or pk_live_...' }, { key:'secretKey', label:'Secret Key', type:'password', hint:'sk_test_... or sk_live_...' }, { key:'webhookSecret', label:'Webhook Secret', type:'password' }] },
   paypal: { name: 'PayPal', logo: '🅿️', color: '#003087', fields: [{ key:'clientId', label:'Client ID', type:'text' }, { key:'clientSecret', label:'Client Secret', type:'password' }] },
+  payzy: { name: 'Payzy', logo: '🟣', color: '#6d28d9', fields: [{ key:'shopId', label:'Shop ID', type:'text' }, { key:'secretKey', label:'Secret API Key', type:'password' }, { key:'companyName', label:'Company Name', type:'text' }, { key:'logoUrl', label:'Payzy Logo URL', type:'url' }] },
 };
 
 
@@ -172,6 +174,7 @@ export default function AdminSettings() {
   const [curfoxBusinesses, setCurfoxBusinesses] = useState([]);
   const [curfoxWorking, setCurfoxWorking] = useState(false);
   const [gwConfigs, setGwConfigs] = useState({});
+  const [installmentPlans, setInstallmentPlans] = useState([]);
   const [whatsappConfig, setWhatsappConfig] = useState({
     whatsappEnabled: false,
     whatsappNumber: '',
@@ -205,7 +208,7 @@ export default function AdminSettings() {
       });
       setSettings(p => ({ ...p, ...coerced }));
     }).catch(() => {});
-    API.get('/payments/admin/all').then(r => { setGateways(r.data); const cfgs = {}; r.data.forEach(g => { cfgs[g.gateway] = { ...g.config, isEnabled: g.isEnabled, isLive: g.isLive, displayName: g.displayName }; }); setGwConfigs(cfgs); }).catch(() => {});
+    API.get('/payments/admin/all').then(r => { setGateways(r.data); const cfgs = {}; r.data.forEach(g => { cfgs[g.gateway] = { ...g.config, isEnabled: g.isEnabled, isLive: g.isLive, displayName: g.displayName }; }); setGwConfigs(cfgs); setInstallmentPlans(r.data.find(g => g.gateway === 'payzy')?.config?.installmentPlans || []); }).catch(() => {});
     API.get('/delivery/admin/all').then(r => setDeliveryServices(r.data)).catch(() => {});
     API.get('/curfox/settings').then(r => setCurfoxConfig(p=>({...p,...r.data,password:''}))).catch(() => {});
     API.get('/whatsapp/config').then(r => setWhatsappConfig(p => ({ ...p, ...r.data }))).catch(() => {});
@@ -268,13 +271,20 @@ export default function AdminSettings() {
       await API.put(`/payments/admin/${gateway}`, {
         isEnabled: cfg.isEnabled || false, isLive: cfg.isLive || false,
         displayName: cfg.displayName || GATEWAY_PRESETS[gateway]?.name,
-        config: Object.fromEntries(Object.entries(cfg).filter(([k]) => !['isEnabled','isLive','displayName'].includes(k)))
+        config: { ...Object.fromEntries(Object.entries(cfg).filter(([k]) => !['isEnabled','isLive','displayName'].includes(k))), ...(gateway === 'payzy' ? { installmentPlans } : {}) }
       });
       toast.success(`${GATEWAY_PRESETS[gateway]?.name} settings saved!`);
     } catch (err) {
       console.error('Save gateway error:', err);
       toast.error(err?.response?.data?.message || 'Failed to save gateway');
     }
+  };
+
+  const saveInstallments = async () => {
+    try {
+      await API.put('/payments/admin/payzy', { ...(gwConfigs.payzy || {}), isEnabled: gwConfigs.payzy?.isEnabled || false, isLive: gwConfigs.payzy?.isLive || false, displayName: 'Payzy', config: { ...(gwConfigs.payzy || {}), installmentPlans } });
+      toast.success('Payzy installment plans saved');
+    } catch (err) { toast.error(err?.response?.data?.message || 'Could not save installment plans'); }
   };
 
   const toggleGateway = async (gateway) => {
@@ -980,6 +990,27 @@ export default function AdminSettings() {
                   <p className="text-sm font-semibold text-blue-800 mb-1">💡 More gateways coming</p>
                   <p className="text-xs text-blue-600">Razorpay, 2Checkout, HNB iPay, Sampath Vishwa integrations available on request.</p>
                 </div>
+              </div>
+            )}
+
+            {tab === 'installments' && (
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-1">Payzy Installment Plans</h3>
+                <p className="text-sm text-gray-400 mb-5">Plans are stored per tenant and calculated server-side for every product card.</p>
+                <div className="space-y-3">
+                  {installmentPlans.map((plan, index) => (
+                    <div key={index} className="grid sm:grid-cols-6 gap-2 items-end border border-gray-100 rounded-xl p-3">
+                      {['provider','name','months','interestRate','providerLogo'].map(key => (
+                        <div key={key} className={key === 'providerLogo' ? 'sm:col-span-2' : ''}>
+                          <label className="form-label text-xs">{key === 'interestRate' ? 'Interest %' : key === 'providerLogo' ? 'Provider Logo URL' : key[0].toUpperCase() + key.slice(1)}</label>
+                          <input type={['months','interestRate'].includes(key) ? 'number' : 'text'} value={plan[key] || ''} onChange={e => setInstallmentPlans(p => p.map((x,i) => i === index ? {...x, [key]: ['months','interestRate'].includes(key) ? Number(e.target.value) : e.target.value} : x))} className="form-input text-sm" />
+                        </div>
+                      ))}
+                      <div className="flex items-center gap-2"><label className="text-xs">Active</label><input type="checkbox" checked={plan.active !== false} onChange={e => setInstallmentPlans(p => p.map((x,i) => i === index ? {...x, active:e.target.checked} : x))} /><button className="text-red-500 text-sm" onClick={() => setInstallmentPlans(p => p.filter((_,i) => i !== index))}>Remove</button></div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-3 mt-5"><button className="btn-outline text-sm" onClick={() => setInstallmentPlans(p => [...p, {provider:'',name:'',months:3,interestRate:0,providerLogo:'',active:true}])}>+ Add Plan</button><button className="btn-primary text-sm" onClick={saveInstallments}>Save Installment Plans</button></div>
               </div>
             )}
 

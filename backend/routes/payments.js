@@ -83,8 +83,10 @@ router.get('/installment-quote/:productId', async (req, res) => {
     const originalAmount = Number(product.price || 0);
     const discounted = Number(product.salePrice > 0 && product.salePrice < originalAmount);
     const amount = discounted ? Number(product.salePrice) : originalAmount;
+    const gateway = await PaymentGateway.findOne({ tenantId: req.tenantId, gateway: 'payzy' }).lean();
     const setting = await Settings.findOne({ tenantId: req.tenantId, key: 'payzyInstallmentPlans' }).lean();
-    const plans = (setting?.value || []).filter(p => p.active !== false && Number(p.months) > 0).map(p => {
+    const configuredPlans = gateway?.config?.installmentPlans || setting?.value || [];
+    const plans = configuredPlans.filter(p => p.active !== false && Number(p.months) > 0).map(p => {
       const totalPayable = Math.round(amount * (1 + Number(p.interestRate || 0) / 100) * 100) / 100;
       return { provider: p.provider || 'Payzy', providerLogo: p.providerLogo || '', name: p.name || `${p.months} months`, months: Number(p.months), interestRate: Number(p.interestRate || 0), totalPayable, monthlyAmount: Math.round(totalPayable / Number(p.months) * 100) / 100 };
     });
