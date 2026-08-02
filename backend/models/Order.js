@@ -27,7 +27,7 @@ const orderSchema = new mongoose.Schema({
     city: String, phone: String
   },
   shipToDifferentAddress: { type: Boolean, default: false },
-  paymentMethod: { type: String, enum: ['bank_transfer', 'cod', 'free', 'payhere', 'stripe', 'paypal'], required: true },
+  paymentMethod: { type: String, enum: ['bank_transfer', 'cod', 'free', 'payhere', 'stripe', 'paypal', 'payzy'], required: true },
   paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'refunded'], default: 'pending' },
   orderStatus: {
     type: String,
@@ -104,6 +104,21 @@ const orderSchema = new mongoose.Schema({
 
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
+});
+
+// Payzy drafts intentionally remain hidden from operational order workflows until
+// the signed callback confirms payment.
+orderSchema.add({
+  isPaymentDraft: { type: Boolean, default: false, index: true },
+  paymentDraftExpiresAt: { type: Date, index: true },
+  payzy: {
+    signedRequest: { type: mongoose.Schema.Types.Mixed },
+    signedFieldNames: String,
+    paymentReference: String,
+    callbackProcessedAt: Date,
+    notificationsSentAt: Date,
+    stockRestoredAt: Date,
+  },
 });
 
 orderSchema.index({ tenantId: 1, orderNumber: 1 }, { unique: true });

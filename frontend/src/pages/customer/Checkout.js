@@ -550,8 +550,8 @@ export default function Checkout() {
   // Load payment gateways and delivery services
   useEffect(() => {
     API.get('/payments/gateways').then(r => {
-      const supported = new Set(['payhere', 'stripe', 'paypal']);
-      const canonicalNames = { payhere: 'PayHere', stripe: 'Stripe', paypal: 'PayPal' };
+      const supported = new Set(['payhere', 'stripe', 'paypal', 'payzy']);
+      const canonicalNames = { payhere: 'PayHere', stripe: 'Stripe', paypal: 'PayPal', payzy: 'Payzy' };
       const unique = new Map();
       (Array.isArray(r.data) ? r.data : []).forEach(gateway => {
         const key = String(gateway?.gateway || '').toLowerCase().trim();
@@ -798,6 +798,19 @@ export default function Checkout() {
         });
         setLoading(false);
         return;
+      }
+
+      if (effectivePaymentMethod === 'payzy') {
+        try {
+          const payzyRes = await API.post('/payments/payzy/create-checkout', orderData);
+          if (!payzyRes.data?.url) throw new Error('Payzy did not return a checkout URL');
+          window.location.assign(payzyRes.data.url);
+          return;
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Could not initialise Payzy. Please try again.');
+          setLoading(false);
+          return;
+        }
       }
 
       // ── COD / bank_transfer / free — create order now ────────────────────────
@@ -1408,6 +1421,7 @@ export default function Checkout() {
                           {gw.gateway === 'payhere' && 'Redirected to PayHere secure checkout'}
                           {gw.gateway === 'stripe'  && 'Enter your card details securely via Stripe'}
                           {gw.gateway === 'paypal'  && 'Complete payment via PayPal'}
+                          {gw.gateway === 'payzy' && 'Redirected to Payzy secure checkout'}
                         </div>
                       </div>
                     </div>
@@ -1443,12 +1457,12 @@ export default function Checkout() {
                 {loading ? (
                   <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Placing Order...</>
                 ) : user ? (
-                  <>Place Order — {sym} {total.toLocaleString()}{['payhere', 'stripe', 'paypal'].includes(paymentMethod) ? ' →' : ''}</>
+                  <>Place Order — {sym} {total.toLocaleString()}{['payhere', 'stripe', 'paypal', 'payzy'].includes(paymentMethod) ? ' →' : ''}</>
                 ) : (
                   <>Create Account &amp; Place Order — {sym} {total.toLocaleString()}</>
                 )}
               </button>
-              {total > 0 && ['payhere', 'stripe', 'paypal'].includes(paymentMethod) && (
+              {total > 0 && ['payhere', 'stripe', 'paypal', 'payzy'].includes(paymentMethod) && (
                 <p className="text-xs text-gray-400 text-center mt-2 flex items-center justify-center gap-1">
                   🔒 Secure payment via {gateways.find(g => g.gateway === paymentMethod)?.displayName}
                 </p>

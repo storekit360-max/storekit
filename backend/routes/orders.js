@@ -202,7 +202,7 @@ router.get('/admin/all', adminAuth, async (req, res) => {
     const tenantId = req.user?.tenantId || req.tenantId;
     if (!tenantId) return res.status(400).json({ message: 'Tenant context is required' });
     const { status, page = 1, limit = 20, search, pendingPayment } = req.query;
-    const filter = { tenantId };
+    const filter = { tenantId, isPaymentDraft: { $ne: true } };
     if (status && status !== 'all') filter.orderStatus = status;
     if (pendingPayment === 'true') {
       filter.paymentStatus = 'pending';
