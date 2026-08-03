@@ -130,7 +130,8 @@ router.get('/customers', adminAuth, async (req, res) => {
     const filter = { role: 'customer' };
     if (search) filter.$or = [
       { firstName: new RegExp(search, 'i') },
-      { email: new RegExp(search, 'i') }
+      { email: new RegExp(search, 'i') },
+      { phone: new RegExp(String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }
     ];
     const total = await User.countDocuments(filter);
     const customers = await User.find(filter)
@@ -142,6 +143,20 @@ router.get('/customers', adminAuth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
+});
+
+router.post('/customers', adminAuth, async (req, res) => {
+  try {
+    const tenantId = req.tenantId || req.user?.tenantId;
+    const firstName = String(req.body.firstName || req.body.name || '').trim();
+    const phone = String(req.body.phone || '').trim();
+    if (!tenantId || !firstName || !phone) return res.status(400).json({ message: 'Name and phone are required' });
+    const existing = await User.findOne({ tenantId, role: 'customer', phone }).select('-password');
+    if (existing) return res.json({ customer: existing, existing: true });
+    const safePhone = phone.replace(/[^0-9]+/g, '').slice(-15) || Date.now().toString();
+    const customer = await User.create({ tenantId, role: 'customer', firstName, lastName: String(req.body.lastName || '').trim(), phone, email: String(req.body.email || `pos-${safePhone}@customer.local`).toLowerCase(), username: `pos_${safePhone}_${Date.now()}`, password: require('crypto').randomBytes(24).toString('hex'), isVerified: false });
+    res.status(201).json({ customer: { ...customer.toObject(), password: undefined }, existing: false });
+  } catch (err) { if (err.code === 11000) return res.status(409).json({ message: 'A customer with these details already exists' }); res.status(500).json({ message: 'Customer registration failed' }); }
 });
 
 // ── Toggle customer active status ─────────────────────────────────────────────

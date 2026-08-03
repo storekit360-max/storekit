@@ -68,6 +68,9 @@ const AnimationSettings  = lazy(() => import('./pages/admin/AnimationSettings'))
 const ThemeBuilder       = lazy(() => import('./pages/admin/ThemeBuilder'));
 const LayoutEditor       = lazy(() => import('./pages/admin/LayoutEditor'));
 const AdminLayout        = lazy(() => import('./pages/admin/AdminLayout'));
+const AdminPOS           = lazy(() => import('./pages/admin/POS'));
+const POSDashboard       = lazy(() => import('./pages/admin/POSDashboard'));
+const POSCustomerDisplay = lazy(() => import('./pages/pos/CustomerDisplay'));
 const Monitoring         = lazy(() => import('./pages/admin/Monitoring'));
 const SocialMediaSettings = lazy(() => import('./pages/admin/SocialMedia'));
 const AutomationRules    = lazy(() => import('./pages/admin/AutomationRules'));
@@ -249,6 +252,7 @@ export default function App() {
                     </Route>
 
                     <Route path="/login"           element={<Login/>}/>
+                    <Route path="/pos/customer-display" element={<POSCustomerDisplay/>}/>
                     <Route path="/register"        element={<Register/>}/>
                     <Route path="/forgot-password" element={<ForgotPassword/>}/>
                     <Route path="/google-auth-bridge" element={<GoogleAuthBridge/>}/>
@@ -258,6 +262,8 @@ export default function App() {
                     <Route path="/superadmin/*" element={<SuperAdminRoute><SuperAdminDashboard/></SuperAdminRoute>}/>
 
                     <Route path="/admin" element={<AdminRoute><AdminLayout/></AdminRoute>}>
+                      <Route path="pos" element={<AdminPOS/>}/>
+                      <Route path="pos-dashboard" element={<POSDashboard/>}/>
                       <Route index                   element={<Dashboard/>}/>
                       <Route path="products"         element={<AdminProducts/>}/>
                       <Route path="orders"           element={<AdminOrders/>}/>

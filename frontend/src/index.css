@@ -1446,3 +1446,9 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
   .superadmin-shell #superadmin-main textarea { max-width: 100%; }
   .superadmin-shell .fixed.inset-0 > [role="dialog"] { max-height: calc(100dvh - 1rem); }
 }
+@media print {
+  body * { visibility: hidden !important; }
+  .pos-receipt, .pos-receipt * { visibility: visible !important; }
+  .pos-receipt { position: absolute; inset: 0; width: 80mm !important; max-width: 80mm !important; margin: 0 !important; padding: 8mm !important; border: 0 !important; box-shadow: none !important; }
+  @page { margin: 0; }
+}

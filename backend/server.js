@@ -333,6 +333,8 @@ safeMount('/api/superadmin',    require('./routes/superadmin'), require('./middl
 safeMount('/api/products',      require('./routes/products'), tenantScope);
 safeMount('/api/storefront',    require('./routes/storefront'), tenantScope);
 safeMount('/api/orders',        require('./routes/orders'), tenantScope);
+safeMount('/api/pos',           require('./routes/pos'), tenantScope);
+safeMount('/api/pos',           require('./routes/posReports'), tenantScope);
 safeMount('/api/categories',    require('./routes/categories'), tenantScope);
 safeMount('/api/coupons',       require('./routes/coupons'), tenantScope);
 safeMount('/api/banners',       require('./routes/banners'), tenantScope);

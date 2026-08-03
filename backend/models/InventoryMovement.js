@@ -1,0 +1,4 @@
+const mongoose = require('mongoose');
+const schema = new mongoose.Schema({ tenantId: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', required: true, index: true }, product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true }, variantKey: String, variantSku: String, movementType: String, quantityChange: Number, quantityBefore: Number, quantityAfter: Number, sourceType: String, sourceId: mongoose.Schema.Types.ObjectId, orderNumber: String, receiptNumber: String, createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, createdByName: String, idempotencyKey: String, reason: String, note: String }, { timestamps: true });
+schema.index({ tenantId: 1, createdAt: -1 });
+module.exports = mongoose.models.InventoryMovement || mongoose.model('InventoryMovement', schema);

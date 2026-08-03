@@ -14,7 +14,8 @@ const orderSchema = new mongoose.Schema({
     image: String,
     price: Number,
     quantity: Number,
-    subtotal: Number
+    subtotal: Number,
+    variantSku: String
   }],
   billing: {
     firstName: String, lastName: String,
@@ -27,7 +28,15 @@ const orderSchema = new mongoose.Schema({
     city: String, phone: String
   },
   shipToDifferentAddress: { type: Boolean, default: false },
-  paymentMethod: { type: String, enum: ['bank_transfer', 'cod', 'free', 'payhere', 'stripe', 'paypal', 'payzy'], required: true },
+  paymentMethod: { type: String, enum: ['cash', 'card', 'qr', 'mobile_wallet', 'bank_transfer', 'cod', 'free', 'payhere', 'stripe', 'paypal', 'payzy'], required: true },
+  orderChannel: { type: String, enum: ['online', 'pos', 'manual'], default: 'online', index: true },
+  fulfillmentType: { type: String, enum: ['delivery', 'pickup', 'in_store'], default: 'delivery' },
+  pos: {
+    saleNumber: String, receiptNumber: String, cashierId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, cashierName: String,
+    completedAt: Date, amountTendered: { type: Number, default: 0 }, changeGiven: { type: Number, default: 0 }, idempotencyKey: String, clientRequestId: String, terminalId: String,
+    voidedAt: Date, voidReason: String, voidedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  },
+  payments: [{ method: { type: String, enum: ['cash','card','bank_transfer','qr','mobile_wallet'] }, amount: { type: Number, required: true }, reference: String, status: { type: String, enum: ['paid','pending','failed'], default: 'paid' }, receivedAt: { type: Date, default: Date.now } }],
   paymentStatus: { type: String, enum: ['pending', 'paid', 'failed', 'refunded'], default: 'pending' },
   orderStatus: {
     type: String,
@@ -129,6 +138,7 @@ orderSchema.index({ tenantId: 1, 'courier.waybill': 1 }, { sparse: true });
 orderSchema.index({ tenantId: 1, orderStatus: 1, createdAt: -1 });
 orderSchema.index({ tenantId: 1, paymentStatus: 1, orderStatus: 1, createdAt: -1 });
 orderSchema.index({ tenantId: 1, isRead: 1, createdAt: -1 });
+orderSchema.index({ tenantId: 1, 'pos.idempotencyKey': 1 }, { unique: true, sparse: true });
 
 orderSchema.pre('save', function(next) {
   if (!this.orderNumber) {

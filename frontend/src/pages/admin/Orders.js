@@ -25,6 +25,7 @@ export default function AdminOrders() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [showPendingPayment, setShowPendingPayment] = useState(false);
+  const [channelFilter, setChannelFilter] = useState('all');
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -33,13 +34,14 @@ export default function AdminOrders() {
         status: statusFilter, search, page, limit: 20,
       });
       if (showPendingPayment) params.set('pendingPayment', 'true');
+      if (channelFilter !== 'all') params.set('orderChannel', channelFilter);
 
       const { data } = await API.get(`/orders/admin/all?${params}`);
       setOrders(data.orders);
       setTotalPages(data.pages);
       setTotal(data.total);
     } catch {} finally { setLoading(false); }
-  }, [statusFilter, search, page, showPendingPayment]);
+  }, [statusFilter, search, page, showPendingPayment, channelFilter]);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
@@ -85,6 +87,7 @@ export default function AdminOrders() {
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${showPendingPayment ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200 hover:border-primary hover:text-primary'}`}>
             Pending payment
           </button>
+          {['all', 'online', 'pos'].map(channel => <button key={channel} onClick={() => { setChannelFilter(channel); setPage(1); }} className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${channelFilter === channel ? 'bg-primary text-white border-primary' : 'bg-white text-gray-600 border-gray-200'}`}>{channel === 'all' ? 'All channels' : channel === 'pos' ? 'POS sales' : 'Online orders'}</button>)}
         </div>
       </div>
 

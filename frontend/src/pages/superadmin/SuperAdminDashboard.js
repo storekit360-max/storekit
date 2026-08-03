@@ -53,6 +53,7 @@ const FEATURE_CATALOG = [
       { key: 'socialMedia',   label: 'Social Media',              icon: '📱', default: false },
       { key: 'automation',    label: 'Automation Rules',            icon: '⚙️', default: false },
       { key: 'backup',        label: 'Backup Center',                icon: '💾', default: false },
+      { key: 'pos',           label: 'Point of Sale',                icon: '🧾', default: false },
     ],
   },
   {

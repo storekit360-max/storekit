@@ -23,6 +23,7 @@ const featureSchema = new mongoose.Schema({
   socialMedia:    { type: Boolean, default: false },
   automation:     { type: Boolean, default: false },
   backup:         { type: Boolean, default: false },
+  pos:            { type: Boolean, default: false },
 
   // ── Sub features (secondary capabilities that extend a core module) ────
   analytics:          { type: Boolean, default: false },

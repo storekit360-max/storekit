@@ -4,7 +4,6 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import API from '../../utils/api';
 import { adminNotificationDestination } from '../../utils/notificationLinks';
-import StoreAssistant from '../../components/admin/StoreAssistant';
 
 const NAV = [
   { path:'/admin',              label:'Dashboard',      exact:true, icon:'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
@@ -418,6 +417,10 @@ export default function AdminLayout() {
           {/* Right: dark mode + notifications + view store */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
 
+            {planFeatures.pos && <Link to="/admin/pos" aria-label="Open POS" title="Open POS" className="inline-flex items-center gap-2 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white shadow-sm hover:opacity-90">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M4 4h16v12H4zM8 20h8M9 16v4m6-4v4M8 8h8M8 11h5"/></svg><span className="hidden sm:inline">Open POS</span>
+            </Link>}
+
             {/* Dark mode toggle */}
             <button
               onClick={() => setDarkMode(!darkMode)}
@@ -599,7 +602,6 @@ export default function AdminLayout() {
         </main>
 
       </div>
-      <StoreAssistant />
     </div>
   );
 }

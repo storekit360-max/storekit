@@ -6,7 +6,7 @@ const groups = [
     ['coupons','Coupons','🎟️',false],['giftCards','Gift Vouchers','🎁',false],['banners','Banners & Popups','🖼️',false],['seasonal','Seasonal Themes','❄️',false],
     ['deals','Deals & Offers','🔥',false],['reviews','Reviews','⭐',false],['subscribers','Subscribers','📬',false],['returns','Returns & Refunds','↩️',false],
     ['seo','SEO Tools','🔍',false],['layoutEditor','Layout Builder','🧩',false],['themeBuilder','Theme Builder','🎨',false],['animations','Animations','✨',false],
-    ['socialMedia','Social Media','📱',false],['automation','Automation Rules','⚙️',false],['backup','Backup Center','💾',false],
+    ['socialMedia','Social Media','📱',false],['automation','Automation Rules','⚙️',false],['backup','Backup Center','💾',false],['pos','Point of Sale','🧾',false],
   ]},
   { tier: 'sub', label: 'Sub Features', description: 'Capabilities that extend core modules.', items: [
     ['analytics','Analytics Dashboard','📊',false],['customDomain','Custom Domain','🌐',true],['metaPixel','Meta Pixel Tracking','📈',false],
