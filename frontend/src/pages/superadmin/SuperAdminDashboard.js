@@ -1142,6 +1142,28 @@ function UsageBar({ label, value, limit }) {
   );
 }
 
+function BillingDateEditor({ tenant, onSaved }) {
+  const [trialEndsAt, setTrialEndsAt] = useState(tenant.billing?.trialEndsAt ? new Date(tenant.billing.trialEndsAt).toISOString().slice(0, 16) : '');
+  const [nextPaymentDate, setNextPaymentDate] = useState(tenant.billing?.nextPaymentDate ? new Date(tenant.billing.nextPaymentDate).toISOString().slice(0, 16) : '');
+  const [saving, setSaving] = useState(false);
+  async function save() {
+    if (!trialEndsAt && !nextPaymentDate) return;
+    setSaving(true);
+    try { await API.patch(`/superadmin/tenants/${tenant._id}/billing-dates`, { trialEndsAt: trialEndsAt || null, nextPaymentDate: nextPaymentDate || null }); onSaved?.(); }
+    catch (err) { window.alert(err.response?.data?.message || 'Could not update billing dates'); }
+    finally { setSaving(false); }
+  }
+  return <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
+    <p className="text-xs font-bold text-indigo-800 mb-2">Billing date override</p>
+    <div className="grid grid-cols-1 gap-2">
+      <label className="text-[11px] font-semibold text-slate-600">Trial ends<input type="datetime-local" value={trialEndsAt} onChange={e => setTrialEndsAt(e.target.value)} className="mt-1 h-8 w-full rounded-lg border border-indigo-100 bg-white px-2 text-xs" /></label>
+      <label className="text-[11px] font-semibold text-slate-600">Next billing date<input type="datetime-local" value={nextPaymentDate} onChange={e => setNextPaymentDate(e.target.value)} className="mt-1 h-8 w-full rounded-lg border border-indigo-100 bg-white px-2 text-xs" /></label>
+    </div>
+    <button onClick={save} disabled={saving} className="mt-2 h-8 rounded-lg bg-indigo-600 px-3 text-xs font-bold text-white disabled:opacity-60">{saving ? 'Saving…' : 'Save billing dates'}</button>
+    {tenant.billing?.subscriptionStatus === 'trial' && <p className="mt-2 text-[10px] text-indigo-600">For trial tenants, changing the trial end automatically synchronizes the next billing date.</p>}
+  </div>;
+}
+
 function TenantMonitorGrid({ rows, onUpdate, onResetPassword, onDelete }) {
   if (!rows || rows.length === 0) return <p className="text-sm text-slate-400 py-6 text-center">No monitoring data available yet.</p>;
   return (
@@ -1184,6 +1206,8 @@ function TenantMonitorGrid({ rows, onUpdate, onResetPassword, onDelete }) {
                 {!alertText(t).includes('Needs') ? null : <span className="text-xs text-slate-400">No alerts</span>}
               </div>
             </div>
+
+            <BillingDateEditor tenant={t} onSaved={onUpdate ? () => onUpdate(t._id, {}) : undefined} />
 
             <div className="mt-4 flex flex-wrap gap-2">
               {url && <a href={url} target="_blank" rel="noreferrer" className="h-8 px-3 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-bold inline-flex items-center">Open</a>}

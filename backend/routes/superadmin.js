@@ -675,6 +675,43 @@ router.put('/tenants/:id', requirePlatformPermission('tenant.edit'), async (req,
   } catch (err) { next(err); }
 });
 
+// Manual billing-date override for exceptional commercial arrangements. The
+// canonical billing fields and the legacy mirrored subscription fields are
+// updated together so tenant-admin billing screens stay synchronized.
+router.patch('/tenants/:id/billing-dates', requirePlatformPermission('billing.update'), async (req, res, next) => {
+  try {
+    const tenant = await Tenant.findById(req.params.id).populate('plan');
+    if (!tenant) return res.status(404).json({ message: 'Tenant not found' });
+    const parseDate = (value, label) => {
+      if (value === null || value === '' || value === undefined) return null;
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) throw Object.assign(new Error(`${label} is invalid`), { statusCode: 400 });
+      return date;
+    };
+    const trialEndsAt = parseDate(req.body.trialEndsAt, 'Trial end date');
+    const requestedNext = parseDate(req.body.nextPaymentDate, 'Next billing date');
+    const nextPaymentDate = tenant.billing?.subscriptionStatus === 'trial' && trialEndsAt ? trialEndsAt : requestedNext;
+    if (!trialEndsAt && !nextPaymentDate) return res.status(400).json({ message: 'Provide at least one billing date' });
+    const set = {};
+    if (trialEndsAt) {
+      set['billing.trialEndsAt'] = trialEndsAt;
+      set['billing.currentPeriodEnd'] = trialEndsAt;
+      set['subscription.trialEndsAt'] = trialEndsAt;
+      set['subscription.currentPeriodEnd'] = trialEndsAt;
+    }
+    if (nextPaymentDate) {
+      set['billing.nextPaymentDate'] = nextPaymentDate;
+      set['subscription.nextBillingAt'] = nextPaymentDate;
+      if (tenant.billing?.subscriptionStatus !== 'trial') {
+        set['billing.currentPeriodEnd'] = nextPaymentDate;
+        set['subscription.currentPeriodEnd'] = nextPaymentDate;
+      }
+    }
+    const updated = await Tenant.findByIdAndUpdate(tenant._id, { $set: set }, { new: true, runValidators: true }).populate('plan').populate('owner', 'firstName lastName email username role');
+    res.json({ ...updated.toObject(), billingDatesUpdatedAt: new Date() });
+  } catch (err) { next(err); }
+});
+
 // ── Billing dashboard — income, pending payments, upcoming payments ───────
 router.get('/billing/overview', requirePlatformPermission('billing.view'), async (_req, res, next) => {
   try { res.json(await subscriptionService.getOverview()); }
