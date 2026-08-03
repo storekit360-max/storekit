@@ -690,7 +690,13 @@ router.patch('/tenants/:id/billing-dates', requirePlatformPermission('billing.up
     };
     const trialEndsAt = parseDate(req.body.trialEndsAt, 'Trial end date');
     const requestedNext = parseDate(req.body.nextPaymentDate, 'Next billing date');
-    const nextPaymentDate = tenant.billing?.subscriptionStatus === 'trial' && trialEndsAt ? trialEndsAt : requestedNext;
+    const existingTrialMs = tenant.billing?.trialEndsAt ? new Date(tenant.billing.trialEndsAt).getTime() : null;
+    const existingNextMs = tenant.billing?.nextPaymentDate ? new Date(tenant.billing.nextPaymentDate).getTime() : null;
+    const trialChanged = trialEndsAt && trialEndsAt.getTime() !== existingTrialMs;
+    // A changed trial date drives the next billing date automatically. If the
+    // trial date was merely submitted unchanged by the form, an independently
+    // edited next billing date must win.
+    const nextPaymentDate = tenant.billing?.subscriptionStatus === 'trial' && trialChanged ? trialEndsAt : requestedNext;
     if (!trialEndsAt && !nextPaymentDate) return res.status(400).json({ message: 'Provide at least one billing date' });
     const set = {};
     if (trialEndsAt) {
