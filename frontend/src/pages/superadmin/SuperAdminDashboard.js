@@ -680,6 +680,7 @@ export default function SuperAdminDashboard() {
                   <Input label="Admins" type="number" value={planForm.limits.admins} onChange={v => updatePlan('limits.admins', Number(v))} />
                   <Input label="Storage MB" type="number" value={planForm.limits.storageMb} onChange={v => updatePlan('limits.storageMb', Number(v))} />
                   <div className="sm:col-span-2 lg:col-span-4">
+                    <label className="sm:col-span-2 lg:col-span-4 flex items-center gap-3 rounded-xl border-2 border-indigo-200 bg-indigo-50 p-4 text-sm font-bold text-indigo-900"><input type="checkbox" className="h-5 w-5 accent-indigo-600" checked={!!planForm.features?.pos} onChange={e => updatePlan('features.pos', e.target.checked)} /> 🧾 Point of Sale <span className="font-normal text-indigo-700">Allow this plan’s tenants to use the POS system</span></label>
                     <FeatureEditor features={planForm.features} onChange={(features) => setPlanForm(prev => ({ ...prev, features }))} />
                   </div>
                   <div className="sm:col-span-2 lg:col-span-4">
@@ -1544,6 +1545,7 @@ function PlanCard({ plan, onSave }) {
           </label>
         ))}
       </div>
+      <label className="flex items-center gap-3 rounded-xl border-2 border-indigo-200 bg-indigo-50 p-4 text-sm font-bold text-indigo-900"><input type="checkbox" className="h-5 w-5 accent-indigo-600" checked={!!draft.features?.pos} onChange={e => setDraft({ ...draft, features: { ...(draft.features || {}), pos: e.target.checked } })} /> 🧾 Point of Sale <span className="font-normal text-indigo-700">Allow this plan’s tenants to use the POS system</span></label>
       <FeatureEditor features={draft.features || {}} onChange={(features) => setDraft({ ...draft, features })} />
       <button onClick={handleSave} disabled={saving} className="h-10 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold text-sm">
         {saving ? 'Saving…' : 'Save Plan'}
