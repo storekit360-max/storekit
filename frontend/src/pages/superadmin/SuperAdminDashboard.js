@@ -184,6 +184,7 @@ export default function SuperAdminDashboard() {
   const [plans, setPlans] = useState([]);
   const [tenants, setTenants] = useState([]);
   const [monitoring, setMonitoring] = useState(null);
+  const [finance, setFinance] = useState(null);
   const [recentDeployments, setRecentDeployments] = useState([]);
   const [featureGovernance, setFeatureGovernance] = useState(null);
   const [planForm, setPlanForm] = useState(emptyPlan);
@@ -247,18 +248,20 @@ export default function SuperAdminDashboard() {
   const loadAll = useCallback(async function loadAll() {
     setLoading(true);
     try {
-      const [statsRes, plansRes, tenantsRes, monitoringRes, governanceRes] = await Promise.allSettled([
+      const [statsRes, plansRes, tenantsRes, monitoringRes, governanceRes, financeRes] = await Promise.allSettled([
         API.get('/superadmin/stats'),
         API.get('/superadmin/plans'),
         API.get('/superadmin/tenants'),
         API.get('/superadmin/monitoring'),
         API.get('/superadmin/feature-registry'),
+        API.get('/superadmin/finance/overview', { skipCache: true }),
       ]);
       if (statsRes.status === 'fulfilled') setStats(statsRes.value.data);
       if (plansRes.status === 'fulfilled') setPlans(plansRes.value.data);
       if (tenantsRes.status === 'fulfilled') setTenants(tenantsRes.value.data);
       if (monitoringRes.status === 'fulfilled') setMonitoring(monitoringRes.value.data);
       if (governanceRes.status === 'fulfilled') setFeatureGovernance(governanceRes.value.data);
+      if (financeRes.status === 'fulfilled') setFinance(financeRes.value.data);
       if (!tenantForm.plan && plansRes.status === 'fulfilled' && plansRes.value.data[0]?._id) setTenantForm(prev => ({ ...prev, plan: plansRes.value.data[0]._id }));
     } catch (err) {
       notify('error', err.response?.data?.message || err.message || 'Failed to load superadmin data');
@@ -645,6 +648,7 @@ export default function SuperAdminDashboard() {
               tenants={tenants}
               monitoring={monitoring}
               deployments={recentDeployments}
+              finance={finance}
               onTab={setActiveTab}
               onUpdate={updateTenantRecord}
               onResetPassword={resetAdminPassword}
@@ -956,7 +960,7 @@ function Stat({ label, value, icon, accent = 'text-indigo-600' }) {
   );
 }
 
-function AdvancedOverview({ stats, plans, tenants, monitoring, deployments = [], onTab, onUpdate, onResetPassword, onDelete }) {
+function AdvancedOverview({ stats, plans, tenants, monitoring, finance, deployments = [], onTab, onUpdate, onResetPassword, onDelete }) {
   const totals = monitoring?.totals || {};
   const rows = monitoring?.tenants || [];
   const riskRows = rows.filter(t => t.alerts?.suspended || t.alerts?.pastDue || t.alerts?.paymentDueSoon || t.alerts?.hasNoDomain || t.alerts?.domainPending);
@@ -964,6 +968,14 @@ function AdvancedOverview({ stats, plans, tenants, monitoring, deployments = [],
     .filter(t => t.billing?.nextPaymentDate || t.billing?.trialEndsAt)
     .sort((a, b) => new Date(a.billing?.nextPaymentDate || a.billing?.trialEndsAt) - new Date(b.billing?.nextPaymentDate || b.billing?.trialEndsAt))
     .slice(0, 6);
+  const [expense, setExpense] = useState({ category: '', description: '', amount: '', tenantId: '', incurredAt: new Date().toISOString().slice(0, 10) });
+  const [savingExpense, setSavingExpense] = useState(false);
+  async function addExpense(event) {
+    event.preventDefault(); setSavingExpense(true);
+    try { await API.post('/superadmin/finance/expenses', { ...expense, amount: Number(expense.amount), incurredAt: expense.incurredAt }); setExpense({ category: '', description: '', amount: '', tenantId: '', incurredAt: new Date().toISOString().slice(0, 10) }); window.location.reload(); }
+    catch (err) { window.alert(err.response?.data?.message || 'Could not save expense'); }
+    finally { setSavingExpense(false); }
+  }
 
   return (
     <div className="space-y-6">
@@ -991,6 +1003,33 @@ function AdvancedOverview({ stats, plans, tenants, monitoring, deployments = [],
         <Stat label="Trial / Past Due" value={`${totals.trial || 0}/${totals.pastDue || 0}`} accent="text-amber-600" icon="M12 8v4l3 3" />
         <Stat label="Plans" value={stats.plans || plans.length} icon="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10" />
         <Stat label="Admins" value={stats.admins || totals.admins || 0} icon="M16 7a4 4 0 11-8 0 4 4 0 018 0z" />
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Stat label="Running tenants" value={finance?.activeTenantCount || 0} accent="text-indigo-600" icon="M5 13l4 4L19 7" />
+        <Stat label="Collected income" value={money(finance?.income || 0)} accent="text-emerald-600" icon="M12 8c-1.1 0-2 .9-2 2s.9 2 2 2" />
+        <Stat label="Expenses" value={money(finance?.expenses || 0)} accent="text-rose-600" icon="M6 18L18 6M6 6l12 12" />
+        <Stat label="Net financial result" value={money(finance?.net || 0)} accent={Number(finance?.net || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'} icon="M3 10h18M7 15h10" />
+      </div>
+
+      <div className="grid xl:grid-cols-3 gap-6">
+        <Panel title="Income vs expenses (active tenants)" action={<span className="text-xs text-slate-400">Last 6 months</span>}>
+          <div className="flex items-end gap-3 h-44">{(finance?.months || []).map(month => { const max = Math.max(...(finance?.months || []).flatMap(x => [x.income, x.expenses]), 1); return <div key={`${month.year}-${month.month}`} className="flex-1 h-full flex items-end gap-1"><div className="flex-1 rounded-t bg-emerald-400" style={{ height: `${Math.max(3, month.income / max * 100)}%` }} title={`Income ${money(month.income)}`} /><div className="flex-1 rounded-t bg-rose-400" style={{ height: `${Math.max(3, month.expenses / max * 100)}%` }} title={`Expenses ${money(month.expenses)}`} /></div>; })}</div>
+          <div className="mt-2 flex justify-between text-[10px] text-slate-400">{(finance?.months || []).map(m => <span key={`${m.year}-${m.month}`}>{m.label}</span>)}</div>
+          <div className="mt-3 flex gap-4 text-xs"><span className="text-emerald-600">● Income</span><span className="text-rose-600">● Expenses</span></div>
+        </Panel>
+        <Panel title="Add operating expense">
+          <form onSubmit={addExpense} className="grid gap-2">
+            <input required value={expense.category} onChange={e => setExpense({ ...expense, category: e.target.value })} placeholder="Category (hosting, staff, marketing)" className="h-9 rounded-lg border px-3 text-xs" />
+            <input value={expense.description} onChange={e => setExpense({ ...expense, description: e.target.value })} placeholder="Description" className="h-9 rounded-lg border px-3 text-xs" />
+            <div className="grid grid-cols-2 gap-2"><input required min="0.01" type="number" value={expense.amount} onChange={e => setExpense({ ...expense, amount: e.target.value })} placeholder="Amount" className="h-9 rounded-lg border px-3 text-xs" /><input required type="date" value={expense.incurredAt} onChange={e => setExpense({ ...expense, incurredAt: e.target.value })} className="h-9 rounded-lg border px-2 text-xs" /></div>
+            <select value={expense.tenantId} onChange={e => setExpense({ ...expense, tenantId: e.target.value })} className="h-9 rounded-lg border px-2 text-xs"><option value="">Platform-wide expense</option>{(finance?.activeTenants || []).map(t => <option key={t._id} value={t._id}>{t.storeName}</option>)}</select>
+            <button disabled={savingExpense} className="h-9 rounded-lg bg-indigo-600 text-xs font-bold text-white disabled:opacity-60">{savingExpense ? 'Saving…' : 'Add expense'}</button>
+          </form>
+        </Panel>
+        <Panel title="Active tenant recurring revenue">
+          <div className="space-y-2">{(finance?.activeTenants || []).slice(0, 8).map(t => <div key={t._id} className="flex items-center justify-between gap-3 text-xs"><span className="truncate font-semibold text-slate-700">{t.storeName}</span><span className="font-bold text-emerald-600">{money(t.recurring)}</span></div>)}{!finance?.activeTenants?.length && <EmptyLine text="No actively running tenants." />}</div>
+        </Panel>
       </div>
 
       <div className="grid xl:grid-cols-3 gap-6">

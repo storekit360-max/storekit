@@ -4,6 +4,7 @@ const express = require('express');
 const crypto = require('crypto');
 const Plan = require('../models/Plan');
 const Tenant = require('../models/Tenant');
+const PlatformExpense = require('../models/PlatformExpense');
 const User = require('../models/User');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
@@ -722,6 +723,41 @@ router.patch('/tenants/:id/billing-dates', requirePlatformPermission('billing.up
 router.get('/billing/overview', requirePlatformPermission('billing.view'), async (_req, res, next) => {
   try { res.json(await subscriptionService.getOverview()); }
   catch (err) { next(err); }
+});
+
+function activeRunningTenantFilter() {
+  return { status: 'active', 'billing.subscriptionStatus': { $in: ['active', 'trial'] } };
+}
+
+router.get('/finance/overview', requirePlatformPermission('billing.view'), async (_req, res, next) => {
+  try {
+    const activeTenants = await Tenant.find(activeRunningTenantFilter()).select('_id storeName plan billing').populate('plan', 'name price currency billingCycle').lean();
+    const ids = activeTenants.map(t => t._id);
+    const from = new Date(); from.setMonth(from.getMonth() - 5, 1); from.setHours(0, 0, 0, 0);
+    const [payments, expenses, monthlyPayments, monthlyExpenses] = await Promise.all([
+      TenantPayment.aggregate([{ $match: { tenant: { $in: ids }, status: 'approved' } }, { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }]),
+      PlatformExpense.aggregate([{ $match: { $or: [{ tenantId: null }, { tenantId: { $in: ids } }] } }, { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }]),
+      TenantPayment.aggregate([{ $match: { tenant: { $in: ids }, status: 'approved', reviewedAt: { $gte: from } } }, { $group: { _id: { y: { $year: '$reviewedAt' }, m: { $month: '$reviewedAt' } }, total: { $sum: '$amount' } } }]),
+      PlatformExpense.aggregate([{ $match: { $or: [{ tenantId: null }, { tenantId: { $in: ids } }], incurredAt: { $gte: from } } }, { $group: { _id: { y: { $year: '$incurredAt' }, m: { $month: '$incurredAt' } }, total: { $sum: '$amount' } } }]),
+    ]);
+    const months = Array.from({ length: 6 }, (_, i) => { const d = new Date(from); d.setMonth(from.getMonth() + i); return { year: d.getFullYear(), month: d.getMonth() + 1, label: d.toLocaleString('en', { month: 'short' }), income: 0, expenses: 0 }; });
+    monthlyPayments.forEach(r => { const m = months.find(x => x.year === r._id.y && x.month === r._id.m); if (m) m.income = Number(r.total || 0); });
+    monthlyExpenses.forEach(r => { const m = months.find(x => x.year === r._id.y && x.month === r._id.m); if (m) m.expenses = Number(r.total || 0); });
+    const recurring = activeTenants.reduce((sum, t) => sum + Number(t.billing?.nextPaymentAmount || t.plan?.price || 0), 0);
+    const income = Number(payments[0]?.total || 0), expenseTotal = Number(expenses[0]?.total || 0);
+    res.json({ activeTenantCount: activeTenants.length, activeTenants: activeTenants.map(t => ({ _id: t._id, storeName: t.storeName, status: t.billing?.subscriptionStatus, recurring: Number(t.billing?.nextPaymentAmount || t.plan?.price || 0) })), income, incomeCount: Number(payments[0]?.count || 0), expenses: expenseTotal, expenseCount: Number(expenses[0]?.count || 0), net: income - expenseTotal, recurringMonthly: recurring, months });
+  } catch (err) { next(err); }
+});
+
+router.post('/finance/expenses', requirePlatformPermission('billing.update'), async (req, res, next) => {
+  try {
+    const amount = Number(req.body.amount);
+    if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ message: 'Expense amount must be greater than zero' });
+    const date = req.body.incurredAt ? new Date(req.body.incurredAt) : new Date();
+    if (Number.isNaN(date.getTime())) return res.status(400).json({ message: 'Expense date is invalid' });
+    const expense = await PlatformExpense.create({ tenantId: req.body.tenantId || null, category: req.body.category, description: req.body.description, amount, currency: req.body.currency || 'LKR', incurredAt: date, createdBy: req.user?._id });
+    res.status(201).json(expense);
+  } catch (err) { next(err); }
 });
 
 // ── Billing — list submitted tenant payments (optionally filter by status) ─
