@@ -1185,15 +1185,17 @@ function BillingDateEditor({ tenant, onSaved }) {
   const [trialEndsAt, setTrialEndsAt] = useState(tenant.billing?.trialEndsAt ? new Date(tenant.billing.trialEndsAt).toISOString().slice(0, 16) : '');
   const [nextPaymentDate, setNextPaymentDate] = useState(tenant.billing?.nextPaymentDate ? new Date(tenant.billing.nextPaymentDate).toISOString().slice(0, 16) : '');
   const [saving, setSaving] = useState(false);
+  const [includeInFinancials, setIncludeInFinancials] = useState(tenant.billing?.includeInFinancials === true);
   async function save() {
     if (!trialEndsAt && !nextPaymentDate) return;
     setSaving(true);
-    try { await API.patch(`/superadmin/tenants/${tenant._id}/billing-dates`, { trialEndsAt: trialEndsAt || null, nextPaymentDate: nextPaymentDate || null }); onSaved?.(); }
+    try { await API.patch(`/superadmin/tenants/${tenant._id}/billing-dates`, { trialEndsAt: trialEndsAt || null, nextPaymentDate: nextPaymentDate || null }); await API.patch(`/superadmin/tenants/${tenant._id}/financial-inclusion`, { includeInFinancials }); onSaved?.(); }
     catch (err) { window.alert(err.response?.data?.message || 'Could not update billing dates'); }
     finally { setSaving(false); }
   }
   return <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
-    <p className="text-xs font-bold text-indigo-800 mb-2">Billing date override</p>
+    <p className="text-xs font-bold text-indigo-800 mb-2">Billing and financial reporting</p>
+    <label className="flex items-center gap-2 mb-3 text-xs font-semibold text-slate-700"><input type="checkbox" checked={includeInFinancials} onChange={e => setIncludeInFinancials(e.target.checked)} className="accent-indigo-600" /> Include this tenant in financial reports</label>
     <div className="grid grid-cols-1 gap-2">
       <label className="text-[11px] font-semibold text-slate-600">Trial ends<input type="datetime-local" value={trialEndsAt} onChange={e => setTrialEndsAt(e.target.value)} className="mt-1 h-8 w-full rounded-lg border border-indigo-100 bg-white px-2 text-xs" /></label>
       <label className="text-[11px] font-semibold text-slate-600">Next billing date<input type="datetime-local" value={nextPaymentDate} onChange={e => setNextPaymentDate(e.target.value)} className="mt-1 h-8 w-full rounded-lg border border-indigo-100 bg-white px-2 text-xs" /></label>
@@ -1636,6 +1638,7 @@ function TenantTable({ tenants, plans, onUpdate, onResetPassword, onDelete, getS
             <th className="py-2 pr-3">Store</th>
             <th className="py-2 pr-3">Plan</th>
             <th className="py-2 pr-3">Status</th>
+            <th className="py-2 pr-3">Financials</th>
             <th className="py-2 pr-3">Domains</th>
             <th className="py-2 pr-3">Admin</th>
             <th className="py-2 pr-3">Actions</th>
@@ -1650,6 +1653,7 @@ function TenantTable({ tenants, plans, onUpdate, onResetPassword, onDelete, getS
                 <div className="font-semibold text-slate-800">{t.storeName}</div>
                 <div className="text-xs text-slate-400">{t.slug}</div>
               </td>
+              <td className="py-3 pr-3"><label className="inline-flex items-center gap-1.5 text-xs text-slate-600"><input type="checkbox" checked={t.billing?.includeInFinancials === true} onChange={async e => { try { await API.patch(`/superadmin/tenants/${t._id}/financial-inclusion`, { includeInFinancials: e.target.checked }); window.location.reload(); } catch (err) { window.alert(err.response?.data?.message || 'Could not update financial inclusion'); } }} className="accent-green-600" /> Include</label></td>
               <td className="py-3 pr-3 text-slate-600">{t.plan?.name || '-'}</td>
               <td className="py-3 pr-3">
                 <select

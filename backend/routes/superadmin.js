@@ -679,7 +679,7 @@ router.put('/tenants/:id', requirePlatformPermission('tenant.edit'), async (req,
 // Manual billing-date override for exceptional commercial arrangements. The
 // canonical billing fields and the legacy mirrored subscription fields are
 // updated together so tenant-admin billing screens stay synchronized.
-router.patch('/tenants/:id/billing-dates', requirePlatformPermission('billing.update'), async (req, res, next) => {
+router.patch('/tenants/:id/billing-dates', requirePlatformPermission('tenant.edit'), async (req, res, next) => {
   try {
     const tenant = await Tenant.findById(req.params.id).populate('plan');
     if (!tenant) return res.status(404).json({ message: 'Tenant not found' });
@@ -726,8 +726,20 @@ router.get('/billing/overview', requirePlatformPermission('billing.view'), async
 });
 
 function activeRunningTenantFilter() {
-  return { status: 'active', 'billing.subscriptionStatus': { $in: ['active', 'trial'] } };
+  return { status: 'active', 'billing.subscriptionStatus': { $in: ['active', 'trial'] }, 'billing.includeInFinancials': true };
 }
+
+router.patch('/tenants/:id/financial-inclusion', requirePlatformPermission('tenant.edit'), async (req, res, next) => {
+  try {
+    const updated = await Tenant.findOneAndUpdate(
+      { _id: req.params.id, 'deletion.state': { $ne: 'deleting' } },
+      { $set: { 'billing.includeInFinancials': req.body.includeInFinancials === true } },
+      { new: true, runValidators: true }
+    ).populate('plan').populate('owner', 'firstName lastName email username role');
+    if (!updated) return res.status(404).json({ message: 'Tenant not found' });
+    res.json(updated);
+  } catch (err) { next(err); }
+});
 
 router.get('/finance/overview', requirePlatformPermission('billing.view'), async (_req, res, next) => {
   try {

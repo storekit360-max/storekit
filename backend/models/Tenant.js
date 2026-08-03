@@ -130,6 +130,7 @@ const tenantSchema = new mongoose.Schema({
   },
 
   billing: {
+    includeInFinancials: { type: Boolean, default: false },
     subscriptionStatus: {
       type: String,
       enum: ['trial', 'active', 'past_due', 'suspended', 'cancelled'],
