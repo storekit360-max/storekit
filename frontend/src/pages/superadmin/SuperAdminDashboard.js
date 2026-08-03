@@ -487,7 +487,7 @@ export default function SuperAdminDashboard() {
   }
 
   return (
-    <div className="superadmin-shell flex h-screen bg-slate-50 text-slate-900 overflow-hidden">
+    <div className="superadmin-shell admin-template-shell flex h-screen bg-slate-50 text-slate-900 overflow-hidden">
       <a href="#superadmin-main" className="fixed left-3 top-3 z-[11000] -translate-y-20 rounded-lg bg-indigo-700 px-4 py-2 text-sm font-bold text-white transition focus:translate-y-0">Skip to main content</a>
       {tenantDeletion && (
         <TenantDeletionDialog
@@ -508,19 +508,19 @@ export default function SuperAdminDashboard() {
         id="superadmin-navigation"
         aria-label="Control Center navigation"
         className={`fixed lg:static z-40 lg:z-auto inset-y-0 left-0 w-64 flex-shrink-0 transform transition-transform duration-200 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}
-        style={{ background: '#0f172a' }}
+        style={{ background: '#ffffff' }}
       >
         <div className="flex flex-col h-full">
           <div className="flex-shrink-0 p-5 border-b border-white/10">
             <Link to="/" className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 bg-indigo-500 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+              <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
                 <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 3v18M3 9h18M3 15h18M15 3v18" />
                 </svg>
               </div>
               <div className="min-w-0">
                 <p className="font-bold text-white text-base leading-tight truncate">StoreKit</p>
-                <p className="text-xs text-indigo-300">Super Admin</p>
+                <p className="text-xs text-primary">Super Admin</p>
               </div>
             </Link>
           </div>
@@ -535,8 +535,8 @@ export default function SuperAdminDashboard() {
               <button
                 key={tab.key}
                 onClick={() => { setActiveTab(tab.key); setSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  activeTab === tab.key ? 'bg-indigo-500/20 text-white border-l-2 border-indigo-400' : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                className={`admin-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  activeTab === tab.key ? 'active' : ''
                 }`}
               >
                 <svg className="w-[18px] h-[18px] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -979,19 +979,19 @@ function AdvancedOverview({ stats, plans, tenants, monitoring, finance, deployme
 
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-2xl bg-slate-950 p-6 text-white">
+      <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-6 text-gray-900 shadow-sm">
         <div className="absolute inset-y-0 right-0 w-1/2 bg-gradient-to-l from-indigo-500/30 to-transparent" />
         <div className="relative flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.24em] text-indigo-200">Platform Control Center</p>
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-green-700">Platform Control Center</p>
             <h2 className="mt-2 text-2xl lg:text-3xl font-extrabold">Tenant monitoring and administration</h2>
             <p className="mt-2 max-w-2xl text-sm text-slate-300">
-              Monitor store availability, billing health, plan limits, usage, domains, admins, and payment risk from one place.
+              Financial and operational view of actively running tenant stores only. Demo and inactive tenants are excluded from income calculations.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3 min-w-[280px]">
-            <HeroMetric label="MRR" value={money(totals.monthlyRevenue)} />
-            <HeroMetric label="ARR Estimate" value={money((totals.monthlyRevenue || 0) * 12 + (totals.yearlyRevenue || 0))} />
+            <HeroMetric label="MRR · active running tenants" value={money(finance?.recurringMonthly || 0)} />
+            <HeroMetric label="ARR · MRR × 12" value={money((finance?.recurringMonthly || 0) * 12)} />
           </div>
         </div>
       </div>
