@@ -1459,6 +1459,12 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
 .pos-page > div.min-h-full > .grid { min-height: 0; flex: 1; overflow: hidden; }
 .pos-page > div.min-h-full > .grid > section,
 .pos-page > div.min-h-full > .grid > aside { min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+.pos-page > div.min-h-full > .grid > section,
+.pos-page > div.min-h-full > .grid > aside { overflow: hidden; }
+.pos-page > div.min-h-full > .grid > section > div.mt-2.divide-y,
+.pos-page > div.min-h-full > .grid > aside > div.divide-y.border-y { min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+.pos-page > div.min-h-full > .grid > section > div.mt-2.divide-y { max-height: calc(100% - 118px); }
+.pos-page > div.min-h-full > .grid > aside > div.divide-y.border-y { max-height: calc(100% - 150px); }
 .pos-kiosk { height: calc(100vh - 92px); min-height: 520px; overflow: hidden !important; display: flex; flex-direction: column; }
 .pos-kiosk > .grid { min-height: 0; flex: 1; overflow: hidden; }
 .pos-kiosk > .grid > section,
