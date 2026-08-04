@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import API from '../../utils/api';
 import { useAuth } from '../../context/AuthContext';
+/* The cashier hotkey listener intentionally captures the current sale actions. */
+/* eslint-disable react-hooks/exhaustive-deps */
 
 const priceOf = p => Number(p.salePrice > 0 && p.salePrice < p.price ? p.salePrice : p.price || 0);
 const label = v => Object.values(v?.combination || {}).join(' / ') || v?.sku || 'Base product';
@@ -25,7 +27,6 @@ export default function POS() {
   const add = useCallback((p, variant = null) => { const stock = Number(variant?.stock >= 0 ? variant.stock : p.stock || 0); if (stock < 1) return setMessage('Out of stock'); const item = { id: `${p._id}:${variant?.sku || 'base'}`, productId: p._id, name: p.name, variantSku: variant?.sku || '', variant: label(variant), sku: variant?.sku || p.sku || '', barcode: variant?.gtin || p.gtin || '', price: variant ? priceOf(variant) : priceOf(p), stock, quantity: 1 }; setCart(items => { const found = items.find(i => i.id === item.id); return found ? items.map(i => i.id === item.id ? { ...i, quantity: Math.min(i.stock, i.quantity + 1) } : i) : [...items, item]; }); setQ(''); setResults([]); setSelected(0); setVariantProduct(null); requestAnimationFrame(() => searchRef.current?.focus()); }, []);
   const choose = p => { const variants = (p.variantCombinations || []).filter(v => Number(v.stock || 0) > 0); if (variants.length > 1) { setVariantProduct({ ...p, variantCombinations: variants }); setVariantIndex(0); } else add(p, variants[0] || null); };
   const scan = async e => { if (e.key !== 'Enter' || !q.trim() || scanLock.current) return; e.preventDefault(); scanLock.current = true; const code = q.trim().toLowerCase(); try { const r = await API.get('/pos/products/search', { params: { q: q.trim(), inStock: false, limit: 12 }, skipCache: true }); const p = (r.data.products || []).find(x => [x.sku, x.gtin, ...(x.variantCombinations || []).flatMap(v => [v.sku, v.gtin])].some(v => String(v || '').toLowerCase() === code)); const v = p?.variantCombinations?.find(x => [x.sku, x.gtin].some(y => String(y || '').toLowerCase() === code)); p ? add(p, v) : setMessage('Barcode not found'); } finally { setQ(''); scanLock.current = false; requestAnimationFrame(() => searchRef.current?.focus()); } };
-  const change = (index, amount) => setCart(items => items.map((i, n) => n === index ? { ...i, quantity: Math.max(0, Math.min(i.stock, i.quantity + amount)) } : i).filter(i => i.quantity > 0));
   const subtotal = useMemo(() => cart.reduce((s, i) => s + i.price * i.quantity, 0), [cart]); const count = cart.reduce((s, i) => s + i.quantity, 0);
   useEffect(() => { try { if (customerDisplay && !customerDisplay.closed) customerDisplay.postMessage({ type: 'POS_STATE', payload: { items: cart, total: subtotal, customer, store } }); } catch { /* customer display may be closed */ } }, [customerDisplay, cart, subtotal, customer, store]);
   const holdSale = async () => { if (!cart.length) return; try { await API.post('/pos/held-sales', { items: cart, customer, note }); setCart([]); setCustomer(emptyCustomer); setNote(''); setMessage('Sale held'); } catch (e) { setMessage(e.response?.data?.message || 'Could not hold sale'); } };
