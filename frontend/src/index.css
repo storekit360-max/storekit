@@ -1474,3 +1474,35 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
 .pos-kiosk > .grid > section { padding-bottom: 10px; }
 .pos-kiosk > .grid > aside { padding-bottom: 10px; }
 @media (max-width: 1279px) { .pos-kiosk { height: auto; min-height: calc(100vh - 92px); overflow: visible !important; } .pos-kiosk > .grid { overflow: visible; } }
+
+@media (max-width: 1279px) {
+  .pos-page { overflow: hidden !important; }
+  .pos-page > div.min-h-full { height: calc(100dvh - 64px); min-height: 0; padding: 10px !important; }
+  .pos-page > div.min-h-full > .mb-4 { margin-bottom: 8px; }
+  .pos-page > div.min-h-full > .mb-4 > div:last-child { width: 100%; justify-content: stretch; }
+  .pos-page > div.min-h-full > .mb-4 > div:last-child > button { flex: 1 1 0; min-height: 44px; white-space: nowrap; }
+  .pos-page > div.min-h-full > .grid { grid-template-columns: minmax(0, 1fr) !important; gap: 10px; overflow: hidden; }
+  .pos-page > div.min-h-full > .grid > section,
+  .pos-page > div.min-h-full > .grid > aside { min-height: 0; padding: 10px; }
+  .pos-page > div.min-h-full > .grid > section { flex: 1 1 55%; }
+  .pos-page > div.min-h-full > .grid > aside { flex: 1 1 45%; }
+  .pos-page > div.min-h-full > .grid > section > input { min-height: 48px; font-size: 1rem; }
+  .pos-page > div.min-h-full > .grid > section > div.mt-2.divide-y,
+  .pos-page > div.min-h-full > .grid > aside > div.divide-y.border-y { min-height: 120px; }
+  .pos-page > div.min-h-full > .grid > aside > div.mt-4 { margin-top: 8px; }
+  .pos-page > div.min-h-full > .grid > aside > div.mt-3.grid { gap: 6px; }
+  .pos-page > div.min-h-full > .grid > aside > div.mt-3.grid > button { min-height: 46px; }
+}
+
+@media (max-width: 640px) {
+  .pos-page > div.min-h-full { height: calc(100dvh - 56px); padding: 6px !important; }
+  .pos-page > div.min-h-full > .mb-4 { align-items: stretch; }
+  .pos-page > div.min-h-full > .mb-4 > div:first-child { width: 100%; }
+  .pos-page > div.min-h-full > .mb-4 > div:first-child h1 { font-size: 1.25rem; }
+  .pos-page > div.min-h-full > .mb-4 > div:last-child { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pos-page > div.min-h-full > .mb-4 > div:last-child > button { min-width: 0; padding: 8px 4px; font-size: 11px; }
+  .pos-page > div.min-h-full > .grid > section > div.mt-2.divide-y button { min-height: 48px; padding: 10px 8px; }
+  .pos-page > div.min-h-full > .grid > section > div.mt-2.divide-y button span:nth-child(2) { display: none; }
+  .pos-page > div.min-h-full > .grid > aside > div.divide-y.border-y > div { min-height: 52px; padding: 8px 4px; }
+  .pos-page > div.min-h-full > .grid > aside > div.divide-y.border-y > div > input { width: 48px; }
+}

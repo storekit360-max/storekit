@@ -44,6 +44,18 @@ function setLink(rel, href) {
   el.setAttribute('href', href);
 }
 
+function absoluteSeoUrl(value, fallback = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return fallback;
+  try {
+    const url = new URL(raw, window.location.origin);
+    if (url.protocol === 'http:' && window.location.protocol === 'https:') url.protocol = 'https:';
+    return url.href;
+  } catch {
+    return fallback;
+  }
+}
+
 function ssrSchemaExists(schemaType) {
   const expectedTypes = schemaType === 'Product'
     ? new Set(['Product', 'ProductGroup'])
@@ -459,6 +471,8 @@ export default function useSEO({
     setMeta('twitter:image',       finalImage);
     setMeta('twitter:image:alt',   finalTitle);
     if (twitterHandle) setMeta('twitter:site', twitterHandle);
+    const favicon = absoluteSeoUrl(cfg.faviconUrl || cfg.logoUrl);
+    if (favicon) setLink('icon', favicon);
 
     setJsonLd('ld-website', {
       '@context': 'https://schema.org',
@@ -483,8 +497,8 @@ export default function useSEO({
         '@type': 'Organization',
         name: cfg.orgName || siteName,
         url: siteUrl,
-        logo: cfg.logoUrl
-          ? { '@type': 'ImageObject', url: cfg.logoUrl, width: 600, height: 60 }
+        logo: absoluteSeoUrl(cfg.logoUrl)
+          ? { '@type': 'ImageObject', url: absoluteSeoUrl(cfg.logoUrl), width: 600, height: 60 }
           : { '@type': 'ImageObject', url: `${siteUrl}/og-default.png` },
         contactPoint: cfg.phone ? [{
           '@type': 'ContactPoint',
@@ -500,8 +514,9 @@ export default function useSEO({
         && Number(product.salePrice) > 0
         && Number(product.salePrice) < Number(product.price);
       const price = hasSale ? product.salePrice : product.price;
-      const availability = product.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
-      const imageArr = [...new Set([product.thumbnail, ...(product.images || [])].filter(Boolean))];
+      const stock = Number(product.stock);
+      const availability = Number.isFinite(stock) && stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
+      const imageArr = [...new Set([product.thumbnail, ...(product.images || [])].map(image => absoluteSeoUrl(image)).filter(Boolean))];
       const rawCurrency = String(cfg.currencyCode || 'LKR').trim().toUpperCase();
       const priceCurrency = /^[A-Z]{3}$/.test(rawCurrency) ? rawCurrency : 'LKR';
 
@@ -522,7 +537,7 @@ export default function useSEO({
           '@type': 'Offer',
           url: finalUrl,
           priceCurrency,
-          price: Number(price),
+          price: Number(price).toFixed(2),
           availability,
           itemCondition: product.condition === 'used'
             ? 'https://schema.org/UsedCondition'
