@@ -96,7 +96,7 @@ router.get('/products/search', adminAuth, async (req, res) => {
       ];
     }
     const [products, total, categories] = await Promise.all([
-      Product.find(filter).select('name price salePrice stock sku gtin brand category variants variantCombinations').populate('category', 'name').sort({ name: 1 }).skip((page - 1) * limit).limit(limit).lean(),
+      Product.find(filter).select('name price salePrice stock sku gtin brand category variants variantCombinations soldCount').populate('category', 'name').sort(q ? { name: 1 } : { soldCount: -1, updatedAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
       Product.countDocuments(filter),
       Category.find({ tenantId: req.tenantId, isActive: true }).select('_id name').sort({ name: 1 }).lean(),
     ]);
