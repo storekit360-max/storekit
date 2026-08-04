@@ -1454,6 +1454,7 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
 }
 
 /* POS is a fixed cashier workspace. Only the two working panels scroll. */
+.pos-page { overflow: hidden !important; }
 .pos-kiosk { height: calc(100vh - 92px); min-height: 520px; overflow: hidden !important; display: flex; flex-direction: column; }
 .pos-kiosk > .grid { min-height: 0; flex: 1; overflow: hidden; }
 .pos-kiosk > .grid > section,
