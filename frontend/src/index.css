@@ -1452,3 +1452,12 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
   .pos-receipt { position: absolute; inset: 0; width: 80mm !important; max-width: 80mm !important; margin: 0 !important; padding: 8mm !important; border: 0 !important; box-shadow: none !important; }
   @page { margin: 0; }
 }
+
+/* POS is a fixed cashier workspace. Only the two working panels scroll. */
+.pos-kiosk { height: calc(100vh - 92px); min-height: 520px; overflow: hidden !important; display: flex; flex-direction: column; }
+.pos-kiosk > .grid { min-height: 0; flex: 1; overflow: hidden; }
+.pos-kiosk > .grid > section,
+.pos-kiosk > .grid > aside { min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+.pos-kiosk > .grid > section { padding-bottom: 10px; }
+.pos-kiosk > .grid > aside { padding-bottom: 10px; }
+@media (max-width: 1279px) { .pos-kiosk { height: auto; min-height: calc(100vh - 92px); overflow: visible !important; } .pos-kiosk > .grid { overflow: visible; } }

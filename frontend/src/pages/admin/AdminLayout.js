@@ -198,6 +198,13 @@ const Sidebar = React.memo(function Sidebar({ user, logout, navigate, isActive, 
             <p className="text-gray-500 text-xs">Administrator</p>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => window.open('/pos/customer-display', 'storekit-pos-customer-display', 'popup=yes,width=1200,height=800')}
+          className="mb-2 w-full rounded-lg py-2 text-left text-xs font-semibold text-gray-300 transition-colors hover:bg-white/10 hover:text-white"
+        >
+          Open customer display
+        </button>
         <div className="flex gap-2">
           <Link
             to="/"
