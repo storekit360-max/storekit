@@ -1446,6 +1446,23 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
   .superadmin-shell #superadmin-main textarea { max-width: 100%; }
   .superadmin-shell .fixed.inset-0 > [role="dialog"] { max-height: calc(100dvh - 1rem); }
 }
+
+/* Universal POS presentation, scoped to the existing StoreKit POS route. */
+.pos-kiosk,
+.pos-page > div.min-h-full { --pos-blue: #2563eb; --pos-ink: #172033; --pos-muted: #718096; --pos-line: #e7ecf3; background: #f4f7fb !important; color: var(--pos-ink); }
+.pos-kiosk section, .pos-kiosk aside,
+.pos-page > div.min-h-full > .grid > section,
+.pos-page > div.min-h-full > .grid > aside { border-color: var(--pos-line) !important; border-radius: 14px !important; box-shadow: 0 8px 30px rgba(24,39,75,.06); }
+.pos-kiosk .form-input { border-color: #d7deea; border-radius: 9px; }
+.pos-kiosk .form-input:focus { border-color: #60a5fa; box-shadow: 0 0 0 3px #dbeafe; }
+.pos-kiosk section > div.mt-2.divide-y,
+.pos-kiosk aside > div.divide-y.border-y { border-color: var(--pos-line); border-radius: 9px; }
+.pos-kiosk section > div.mt-2.divide-y > button { min-height: 64px; border-bottom-color: #f0f3f7; transition: background .15s, box-shadow .15s; }
+.pos-kiosk section > div.mt-2.divide-y > button:hover,
+.pos-kiosk section > div.mt-2.divide-y > button.bg-green-50 { background: #edf4ff !important; box-shadow: inset 3px 0 #2563eb; }
+.pos-kiosk aside > div.divide-y.border-y > div { min-height: 62px; border-bottom-color: var(--pos-line); }
+.pos-kiosk .btn-primary { background: var(--pos-blue) !important; }
+.pos-kiosk .btn-primary:hover { background: #1d4ed8 !important; }
 @media print {
   body * { visibility: hidden !important; }
   .pos-receipt, .pos-receipt * { visibility: visible !important; }
