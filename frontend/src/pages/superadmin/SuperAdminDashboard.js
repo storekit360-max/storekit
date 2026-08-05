@@ -1191,7 +1191,7 @@ function BillingDateEditor({ tenant, onSaved }) {
   async function save() {
     if (!trialEndsAt && !nextPaymentDate) return;
     setSaving(true);
-    try { await API.patch(`/superadmin/tenants/${tenant._id}/billing-dates`, { trialEndsAt: trialEndsAt || null, nextPaymentDate: nextPaymentDate || null }); await API.patch(`/superadmin/tenants/${tenant._id}/financial-inclusion`, { includeInFinancials }); onSaved?.(); }
+    try { await API.patch(`/superadmin/tenants/${tenant._id}/billing-dates`, { trialEndsAt: trialEndsAt || null, nextPaymentDate: nextPaymentDate || null }, { skipCache: true }); await API.patch(`/superadmin/tenants/${tenant._id}/financial-inclusion`, { includeInFinancials }, { skipCache: true }); onSaved?.(); }
     catch (err) { window.alert(err.response?.data?.message || 'Could not update billing dates'); }
     finally { setSaving(false); }
   }
