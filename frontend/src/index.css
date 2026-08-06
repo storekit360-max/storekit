@@ -1463,6 +1463,11 @@ a:focus-visible      { outline: 2px solid var(--color-primary); outline-offset: 
 .pos-kiosk aside > div.divide-y.border-y > div { min-height: 62px; border-bottom-color: var(--pos-line); }
 .pos-kiosk .btn-primary { background: var(--pos-blue) !important; }
 .pos-kiosk .btn-primary:hover { background: #1d4ed8 !important; }
+.pos-row-actions { display: flex; align-items: center; gap: 3px; margin-left: 4px; }
+.pos-row-actions button { width: 28px; height: 28px; border: 1px solid #d7deea; border-radius: 7px; background: #fff; color: #334155; font-weight: 800; line-height: 1; }
+.pos-row-actions button:hover { background: #edf4ff; border-color: #60a5fa; }
+.pos-row-actions button:last-child { color: #dc2626; border-color: #fecaca; }
+@media (max-width: 640px) { .pos-row-actions button { width: 32px; height: 32px; } }
 @media print {
   body * { visibility: hidden !important; }
   .pos-receipt, .pos-receipt * { visibility: visible !important; }

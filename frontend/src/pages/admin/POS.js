@@ -25,8 +25,28 @@ export default function POS() {
   useEffect(() => { const t = setTimeout(() => search(q), q.trim() ? 120 : 0); return () => clearTimeout(t); }, [q, search]);
   useEffect(() => { if (results.length) quickProductsRef.current = results; else if (!q.trim() && cart.length && quickProductsRef.current.length) setResults(quickProductsRef.current); }, [results, q, cart.length]);
   useEffect(() => { if (!q.trim() && cart.length) { const timer = setTimeout(() => search(''), 80); return () => clearTimeout(timer); } return undefined; }, [cart.length, q, search]);
+  useEffect(() => {
+    const rows = document.querySelectorAll('.pos-kiosk aside > div.divide-y.border-y > div');
+    rows.forEach((row, index) => {
+      if (row.querySelector('[data-pos-row-actions]')) return;
+      const actions = document.createElement('div');
+      actions.dataset.posRowActions = 'true';
+      actions.className = 'pos-row-actions';
+      actions.innerHTML = '<button type="button" data-pos-minus="true" aria-label="Decrease quantity">−</button><button type="button" data-pos-plus="true" aria-label="Increase quantity">＋</button><button type="button" data-pos-remove="true" aria-label="Remove item">×</button>';
+      row.appendChild(actions);
+      actions.addEventListener('click', event => {
+        event.stopPropagation();
+        setCart(items => items.flatMap((item, itemIndex) => {
+          if (itemIndex !== index) return [item];
+          if (event.target.closest('[data-pos-remove]')) return [];
+          const delta = event.target.closest('[data-pos-plus]') ? 1 : -1;
+          const quantity = Math.max(1, Math.min(item.stock, item.quantity + delta));
+          return [{ ...item, quantity }];
+        }));
+      });
+    });
+  }, [cart]);
   useEffect(() => { const root = searchRef.current?.closest('div.min-h-full'); if (!root) return undefined; const page = root.closest('main'); root.classList.add('pos-kiosk'); page?.classList.add('pos-page'); return () => { root.classList.remove('pos-kiosk'); page?.classList.remove('pos-page'); }; }, []);
-  useEffect(() => { if (!q.trim() && cart.length) search(''); }, [cart.length, q, search]);
   const add = useCallback((p, variant = null) => { const stock = Number(variant?.stock >= 0 ? variant.stock : p.stock || 0); if (stock < 1) return setMessage('Out of stock'); const item = { id: `${p._id}:${variant?.sku || 'base'}`, productId: p._id, name: p.name, variantSku: variant?.sku || '', variant: label(variant), sku: variant?.sku || p.sku || '', barcode: variant?.gtin || p.gtin || '', price: variant ? priceOf(variant) : priceOf(p), stock, quantity: 1 }; setCart(items => { const found = items.find(i => i.id === item.id); return found ? items.map(i => i.id === item.id ? { ...i, quantity: Math.min(i.stock, i.quantity + 1) } : i) : [...items, item]; }); setQ(''); setSelected(0); setVariantProduct(null); requestAnimationFrame(() => searchRef.current?.focus()); }, []);
   const choose = p => { const variants = (p.variantCombinations || []).filter(v => Number(v.stock || 0) > 0); if (variants.length > 1) { setVariantProduct({ ...p, variantCombinations: variants }); setVariantIndex(0); } else add(p, variants[0] || null); };
   const scan = async e => { if (e.key !== 'Enter' || !q.trim() || scanLock.current) return; e.preventDefault(); scanLock.current = true; const code = q.trim().toLowerCase(); try { const r = await API.get('/pos/products/search', { params: { q: q.trim(), inStock: false, limit: 12 }, skipCache: true }); const p = (r.data.products || []).find(x => [x.sku, x.gtin, ...(x.variantCombinations || []).flatMap(v => [v.sku, v.gtin])].some(v => String(v || '').toLowerCase() === code)); const v = p?.variantCombinations?.find(x => [x.sku, x.gtin].some(y => String(y || '').toLowerCase() === code)); p ? add(p, v) : setMessage('Barcode not found'); } finally { setQ(''); scanLock.current = false; requestAnimationFrame(() => searchRef.current?.focus()); } };
