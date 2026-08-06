@@ -270,6 +270,12 @@ select.form-input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
 .hero-blur-fill{transition:filter .2s ease,opacity .2s ease}
 @media (max-width:640px){.hero-blur-fill{filter:none!important;opacity:1!important;transform:scale(1.01)!important}}
 .hero-slider-frame{aspect-ratio:16/9}
+.storefront-template-home,
+.template-hero-frame,
+.hero-slider-frame { width: 100%; max-width: none; min-width: 0; }
+.hero-slider-frame > div img { object-fit: cover !important; object-position: center center; }
+.customer-storefront main,
+.customer-storefront .storefront-template-home { width: 100%; max-width: 100%; min-width: 0; overflow-x: clip; }
 @media (max-width:640px){
   .hero-slider-frame{height:auto!important;min-height:0!important;aspect-ratio:var(--hero-mobile-ratio,1/1)!important}
   .hero-slider-frame.hero-mobile-square{aspect-ratio:1/1}
