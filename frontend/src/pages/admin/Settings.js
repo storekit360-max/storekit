@@ -40,7 +40,7 @@ const GATEWAY_PRESETS = {
   stripe: { name: 'Stripe', logo: '💜', color: '#635bff', fields: [{ key:'publicKey', label:'Publishable Key', type:'text', hint:'pk_test_... or pk_live_...' }, { key:'secretKey', label:'Secret Key', type:'password', hint:'sk_test_... or sk_live_...' }, { key:'webhookSecret', label:'Webhook Secret', type:'password' }] },
   paypal: { name: 'PayPal', logo: '🅿️', color: '#003087', fields: [{ key:'clientId', label:'Client ID', type:'text' }, { key:'clientSecret', label:'Client Secret', type:'password' }] },
   payzy: { name: 'Payzy', logo: '🟣', color: '#6d28d9', fields: [{ key:'shopId', label:'Shop ID', type:'text' }, { key:'secretKey', label:'Secret API Key', type:'password' }, { key:'companyName', label:'Company Name', type:'text' }, { key:'logoUrl', label:'Payzy Logo URL', type:'url' }] },
-  koko: { name: 'KOKO', logo: '🟢', color: '#168a52', fields: [{ key:'merchantId', label:'Merchant ID', type:'text' }, { key:'apiKey', label:'API Key', type:'password' }, { key:'publicKey', label:'Public Key', type:'textarea' }, { key:'privateKey', label:'Private Key', type:'textarea' }, { key:'logoUrl', label:'KOKO Logo URL', type:'url' }] },
+  koko: { name: 'KOKO', logo: '🟢', color: '#168a52', fields: [{ key:'merchantId', label:'Merchant ID', type:'text' }, { key:'apiKey', label:'API Key', type:'password' }, { key:'publicKey', label:'Public Key', type:'textarea' }, { key:'privateKey', label:'Private Key', type:'textarea' }, { key:'endpoint', label:'KOKO API Endpoint URL', type:'url' }, { key:'logoUrl', label:'KOKO Logo URL', type:'url' }] },
 };
 
 

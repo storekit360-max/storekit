@@ -817,6 +817,24 @@ export default function Checkout() {
         }
       }
 
+      if (effectivePaymentMethod === 'koko') {
+        try {
+          const kokoRes = await API.post('/payments/koko/create-checkout', orderData);
+          const { endpoint, fields } = kokoRes.data || {};
+          if (!/^https:\/\//i.test(endpoint || '') || !fields || typeof fields !== 'object') throw new Error('KOKO did not return valid checkout details');
+          const form = document.createElement('form');
+          form.method = 'POST'; form.action = endpoint; form.style.display = 'none';
+          Object.entries(fields).forEach(([name, value]) => { const input = document.createElement('input'); input.type = 'hidden'; input.name = name; input.value = String(value ?? ''); form.appendChild(input); });
+          document.body.appendChild(form);
+          form.submit();
+          return;
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Could not initialise KOKO. Please try again.');
+          setLoading(false);
+          return;
+        }
+      }
+
       // ── COD / bank_transfer / free — create order now ────────────────────────
       const _purchaseEventId = generateEventId('Purchase', Date.now());
       const { fbp: _fbp, fbc: _fbc } = getFbCookies();
@@ -1179,10 +1197,13 @@ export default function Checkout() {
                 <div className="field-full sm:col-span-2">
                   <label className="form-label">Town / City <span className="text-red-500">*</span></label>
                   {billing.country === 'Sri Lanka' ? (
-                    <select value={billing.city} onChange={e => setBilling(p => ({ ...p, city: e.target.value }))} required className="form-input">
-                      <option value="">Select city…</option>
-                      {SL_CITIES.map(d => <option key={d}>{d}</option>)}
-                    </select>
+                    <>
+                      <input list="checkout-sl-cities" value={billing.city} onChange={e => setBilling(p => ({ ...p, city: e.target.value }))} required className="form-input" placeholder="Select or type your town / city" autoComplete="address-level2" />
+                      <datalist id="checkout-sl-cities">
+                        {SL_CITIES.map(city => <option key={city} value={city} />)}
+                      </datalist>
+                      <p className="mt-1 text-xs text-gray-400">If your location is not listed, type it manually.</p>
+                    </>
                   ) : (
                     <input value={billing.city} onChange={e => setBilling(p => ({ ...p, city: e.target.value }))} required className="form-input" placeholder="Your city" />
                   )}
@@ -1426,17 +1447,13 @@ export default function Checkout() {
                           {gw.gateway === 'stripe'  && 'Enter your card details securely via Stripe'}
                           {gw.gateway === 'paypal'  && 'Complete payment via PayPal'}
                           {gw.gateway === 'payzy' && 'Redirected to Payzy secure checkout'}
+                          {gw.gateway === 'koko' && 'Pay in interest-free instalments with KOKO'}
                         </div>
+                        {installmentPlans.filter(plan => String(plan.provider || '').toLowerCase() === String(gw.displayName || gw.gateway).toLowerCase() || (gw.gateway === 'payzy' && String(plan.provider || '').toLowerCase() === 'payzy') || (gw.gateway === 'koko' && String(plan.provider || '').toLowerCase() === 'koko')).map(plan => <div key={`${gw.gateway}-${plan.months}`} className="mt-1 min-w-0 text-xs text-violet-700">{plan.months} × Rs. {Number(plan.monthlyAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} with {plan.provider}</div>)}
                       </div>
                     </div>
                   ))}
                 </div>
-                {installmentPlans.length > 0 && (
-                  <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4">
-                    <div className="text-sm font-bold text-violet-900">Available installment plans</div>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">{installmentPlans.map(plan => <div key={`preview-${plan.provider}-${plan.months}`} className="flex min-w-0 items-center gap-2 text-xs text-violet-800"><span className="inline-flex h-5 w-14 shrink-0 items-center">{plan.providerLogo ? <img src={plan.providerLogo} alt={plan.provider} className="max-h-5 max-w-14 object-contain object-left" onError={e => { e.currentTarget.style.display = 'none'; }} /> : <strong>{plan.provider}</strong>}</span><span className="truncate">{plan.months} × Rs. {Number(plan.monthlyAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} with {plan.provider}</span></div>)}</div>
-                  </div>
-                )}
               </div>
             )}
 

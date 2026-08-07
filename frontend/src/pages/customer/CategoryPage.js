@@ -18,6 +18,7 @@ import { useCart } from '../../context/CartContext';
 import { useTheme } from '../../context/ThemeContext';
 import useSEO from '../../hooks/useSEO';
 import PositionBanner from '../../components/PositionBanner';
+import InstallmentQuote from '../../components/InstallmentQuote';
 
 // ── FAQ content per category ──────────────────────────────────────────────────
 function getCategoryFAQs(catName, storeName) {
@@ -344,6 +345,7 @@ export default function CategoryPage() {
                         {addedId === product._id ? '✓' : '+'}
                       </button>
                     </div>
+                    <InstallmentQuote productId={product._id} className="card-installments" />
                   </div>
                 </Link>
               );

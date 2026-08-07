@@ -17,6 +17,7 @@ import API from '../../utils/api';
 import { useCart } from '../../context/CartContext';
 import { useTheme } from '../../context/ThemeContext';
 import useSEO from '../../hooks/useSEO';
+import InstallmentQuote from '../../components/InstallmentQuote';
 
 // Keep collection structured data aligned with the visible tenant catalogue.
 function injectBrandSchemas(brandName, slug, products, siteUrl, storeName) {
@@ -291,6 +292,7 @@ export default function BrandPage() {
                         {addedId === product._id ? '✓' : '+'}
                       </button>
                     </div>
+                    <InstallmentQuote productId={product._id} className="card-installments" />
                   </div>
                 </Link>
               );

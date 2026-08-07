@@ -809,6 +809,7 @@ export default function ProductDetail() {
                     {effectivePrice(p) < Number(p.price) && (
                       <p className="text-xs text-gray-400 line-through">{sym} {p.price?.toLocaleString()}</p>
                     )}
+                    <InstallmentQuote productId={p._id} className="card-installments" />
                   </div>
                 </div>
               ))}
@@ -859,6 +860,7 @@ export default function ProductDetail() {
                   {effectivePrice(p) < Number(p.price) && (
                     <p className="text-xs text-gray-400 line-through">{sym} {p.price?.toLocaleString()}</p>
                   )}
+                  <InstallmentQuote productId={p._id} className="card-installments" />
                 </div>
               </div>
             ))}
@@ -893,6 +895,7 @@ export default function ProductDetail() {
                   <p className="font-black mt-1.5 text-base" style={{ color: 'var(--color-primary)', fontFamily: 'var(--font-display)' }}>
                     {sym} {effectivePrice(p).toLocaleString()}
                   </p>
+                  <InstallmentQuote productId={p._id} className="card-installments" />
                   {effectivePrice(p) < Number(p.price) && (
                     <p className="text-xs text-gray-400 line-through">{sym} {p.price?.toLocaleString()}</p>
                   )}
@@ -961,6 +964,7 @@ export default function ProductDetail() {
                   <p className="font-black mt-1.5 text-base" style={{ color: 'var(--color-primary)', fontFamily: 'var(--font-display)' }}>
                     {sym} {effectivePrice(p).toLocaleString()}
                   </p>
+                  <InstallmentQuote productId={p._id} className="card-installments" />
                 </div>
               </div>
             ))}

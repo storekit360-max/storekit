@@ -28,7 +28,7 @@ const orderSchema = new mongoose.Schema({
     city: String, phone: String
   },
   shipToDifferentAddress: { type: Boolean, default: false },
-  paymentMethod: { type: String, enum: ['cash', 'card', 'qr', 'mobile_wallet', 'bank_transfer', 'cod', 'free', 'payhere', 'stripe', 'paypal', 'payzy'], required: true },
+  paymentMethod: { type: String, enum: ['cash', 'card', 'qr', 'mobile_wallet', 'bank_transfer', 'cod', 'free', 'payhere', 'stripe', 'paypal', 'payzy', 'koko'], required: true },
   orderChannel: { type: String, enum: ['online', 'pos', 'manual'], default: 'online', index: true },
   fulfillmentType: { type: String, enum: ['delivery', 'pickup', 'in_store'], default: 'delivery' },
   pos: {
@@ -128,6 +128,13 @@ orderSchema.add({
     notificationsSentAt: Date,
     stockRestoredAt: Date,
     installmentPlan: { type: mongoose.Schema.Types.Mixed },
+  },
+  koko: {
+    signedRequest: { type: mongoose.Schema.Types.Mixed },
+    paymentReference: String,
+    callbackProcessedAt: Date,
+    stockRestoredAt: Date,
+    returnOrigin: String,
   },
 });
 

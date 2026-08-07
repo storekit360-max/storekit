@@ -78,6 +78,13 @@ function payzySignature(values, secret, callback = false) {
 function payzyConfig(gw) { return gw?.config || {}; }
 function payzyValue(req, key) { return req.body?.[key] ?? req.query?.[key] ?? ''; }
 function payzyUrl(payload) { return payload?.data?.url || payload?.data?.redirect_url || payload?.data?.checkout_url || payload?.data?.data?.url || payload?.response?.data?.url || payload?.url || payload?.redirect_url || payload?.checkout_url; }
+function normalisePem(value) { return String(value || '').replace(/\\n/g, '\n').trim(); }
+function safeReturnOrigin(req) {
+  try {
+    const url = new URL(String(req.get('origin') || process.env.FRONTEND_URL || ''));
+    return ['http:', 'https:'].includes(url.protocol) ? url.origin : String(process.env.FRONTEND_URL || '').replace(/\/$/, '');
+  } catch (_) { return String(process.env.FRONTEND_URL || '').replace(/\/$/, ''); }
+}
 
 // Server-authoritative public quote. Coupon codes are deliberately not accepted:
 // product cards must never guess a customer-specific/site-wide coupon.
@@ -111,6 +118,124 @@ router.get('/installment-plans', async (req, res) => {
     res.json({ plans });
   } catch (e) { res.status(500).json({ message: 'Could not load installment plans' }); }
 });
+
+router.post('/koko/create-checkout', paymentInitLimiter, async (req, res) => {
+  let order;
+  const reservedItems = [];
+  try {
+    const tenantId = tenantIdForRequest(req);
+    if (!tenantId) return res.status(404).json({ message: 'Store not found' });
+    const gw = await PaymentGateway.findOne({ tenantId, gateway: 'koko', isEnabled: true });
+    const cfg = gw?.config || {};
+    const merchantId = cfg.merchantId || cfg.merchantID;
+    const apiKey = cfg.apiKey;
+    const privateKey = normalisePem(cfg.privateKey);
+    if (!gw || !merchantId || !apiKey || !privateKey) return res.status(400).json({ message: 'KOKO is not configured' });
+    const { items, billing = {}, shipping = {}, shipToDifferentAddress, notes, deliveryService, couponCode } = req.body;
+    if (!Array.isArray(items) || !items.length) return res.status(400).json({ message: 'No items in order' });
+    const orderItems = [];
+    for (const item of items) {
+      const product = await Product.findOne({ _id: item.productId, tenantId, isActive: true });
+      const quantity = Math.max(1, parseInt(item.quantity, 10));
+      if (!product || product.stock < quantity) return res.status(400).json({ message: 'Product unavailable or out of stock' });
+      orderItems.push(DiscountEngine.buildLineItem(product, quantity));
+    }
+    const subtotal = DiscountEngine.computeSubtotal(orderItems);
+    const delivery = await DiscountEngine.resolveDeliveryFee(deliveryService || null, billing.city || '', subtotal, {}, tenantId);
+    const benefit = await DiscountEngine.resolveBenefit({ couponCode: couponCode || null, subtotal, deliveryFee: delivery.fee, email: billing.email || null, productIds: orderItems.map(i => String(i.product)), categoryIds: orderItems.flatMap(i => [i.category, i.subCategory]).filter(Boolean), brands: orderItems.map(i => i.brand).filter(Boolean), lineItems: orderItems });
+    if (couponCode && benefit.errorCoupon) return res.status(400).json({ message: benefit.errorCoupon });
+    const totals = DiscountEngine.computeTotals({ subtotal, deliveryFee: delivery.fee, benefit });
+    for (const item of orderItems) {
+      const update = await Product.updateOne({ _id: item.product, tenantId, stock: { $gte: item.quantity } }, { $inc: { stock: -item.quantity, soldCount: item.quantity } });
+      if (!update.modifiedCount) throw new Error('Stock changed while starting checkout');
+      reservedItems.push(item);
+    }
+    const backendBase = String(process.env.PAYZY_RESPONSE_BASE_URL || process.env.BACKEND_URL || '').replace(/\/$/, '');
+    if (!backendBase) throw new Error('Backend callback URL is not configured');
+    const returnOrigin = safeReturnOrigin(req);
+    order = await Order.create({ tenantId, items: orderItems, billing, shipping: shipToDifferentAddress ? shipping : billing, shipToDifferentAddress, paymentMethod: 'koko', paymentStatus: 'pending', orderStatus: 'pending', isPaymentDraft: true, paymentDraftExpiresAt: new Date(Date.now() + 3600000), subtotal: totals.subtotal, couponCode: benefit.couponDiscount > 0 ? couponCode : undefined, couponDiscount: benefit.couponDiscount || 0, shippingCost: delivery.fee, total: totals.total, notes, deliveryService: deliveryService || 'standard', deliveryServiceName: delivery.serviceName, statusHistory: [{ status: 'pending', note: 'KOKO payment draft created', updatedBy: billing.email || 'system' }] });
+    if (benefit.couponDiscount > 0) {
+      const applied = await DiscountEngine.applyBenefit(benefit, order._id, null, billing.email || null, 0);
+      if (!applied.ok) throw new Error('Coupon is no longer available');
+    }
+    const returnUrl = `${backendBase}/api/payments/koko/return/${encodeURIComponent(order.orderNumber)}`;
+    const cancelUrl = `${backendBase}/api/payments/koko/cancel/${encodeURIComponent(order.orderNumber)}`;
+    const responseUrl = `${backendBase}/api/payments/koko/response`;
+    const amount = Number(totals.total).toFixed(2);
+    const description = `${orderItems.length} item${orderItems.length === 1 ? '' : 's'}`;
+    const reference = String(order.orderNumber);
+    const dataString = `${merchantId}${amount}LKRcustomapi1${returnUrl}${cancelUrl}${order.orderNumber}${reference}${sanitise(billing.firstName, 60)}${sanitise(billing.lastName, 60)}${sanitise(billing.email, 120)}${description}${apiKey}${responseUrl}`;
+    const signature = crypto.sign('RSA-SHA256', Buffer.from(dataString), privateKey).toString('base64');
+    const fields = { _mId: String(merchantId), api_key: String(apiKey), _returnUrl: returnUrl, _responseUrl: responseUrl, _currency: 'LKR', _amount: amount, _reference: reference, _pluginName: 'customapi', _pluginVersion: '1', _cancelUrl: cancelUrl, _orderId: String(order.orderNumber), _firstName: sanitise(billing.firstName, 60), _lastName: sanitise(billing.lastName, 60), _email: sanitise(billing.email, 120), _description: description, dataString, signature, _mobileNo: sanitise(billing.phone, 30) };
+    order.koko = { signedRequest: fields, returnOrigin }; await order.save();
+    const endpoint = gw.isLive ? String(cfg.endpoint || cfg.productionEndpoint || '') : String(cfg.endpoint || 'https://qaapi.paykoko.com/api/merchants/orderCreate');
+    if (!/^https:\/\//i.test(endpoint)) throw new Error('KOKO endpoint is not configured');
+    res.json({ endpoint, fields });
+  } catch (error) {
+    if (order) await Order.deleteOne({ _id: order._id, isPaymentDraft: true }).catch(() => {});
+    for (const item of reservedItems) await Product.updateOne({ _id: item.product, tenantId: order?.tenantId || tenantIdForRequest(req) }, { $inc: { stock: item.quantity, soldCount: -item.quantity } }).catch(() => {});
+    console.error('[KOKO CREATE]', error.message);
+    res.status(502).json({ message: 'Unable to start KOKO checkout. Please try again.' });
+  }
+});
+
+async function failKokoDraft(order, note) {
+  const claimed = await withoutTenantScope(() => Order.findOneAndUpdate({ _id: order._id, isPaymentDraft: true, paymentStatus: 'pending' }, { $set: { paymentStatus: 'failed', orderStatus: 'cancelled', 'koko.stockRestoredAt': new Date() } }, { new: true }));
+  if (!claimed) return;
+  for (const item of claimed.items || []) await Product.updateOne({ _id: item.product, tenantId: claimed.tenantId }, { $inc: { stock: item.quantity, soldCount: -item.quantity } });
+  await withoutTenantScope(() => Order.deleteOne({ _id: claimed._id, isPaymentDraft: true }));
+  console.warn(`[KOKO] ${note}: ${claimed.orderNumber}`);
+}
+
+async function handleKokoResponse(req, res) {
+  const input = { ...req.query, ...req.body };
+  const orderId = String(input.orderId || input._orderId || input.order_id || '');
+  const trnId = String(input.trnId || input.transactionId || input.trn_id || '');
+  const status = String(input.status || '').toUpperCase();
+  const desc = String(input.desc || input.description || '');
+  const signature = String(input.signature || '');
+  const order = await withoutTenantScope(() => Order.findOne({ orderNumber: orderId, paymentMethod: 'koko' }));
+  const fallback = String(process.env.FRONTEND_URL || '').replace(/\/$/, '');
+  if (!order) return res.redirect(`${fallback}/checkout?payment=failed`);
+  const frontend = order.koko?.returnOrigin || fallback;
+  const gw = await withoutTenantScope(() => PaymentGateway.findOne({ tenantId: order.tenantId, gateway: 'koko', isEnabled: true }).lean());
+  let verified = false;
+  try { verified = Boolean(gw?.config?.publicKey && signature && crypto.verify('RSA-SHA256', Buffer.from(`${orderId}${trnId}${status}${desc}`), normalisePem(gw.config.publicKey), Buffer.from(signature, 'base64'))); } catch (_) {}
+  console.info('[KOKO CALLBACK]', { orderId, status, hasTransactionId: Boolean(trnId), verified, fields: Object.keys(input).filter(key => !/signature|key/i.test(key)) });
+  if (!verified) return res.status(400).send('Invalid KOKO signature');
+  if (status !== 'SUCCESS') { await failKokoDraft(order, `Payment ${status || 'failed'}`); return res.redirect(`${frontend}/checkout?payment=failed`); }
+  if (order.paymentStatus === 'paid' && order.koko?.callbackProcessedAt) return res.redirect(`${frontend}/my-orders?new=${order._id}&payment=koko&status=success`);
+  order.paymentStatus = 'paid'; order.orderStatus = 'confirmed'; order.isPaymentDraft = false; order.paymentReference = trnId; order.koko.paymentReference = trnId; order.koko.callbackProcessedAt = new Date();
+  order.statusHistory.push({ status: 'confirmed', note: `Payment confirmed via KOKO (${trnId})`, updatedBy: 'koko' });
+  await withoutTenantScope(() => order.save());
+  await withoutTenantScope(() => Notification.create({ tenantId: order.tenantId, type: 'payment_confirmed', title: '✅ KOKO Payment Confirmed', message: `Order ${order.orderNumber} payment confirmed`, link: `/admin/orders/${order._id}`, data: { orderId: order._id, paymentMethod: 'koko' } }));
+  sendOrderWhatsAppNotification(order).catch(e => console.error('[KOKO WHATSAPP]', e.message));
+  if (order.billing?.email && await isEmailEnabled('payment_confirmed_customer')) sendMail({ to: order.billing.email, subject: `Order Confirmed — ${order.orderNumber}`, html: await orderConfirmHtml(order) }).catch(() => {});
+  const adminEmail = await getAdminEmail(); if (adminEmail && await isEmailEnabled('payment_confirmed_admin')) sendMail({ to: adminEmail, subject: `✅ KOKO Payment Confirmed — ${order.orderNumber}`, html: await newOrderAdminHtml(order) }).catch(() => {});
+  res.redirect(`${frontend}/my-orders?new=${order._id}&payment=koko&status=success`);
+}
+router.get('/koko/response', webhookLimiter, (req, res) => handleKokoResponse(req, res).catch(() => res.status(400).send('Invalid response')));
+router.post('/koko/response', webhookLimiter, (req, res) => handleKokoResponse(req, res).catch(() => res.status(400).send('Invalid response')));
+async function handleKokoReturn(req, res) {
+  const orderNumber = String(req.params.order || req.body?.orderId || req.query?.order || '');
+  let order = await withoutTenantScope(() => Order.findOne({ orderNumber, paymentMethod: 'koko' }).lean());
+  const frontend = order?.koko?.returnOrigin || String(process.env.FRONTEND_URL || '').replace(/\/$/, '');
+  for (let attempt = 0; order && order.paymentStatus === 'pending' && attempt < 10; attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    order = await withoutTenantScope(() => Order.findOne({ _id: order._id, paymentMethod: 'koko' }).lean());
+  }
+  if (order?.paymentStatus === 'paid') return res.redirect(`${frontend}/my-orders?new=${order._id}&payment=koko&status=success`);
+  return res.redirect(`${frontend}/checkout?payment=processing`);
+}
+router.get('/koko/return/:order', handleKokoReturn);
+router.post('/koko/return/:order', handleKokoReturn);
+router.get('/koko/return', handleKokoReturn);
+router.post('/koko/return', handleKokoReturn);
+async function handleKokoCancel(req, res) { const orderNumber = String(req.params.order || req.query.order || req.body?.orderId || ''); const order = await withoutTenantScope(() => Order.findOne({ orderNumber, paymentMethod: 'koko' })); const frontend = order?.koko?.returnOrigin || String(process.env.FRONTEND_URL || '').replace(/\/$/, ''); if (order) await failKokoDraft(order, 'Customer cancelled payment'); return res.redirect(`${frontend}/checkout?payment=cancelled`); }
+router.get('/koko/cancel/:order', handleKokoCancel);
+router.post('/koko/cancel/:order', handleKokoCancel);
+router.get('/koko/cancel', handleKokoCancel);
+router.post('/koko/cancel', handleKokoCancel);
 
 router.post('/payzy/create-checkout', paymentInitLimiter, async (req, res) => {
   let order;
@@ -186,11 +311,14 @@ router.post('/payzy/response', webhookLimiter, (req, res) => handlePayzyResponse
 // multiple application instances and prevents duplicate stock restoration.
 setInterval(async () => {
   try {
-    const expired = await withoutTenantScope(() => Order.find({ paymentMethod: 'payzy', isPaymentDraft: true, paymentDraftExpiresAt: { $lte: new Date() } }).limit(100));
+    const expired = await withoutTenantScope(() => Order.find({ paymentMethod: { $in: ['payzy', 'koko'] }, isPaymentDraft: true, paymentDraftExpiresAt: { $lte: new Date() } }).limit(100));
     for (const order of expired) {
-      const claimed = await withoutTenantScope(() => Order.findOneAndUpdate({ _id: order._id, isPaymentDraft: true, paymentStatus: 'pending' }, { $set: { isPaymentDraft: false, paymentStatus: 'failed', orderStatus: 'cancelled', 'payzy.stockRestoredAt': new Date() }, $push: { statusHistory: { status: 'cancelled', note: 'Payzy payment draft expired', updatedBy: 'system' } } }, { new: true }));
+      const provider = order.paymentMethod === 'koko' ? 'KOKO' : 'Payzy';
+      const restoredField = order.paymentMethod === 'koko' ? 'koko.stockRestoredAt' : 'payzy.stockRestoredAt';
+      const claimed = await withoutTenantScope(() => Order.findOneAndUpdate({ _id: order._id, isPaymentDraft: true, paymentStatus: 'pending' }, { $set: { isPaymentDraft: false, paymentStatus: 'failed', orderStatus: 'cancelled', [restoredField]: new Date() }, $push: { statusHistory: { status: 'cancelled', note: `${provider} payment draft expired`, updatedBy: 'system' } } }, { new: true }));
       if (!claimed) continue;
       for (const item of claimed.items || []) await Product.updateOne({ _id: item.product, tenantId: claimed.tenantId }, { $inc: { stock: item.quantity, soldCount: -item.quantity } });
+      if (claimed.paymentMethod === 'koko') await withoutTenantScope(() => Order.deleteOne({ _id: claimed._id, paymentStatus: 'failed' }));
     }
   } catch (e) { console.error('[PAYZY EXPIRY]', e.message); }
 }, 5 * 60 * 1000);
