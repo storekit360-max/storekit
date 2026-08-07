@@ -10,5 +10,21 @@ export default function InstallmentQuote({ productId, className = '' }) {
     return () => { alive = false; };
   }, [productId]);
   if (!state.enabled || (!state.loading && !state.plans.length)) return null;
-  return <div className={`mt-2 rounded-lg bg-violet-50 px-2.5 py-2 text-xs ${className}`}><div className="font-semibold text-violet-700">Installment available</div>{state.loading ? <div className="text-violet-400">Loading plans…</div> : state.plans.slice(0, 3).map(plan => <div key={`${plan.provider}-${plan.months}`} className="mt-1 flex items-center gap-1.5 text-violet-600"><span className="inline-flex h-5 w-14 items-center justify-start overflow-hidden"><img src={plan.providerLogo || ''} alt={plan.provider} className="max-h-5 max-w-14 object-contain" onError={e => { e.currentTarget.style.display = 'none'; }} /></span><span><strong>{plan.months} × Rs. {Number(plan.monthlyAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong> with {plan.provider}</span></div>)}</div>;
+  return (
+    <div className={`installment-quote mt-2 w-full rounded-xl bg-violet-50 px-2.5 py-2 text-xs ${className}`}>
+      <div className="font-semibold text-violet-700">Installment available</div>
+      {state.loading ? <div className="text-violet-400">Installment available</div> : state.plans.slice(0, 3).map(plan => {
+        const provider = String(plan.provider || '').trim();
+        const amount = Number(plan.monthlyAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return (
+          <div key={`${provider}-${plan.months}`} className="mt-1 flex min-w-0 items-center gap-1.5 leading-5 text-violet-600">
+            <span className="inline-flex h-5 w-[58px] shrink-0 items-center justify-start">
+              {plan.providerLogo ? <img src={plan.providerLogo} alt={provider} className="max-h-5 max-w-[58px] object-contain object-left" onError={e => { e.currentTarget.style.display = 'none'; }} /> : <span className="font-bold text-[11px] text-violet-700">{provider}</span>}
+            </span>
+            <span className="truncate"><strong>{plan.months} × Rs. {amount}</strong> with {provider}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
 }

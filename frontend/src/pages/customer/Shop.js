@@ -6,6 +6,7 @@ import { useCart } from '../../context/CartContext';
 import { useTheme } from '../../context/ThemeContext';
 import useSEO, { getSeoConfig } from '../../hooks/useSEO';
 import PositionBanner from '../../components/PositionBanner';
+import InstallmentQuote from '../../components/InstallmentQuote';
 
 const Stars = ({ rating=0 }) => (
   <div className="flex gap-0.5">
@@ -381,6 +382,7 @@ export default function Shop() {
                               </button>
                             )}
                           </div>
+                          <InstallmentQuote productId={product._id} />
                         </div>
                       </article>
                     );
