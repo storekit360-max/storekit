@@ -20,6 +20,11 @@ function tenantIdForRequest(req) {
 }
 
 const GATEWAY_NAMES = { payhere: 'PayHere', stripe: 'Stripe', paypal: 'PayPal', payzy: 'Payzy', koko: 'KOKO' };
+function providerLogoFor(plan, gateway, gateways) {
+  const provider = String(plan.provider || GATEWAY_NAMES[gateway.gateway] || '').toLowerCase();
+  const matching = gateways.find(item => String(GATEWAY_NAMES[item.gateway] || item.gateway).toLowerCase() === provider || item.gateway === provider);
+  return matching?.logo || matching?.config?.logoUrl || (matching ? '' : plan.providerLogo || gateway.logo || gateway.config?.logoUrl || '');
+}
 
 // ── Rate limiters ─────────────────────────────────────────────────────────────
 // Prevent brute-force / enumeration attacks on payment endpoints
@@ -85,7 +90,7 @@ router.get('/installment-quote/:productId', async (req, res) => {
     const amount = discounted ? Number(product.salePrice) : originalAmount;
     const gateways = await PaymentGateway.find({ tenantId: req.tenantId, gateway: { $in: ['payzy', 'koko'] }, isEnabled: true }).lean();
     const setting = await Settings.findOne({ tenantId: req.tenantId, key: 'payzyInstallmentPlans' }).lean();
-    const configuredPlans = gateways.flatMap(gateway => (gateway.config?.installmentPlans || []).map(p => ({ ...p, provider: p.provider || GATEWAY_NAMES[gateway.gateway], providerLogo: p.providerLogo || gateway.logo || gateway.config?.logoUrl || '' }))).concat(setting?.value || []);
+    const configuredPlans = gateways.flatMap(gateway => (gateway.config?.installmentPlans || []).map(p => ({ ...p, provider: p.provider || GATEWAY_NAMES[gateway.gateway], providerLogo: providerLogoFor(p, gateway, gateways) }))).concat(setting?.value || []);
     const plans = configuredPlans.filter(p => p.active !== false && Number(p.months) > 0).map(p => {
       const totalPayable = Math.round(amount * (1 + Number(p.interestRate || 0) / 100) * 100) / 100;
       return { provider: p.provider || 'Payzy', providerLogo: p.providerLogo || '', name: p.name || `${p.months} months`, months: Number(p.months), interestRate: Number(p.interestRate || 0), totalPayable, monthlyAmount: Math.round(totalPayable / Number(p.months) * 100) / 100 };
@@ -98,7 +103,7 @@ router.get('/installment-plans', async (req, res) => {
   try {
     const gateways = await PaymentGateway.find({ tenantId: req.tenantId, gateway: { $in: ['payzy', 'koko'] }, isEnabled: true }).lean();
     const amount = Number(req.query.amount || 0);
-    const plans = gateways.flatMap(gateway => (gateway.config?.installmentPlans || []).filter(p => p.active !== false && Number(p.months) > 0).map(p => { const totalPayable = Math.round(amount * (1 + Number(p.interestRate || 0) / 100) * 100) / 100; return { provider: p.provider || GATEWAY_NAMES[gateway.gateway], providerLogo: p.providerLogo || gateway.logo || gateway.config?.logoUrl || '', name: p.name || `${p.months} months`, months: Number(p.months), interestRate: Number(p.interestRate || 0), totalPayable, monthlyAmount: Math.round(totalPayable / Number(p.months) * 100) / 100 }; }));
+    const plans = gateways.flatMap(gateway => (gateway.config?.installmentPlans || []).filter(p => p.active !== false && Number(p.months) > 0).map(p => { const totalPayable = Math.round(amount * (1 + Number(p.interestRate || 0) / 100) * 100) / 100; return { provider: p.provider || GATEWAY_NAMES[gateway.gateway], providerLogo: providerLogoFor(p, gateway, gateways), name: p.name || `${p.months} months`, months: Number(p.months), interestRate: Number(p.interestRate || 0), totalPayable, monthlyAmount: Math.round(totalPayable / Number(p.months) * 100) / 100 }; }));
     res.json({ plans });
   } catch (e) { res.status(500).json({ message: 'Could not load installment plans' }); }
 });
@@ -210,7 +215,7 @@ router.get('/gateways', async (req, res) => {
         // NEVER include: secretKey, merchantSecret, clientSecret, webhookSecret
       }))
       // An enabled but incomplete record is not a usable checkout method.
-      .filter(g => Boolean(g.publicKey) || (g.gateway === 'payzy' && g.isEnabled));
+      .filter(g => Boolean(g.publicKey) || ['payzy', 'koko'].includes(g.gateway));
     res.json(safe);
   } catch (err) {
     console.error('[gateways]', err);
