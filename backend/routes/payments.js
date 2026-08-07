@@ -83,13 +83,15 @@ function payzyUrl(payload) { return payload?.data?.url || payload?.data?.redirec
 // product cards must never guess a customer-specific/site-wide coupon.
 router.get('/installment-quote/:productId', async (req, res) => {
   try {
-    const product = await Product.findOne({ _id: req.params.productId, tenantId: req.tenantId, isActive: true }).lean();
+    const tenantId = tenantIdForRequest(req);
+    if (!tenantId) return res.status(404).json({ enabled: false, plans: [] });
+    const product = await Product.findOne({ _id: req.params.productId, tenantId, isActive: true }).lean();
     if (!product) return res.status(404).json({ message: 'Product not found' });
     const originalAmount = Number(product.price || 0);
     const discounted = Number(product.salePrice > 0 && product.salePrice < originalAmount);
     const amount = discounted ? Number(product.salePrice) : originalAmount;
-    const gateways = await PaymentGateway.find({ tenantId: req.tenantId, gateway: { $in: ['payzy', 'koko'] }, isEnabled: true }).lean();
-    const setting = await Settings.findOne({ tenantId: req.tenantId, key: 'payzyInstallmentPlans' }).lean();
+    const gateways = await PaymentGateway.find({ tenantId, gateway: { $in: ['payzy', 'koko'] }, isEnabled: true }).lean();
+    const setting = await Settings.findOne({ tenantId, key: 'payzyInstallmentPlans' }).lean();
     const configuredPlans = gateways.flatMap(gateway => (gateway.config?.installmentPlans || []).map(p => ({ ...p, provider: p.provider || GATEWAY_NAMES[gateway.gateway], providerLogo: providerLogoFor(p, gateway, gateways) }))).concat(setting?.value || []);
     const plans = configuredPlans.filter(p => p.active !== false && Number(p.months) > 0).map(p => {
       const totalPayable = Math.round(amount * (1 + Number(p.interestRate || 0) / 100) * 100) / 100;
@@ -101,7 +103,9 @@ router.get('/installment-quote/:productId', async (req, res) => {
 
 router.get('/installment-plans', async (req, res) => {
   try {
-    const gateways = await PaymentGateway.find({ tenantId: req.tenantId, gateway: { $in: ['payzy', 'koko'] }, isEnabled: true }).lean();
+    const tenantId = tenantIdForRequest(req);
+    if (!tenantId) return res.json({ plans: [] });
+    const gateways = await PaymentGateway.find({ tenantId, gateway: { $in: ['payzy', 'koko'] }, isEnabled: true }).lean();
     const amount = Number(req.query.amount || 0);
     const plans = gateways.flatMap(gateway => (gateway.config?.installmentPlans || []).filter(p => p.active !== false && Number(p.months) > 0).map(p => { const totalPayable = Math.round(amount * (1 + Number(p.interestRate || 0) / 100) * 100) / 100; return { provider: p.provider || GATEWAY_NAMES[gateway.gateway], providerLogo: providerLogoFor(p, gateway, gateways), name: p.name || `${p.months} months`, months: Number(p.months), interestRate: Number(p.interestRate || 0), totalPayable, monthlyAmount: Math.round(totalPayable / Number(p.months) * 100) / 100 }; }));
     res.json({ plans });

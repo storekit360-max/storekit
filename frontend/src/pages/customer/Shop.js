@@ -382,7 +382,7 @@ export default function Shop() {
                               </button>
                             )}
                           </div>
-                          <InstallmentQuote productId={product._id} />
+                          <InstallmentQuote productId={product._id} className="card-installments" />
                         </div>
                       </article>
                     );

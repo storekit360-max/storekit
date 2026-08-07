@@ -494,7 +494,6 @@ export default function Checkout() {
   const [notes,            setNotes]            = useState('');
   const [gateways,         setGateways]         = useState([]);
   const [installmentPlans, setInstallmentPlans] = useState([]);
-  const [selectedInstallmentPlan, setSelectedInstallmentPlan] = useState(null);
   const [deliveryServices, setDeliveryServices] = useState([]);
   const [selectedDelivery, setSelectedDelivery] = useState('');
   const [payHereData,      setPayHereData]      = useState(null);
@@ -701,7 +700,6 @@ export default function Checkout() {
     submitting.current = true;
     if (!agreedTerms)                    { submitting.current = false; toast.error('Please agree to terms and conditions'); return; }
     if (total > 0 && !paymentMethod)     { submitting.current = false; toast.error('Please select a payment method'); return; }
-    if (paymentMethod === 'payzy' && installmentPlans.length > 0 && !selectedInstallmentPlan) { submitting.current = false; toast.error('Please select an installment plan'); return; }
 
     if (!user) {
       try {
@@ -736,7 +734,6 @@ export default function Checkout() {
         giftCard:    giftCardData ? giftCardCode : undefined,
         notes,
         deliveryService: selectedDelivery || undefined,
-        installmentPlan: selectedInstallmentPlan || undefined,
       };
 
       // ── Handle PayHere — get hash from backend WITHOUT creating the order yet ──
@@ -1434,15 +1431,10 @@ export default function Checkout() {
                     </div>
                   ))}
                 </div>
-                {['payzy', 'koko'].includes(paymentMethod) && installmentPlans.length > 0 && (
+                {installmentPlans.length > 0 && (
                   <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4">
-                    <label className="block text-sm font-bold text-violet-900 mb-2">Choose an installment plan</label>
-                    <select value={selectedInstallmentPlan ? JSON.stringify(selectedInstallmentPlan) : ''} onChange={e => setSelectedInstallmentPlan(e.target.value ? JSON.parse(e.target.value) : null)} className="form-input bg-white">
-                      <option value="">Select an installment plan</option>
-                      {installmentPlans.map(plan => <option key={`${plan.provider}-${plan.months}`} value={JSON.stringify(plan)}>{plan.provider} — {plan.name} ({plan.months} months, {plan.interestRate}% interest)</option>)}
-                    </select>
-                    <div className="mt-3 space-y-1.5">{installmentPlans.map(plan => <div key={`preview-${plan.provider}-${plan.months}`} className="flex items-center gap-2 text-xs text-violet-800"><img src={plan.providerLogo || ''} alt={plan.provider} className="h-5 w-14 object-contain" onError={e => { e.currentTarget.style.display = 'none'; }} /><span>{plan.months} × Rs. {Number(plan.monthlyAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} with {plan.provider}</span></div>)}</div>
-                    <p className="text-xs text-violet-700 mt-2">Your selected plan will be carried into the payment gateway.</p>
+                    <div className="text-sm font-bold text-violet-900">Available installment plans</div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">{installmentPlans.map(plan => <div key={`preview-${plan.provider}-${plan.months}`} className="flex min-w-0 items-center gap-2 text-xs text-violet-800"><span className="inline-flex h-5 w-14 shrink-0 items-center">{plan.providerLogo ? <img src={plan.providerLogo} alt={plan.provider} className="max-h-5 max-w-14 object-contain object-left" onError={e => { e.currentTarget.style.display = 'none'; }} /> : <strong>{plan.provider}</strong>}</span><span className="truncate">{plan.months} × Rs. {Number(plan.monthlyAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} with {plan.provider}</span></div>)}</div>
                   </div>
                 )}
               </div>

@@ -197,7 +197,6 @@ const ProductCard = ({ product, settings, priority = false }) => {
             </span>
         {isOnSale && <span className="text-xs text-gray-400 line-through ml-1.5 hidden sm:inline">{sym} {product.price?.toLocaleString()}</span>}
           </div>
-          <InstallmentQuote productId={product._id} />
           {hasVars ? (
             <Link to={`/product/${product.slug}`} className="flex-shrink-0 text-xs px-3 py-1.5 rounded-xl font-bold text-white transition-all hover:-translate-y-0.5 hover:shadow-lg"
               style={{ background:'var(--theme-gradient)' }}>Select</Link>
@@ -212,6 +211,7 @@ const ProductCard = ({ product, settings, priority = false }) => {
             </button>
           )}
         </div>
+        <InstallmentQuote productId={product._id} className="card-installments" />
       </div>
     </article>
   );
