@@ -563,7 +563,6 @@ export default function Checkout() {
       });
       setGateways(Array.from(unique.values()));
     }).catch(() => setGateways([]));
-    API.get('/payments/installment-plans', { params: { amount: total } }).then(r => setInstallmentPlans(Array.isArray(r.data?.plans) ? r.data.plans : [])).catch(() => setInstallmentPlans([]));
     API.get('/delivery').then(r => {
       const svcs = r.data?.services || r.data || [];
       setDeliveryServices(svcs);
@@ -583,7 +582,7 @@ export default function Checkout() {
     if (settings?.bankTransferEnabled !== false) { setPaymentMethod('bank_transfer'); return; }
     if (codEnabled)          { setPaymentMethod('cod'); return; }
     if (gateways.length > 0)                     setPaymentMethod(gateways[0].gateway);
-  }, [settings, gateways, paymentMethod, codEnabled, total]);
+  }, [settings, gateways, paymentMethod, codEnabled]);
 
   // Pre-fill billing from saved address
   useEffect(() => {
@@ -633,6 +632,9 @@ export default function Checkout() {
   const couponDiscount    = totals.couponDiscount;
   const giftCardDeduction = totals.giftCardDeduction;
   const total             = totals.total;
+  useEffect(() => {
+    API.get('/payments/installment-plans', { params: { amount: total } }).then(r => setInstallmentPlans(Array.isArray(r.data?.plans) ? r.data.plans : [])).catch(() => setInstallmentPlans([]));
+  }, [total]);
   const isCouponActive    = benefit.couponDiscount > 0;
   const isGiftCardActive  = benefit.giftCardDeduction > 0;
 
