@@ -19,7 +19,7 @@ function tenantIdForRequest(req) {
   return req.user?.tenantId || req.tenantId || null;
 }
 
-const GATEWAY_NAMES = { payhere: 'PayHere', stripe: 'Stripe', paypal: 'PayPal', payzy: 'Payzy' };
+const GATEWAY_NAMES = { payhere: 'PayHere', stripe: 'Stripe', paypal: 'PayPal', payzy: 'Payzy', koko: 'KOKO' };
 
 // ── Rate limiters ─────────────────────────────────────────────────────────────
 // Prevent brute-force / enumeration attacks on payment endpoints
@@ -83,21 +83,21 @@ router.get('/installment-quote/:productId', async (req, res) => {
     const originalAmount = Number(product.price || 0);
     const discounted = Number(product.salePrice > 0 && product.salePrice < originalAmount);
     const amount = discounted ? Number(product.salePrice) : originalAmount;
-    const gateway = await PaymentGateway.findOne({ tenantId: req.tenantId, gateway: 'payzy', isEnabled: true }).lean();
+    const gateways = await PaymentGateway.find({ tenantId: req.tenantId, gateway: { $in: ['payzy', 'koko'] }, isEnabled: true }).lean();
     const setting = await Settings.findOne({ tenantId: req.tenantId, key: 'payzyInstallmentPlans' }).lean();
-    const configuredPlans = gateway?.config?.installmentPlans || setting?.value || [];
+    const configuredPlans = gateways.flatMap(gateway => (gateway.config?.installmentPlans || []).map(p => ({ ...p, provider: p.provider || GATEWAY_NAMES[gateway.gateway], providerLogo: p.providerLogo || gateway.logo || gateway.config?.logoUrl || '' }))).concat(setting?.value || []);
     const plans = configuredPlans.filter(p => p.active !== false && Number(p.months) > 0).map(p => {
       const totalPayable = Math.round(amount * (1 + Number(p.interestRate || 0) / 100) * 100) / 100;
       return { provider: p.provider || 'Payzy', providerLogo: p.providerLogo || '', name: p.name || `${p.months} months`, months: Number(p.months), interestRate: Number(p.interestRate || 0), totalPayable, monthlyAmount: Math.round(totalPayable / Number(p.months) * 100) / 100 };
     });
-    res.json({ amount, originalAmount, discounted: Boolean(discounted), enabled: Boolean(gateway), plans });
+    res.json({ amount, originalAmount, discounted: Boolean(discounted), enabled: gateways.length > 0, plans });
   } catch (e) { res.status(500).json({ message: 'Could not load installment quote' }); }
 });
 
 router.get('/installment-plans', async (req, res) => {
   try {
-    const gateway = await PaymentGateway.findOne({ tenantId: req.tenantId, gateway: 'payzy', isEnabled: true }).lean();
-    const plans = (gateway?.config?.installmentPlans || []).filter(p => p.active !== false && Number(p.months) > 0).map(p => ({ provider: p.provider || 'Payzy', name: p.name || `${p.months} months`, months: Number(p.months), interestRate: Number(p.interestRate || 0) }));
+    const gateways = await PaymentGateway.find({ tenantId: req.tenantId, gateway: { $in: ['payzy', 'koko'] }, isEnabled: true }).lean();
+    const plans = gateways.flatMap(gateway => (gateway.config?.installmentPlans || []).filter(p => p.active !== false && Number(p.months) > 0).map(p => ({ provider: p.provider || GATEWAY_NAMES[gateway.gateway], providerLogo: p.providerLogo || gateway.logo || gateway.config?.logoUrl || '', name: p.name || `${p.months} months`, months: Number(p.months), interestRate: Number(p.interestRate || 0) })));
     res.json({ plans });
   } catch (e) { res.status(500).json({ message: 'Could not load installment plans' }); }
 });

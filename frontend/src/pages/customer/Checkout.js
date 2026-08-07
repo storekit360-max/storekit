@@ -552,8 +552,8 @@ export default function Checkout() {
   // Load payment gateways and delivery services
   useEffect(() => {
     API.get('/payments/gateways').then(r => {
-      const supported = new Set(['payhere', 'stripe', 'paypal', 'payzy']);
-      const canonicalNames = { payhere: 'PayHere', stripe: 'Stripe', paypal: 'PayPal', payzy: 'Payzy' };
+      const supported = new Set(['payhere', 'stripe', 'paypal', 'payzy', 'koko']);
+      const canonicalNames = { payhere: 'PayHere', stripe: 'Stripe', paypal: 'PayPal', payzy: 'Payzy', koko: 'KOKO' };
       const unique = new Map();
       (Array.isArray(r.data) ? r.data : []).forEach(gateway => {
         const key = String(gateway?.gateway || '').toLowerCase().trim();
