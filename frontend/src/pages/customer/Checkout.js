@@ -563,7 +563,7 @@ export default function Checkout() {
       });
       setGateways(Array.from(unique.values()));
     }).catch(() => setGateways([]));
-    API.get('/payments/installment-plans').then(r => setInstallmentPlans(Array.isArray(r.data?.plans) ? r.data.plans : [])).catch(() => setInstallmentPlans([]));
+    API.get('/payments/installment-plans', { params: { amount: total } }).then(r => setInstallmentPlans(Array.isArray(r.data?.plans) ? r.data.plans : [])).catch(() => setInstallmentPlans([]));
     API.get('/delivery').then(r => {
       const svcs = r.data?.services || r.data || [];
       setDeliveryServices(svcs);
@@ -583,7 +583,7 @@ export default function Checkout() {
     if (settings?.bankTransferEnabled !== false) { setPaymentMethod('bank_transfer'); return; }
     if (codEnabled)          { setPaymentMethod('cod'); return; }
     if (gateways.length > 0)                     setPaymentMethod(gateways[0].gateway);
-  }, [settings, gateways, paymentMethod, codEnabled]);
+  }, [settings, gateways, paymentMethod, codEnabled, total]);
 
   // Pre-fill billing from saved address
   useEffect(() => {
@@ -1432,14 +1432,15 @@ export default function Checkout() {
                     </div>
                   ))}
                 </div>
-                {paymentMethod === 'payzy' && installmentPlans.length > 0 && (
+                {['payzy', 'koko'].includes(paymentMethod) && installmentPlans.length > 0 && (
                   <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4">
                     <label className="block text-sm font-bold text-violet-900 mb-2">Choose an installment plan</label>
                     <select value={selectedInstallmentPlan ? JSON.stringify(selectedInstallmentPlan) : ''} onChange={e => setSelectedInstallmentPlan(e.target.value ? JSON.parse(e.target.value) : null)} className="form-input bg-white">
                       <option value="">Select an installment plan</option>
                       {installmentPlans.map(plan => <option key={`${plan.provider}-${plan.months}`} value={JSON.stringify(plan)}>{plan.provider} — {plan.name} ({plan.months} months, {plan.interestRate}% interest)</option>)}
                     </select>
-                    <p className="text-xs text-violet-700 mt-2">Your selected plan will be carried into Payzy checkout.</p>
+                    <div className="mt-3 space-y-1.5">{installmentPlans.map(plan => <div key={`preview-${plan.provider}-${plan.months}`} className="flex items-center gap-2 text-xs text-violet-800"><img src={plan.providerLogo || ''} alt={plan.provider} className="h-5 w-14 object-contain" onError={e => { e.currentTarget.style.display = 'none'; }} /><span>{plan.months} × Rs. {Number(plan.monthlyAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} with {plan.provider}</span></div>)}</div>
+                    <p className="text-xs text-violet-700 mt-2">Your selected plan will be carried into the payment gateway.</p>
                   </div>
                 )}
               </div>

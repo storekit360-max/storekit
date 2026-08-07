@@ -97,7 +97,8 @@ router.get('/installment-quote/:productId', async (req, res) => {
 router.get('/installment-plans', async (req, res) => {
   try {
     const gateways = await PaymentGateway.find({ tenantId: req.tenantId, gateway: { $in: ['payzy', 'koko'] }, isEnabled: true }).lean();
-    const plans = gateways.flatMap(gateway => (gateway.config?.installmentPlans || []).filter(p => p.active !== false && Number(p.months) > 0).map(p => ({ provider: p.provider || GATEWAY_NAMES[gateway.gateway], providerLogo: p.providerLogo || gateway.logo || gateway.config?.logoUrl || '', name: p.name || `${p.months} months`, months: Number(p.months), interestRate: Number(p.interestRate || 0) })));
+    const amount = Number(req.query.amount || 0);
+    const plans = gateways.flatMap(gateway => (gateway.config?.installmentPlans || []).filter(p => p.active !== false && Number(p.months) > 0).map(p => { const totalPayable = Math.round(amount * (1 + Number(p.interestRate || 0) / 100) * 100) / 100; return { provider: p.provider || GATEWAY_NAMES[gateway.gateway], providerLogo: p.providerLogo || gateway.logo || gateway.config?.logoUrl || '', name: p.name || `${p.months} months`, months: Number(p.months), interestRate: Number(p.interestRate || 0), totalPayable, monthlyAmount: Math.round(totalPayable / Number(p.months) * 100) / 100 }; }));
     res.json({ plans });
   } catch (e) { res.status(500).json({ message: 'Could not load installment plans' }); }
 });

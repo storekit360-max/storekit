@@ -974,7 +974,7 @@ export default function AdminSettings() {
                           <div className="grid sm:grid-cols-2 gap-3">
                             {preset.fields.map(field => (
                               <div key={field.key}>
-                                {gwKey === 'payzy' && field.key === 'logoUrl' ? <ImageUpload label={field.label} hint="Upload an image or enter a public HTTPS URL." value={cfg.logoUrl || ''} onChange={url => setGwConfigs(p => ({ ...p, [gwKey]: { ...p[gwKey], logoUrl: url } }))} /> : <>
+                                {['payzy', 'koko'].includes(gwKey) && field.key === 'logoUrl' ? <ImageUpload label={field.label} hint="Upload an image or enter a public HTTPS URL." value={cfg.logoUrl || ''} onChange={url => setGwConfigs(p => ({ ...p, [gwKey]: { ...p[gwKey], logoUrl: url } }))} /> : <>
                                 <label className="form-label text-xs">{field.label}</label>
                                 {field.type === 'textarea' ? <textarea value={cfg[field.key]||''} onChange={e=>setGwConfigs(p=>({...p,[gwKey]:{...p[gwKey],[field.key]:e.target.value}}))} className="form-input text-sm min-h-24" /> : <input type={field.type} value={cfg[field.key]||''} onChange={e=>setGwConfigs(p=>({...p,[gwKey]:{...p[gwKey],[field.key]:e.target.value}}))}
                                   className="form-input text-sm" placeholder={field.type==='password'?'••••••••':''}/>} 
