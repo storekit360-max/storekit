@@ -170,8 +170,12 @@ router.post('/koko/create-checkout', paymentInitLimiter, async (req, res) => {
       const applied = await DiscountEngine.applyBenefit(benefit, order._id, null, billing.email || null, 0);
       if (!applied.ok) throw new Error('Coupon is no longer available');
     }
-    const returnUrl = `${backendBase}/api/payments/koko/return/${encodeURIComponent(order.orderNumber)}`;
-    const cancelUrl = `${backendBase}/api/payments/koko/cancel/${encodeURIComponent(order.orderNumber)}`;
+    const encodedOrderNumber = encodeURIComponent(order.orderNumber);
+    // KOKO QA has used both path and query-string return formats. Supplying
+    // both keeps the tenant/order context intact even if its hosted success
+    // page strips path parameters during the handoff.
+    const returnUrl = `${backendBase}/api/payments/koko/return/${encodedOrderNumber}?order=${encodedOrderNumber}`;
+    const cancelUrl = `${backendBase}/api/payments/koko/cancel/${encodedOrderNumber}?order=${encodedOrderNumber}`;
     const responseUrl = `${backendBase}/api/payments/koko/response`;
     const amount = Number(totals.total).toFixed(2);
     const description = `${orderItems.length} item${orderItems.length === 1 ? '' : 's'}`;
