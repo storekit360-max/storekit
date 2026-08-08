@@ -1,7 +1,6 @@
 const express  = require('express');
 const router   = express.Router();
 const crypto   = require('crypto');
-const axios = require('axios');
 const rateLimit = require('express-rate-limit');
 const { PaymentGateway, Settings, Notification } = require('../models/index');
 const Product = require('../models/Product');
@@ -72,9 +71,13 @@ function sanitise(str, maxLen = 100) {
 }
 
 const PAYZY_FIELDS = ['x_test_mode','x_shopid','x_amount','x_order_id','x_response_url','x_first_name','x_last_name','x_company','x_address','x_country','x_state','x_city','x_zip','x_phone','x_email','x_ship_to_first_name','x_ship_to_last_name','x_ship_to_company','x_ship_to_address','x_ship_to_country','x_ship_to_state','x_ship_to_city','x_ship_to_zip','x_freight','x_platform','x_version','signed_field_names'];
+const payzyText = value => String(value ?? '').replace(/[\r\n]/g, ' ').trim();
 function payzySignature(values, secret, callback = false) {
   const fields = callback ? ['response_code', ...PAYZY_FIELDS] : PAYZY_FIELDS;
-  const string = fields.map(field => field === 'x_version' && !callback ? `x_version${values[field]}` : `${field}=${values[field] ?? ''}`).join(',');
+  const string = fields.map(field => {
+    const value = payzyText(values[field]);
+    return field === 'x_version' && !callback ? `x_version${value}` : `${field}=${value}`;
+  }).join(',');
   return crypto.createHmac('sha256', secret).update(string).digest('base64');
 }
 function payzyConfig(gw) { return gw?.config || {}; }
@@ -389,23 +392,25 @@ router.post('/payzy/create-checkout', paymentInitLimiter, async (req, res) => {
     }
     const shipTo = shipToDifferentAddress ? shipping : billing;
     const company = sanitise(cfg.companyName || gw.displayName || 'Store', 100);
-    const v = { x_test_mode: testMode, x_shopid: String(cfg.shopId), x_amount: Number(total).toFixed(2), x_order_id: String(order.orderNumber), x_response_url: `${backendBase}/api/payments/payzy/response`, x_first_name: sanitise(billing.firstName, 60), x_last_name: sanitise(billing.lastName, 60), x_company: company, x_address: sanitise(billing.street, 200), x_country: sanitise(billing.country || 'Sri Lanka', 60), x_state: sanitise(billing.state || billing.city, 60), x_city: sanitise(billing.city, 60), x_zip: sanitise(billing.zip || '00000', 20), x_phone: sanitise(billing.phone, 30), x_email: sanitise(billing.email, 120), x_ship_to_first_name: sanitise(shipTo.firstName || billing.firstName, 60), x_ship_to_last_name: sanitise(shipTo.lastName || billing.lastName, 60), x_ship_to_company: company, x_ship_to_address: sanitise(shipTo.street || billing.street, 200), x_ship_to_country: sanitise(shipTo.country || billing.country || 'Sri Lanka', 60), x_ship_to_state: sanitise(shipTo.state || shipTo.city || billing.city, 60), x_ship_to_city: sanitise(shipTo.city || billing.city, 60), x_ship_to_zip: sanitise(shipTo.zip || billing.zip || '00000', 20), x_freight: Number(delivery.fee || 0).toFixed(2), x_platform: 'custom', x_version: '1.0', signed_field_names: PAYZY_FIELDS.join(',') };
+    const v = { x_test_mode: testMode, x_shopid: payzyText(cfg.shopId), x_amount: Number(total).toFixed(2), x_order_id: String(order.orderNumber), x_response_url: `${backendBase}/api/payments/payzy/response`, x_first_name: sanitise(billing.firstName, 60), x_last_name: sanitise(billing.lastName, 60), x_company: company, x_address: sanitise(billing.street, 200), x_country: sanitise(billing.country || 'Sri Lanka', 60), x_state: sanitise(billing.state || billing.city, 60), x_city: sanitise(billing.city, 60), x_zip: sanitise(billing.zip || '00000', 20), x_phone: sanitise(billing.phone, 30), x_email: sanitise(billing.email, 120), x_ship_to_first_name: sanitise(shipTo.firstName || billing.firstName, 60), x_ship_to_last_name: sanitise(shipTo.lastName || billing.lastName, 60), x_ship_to_company: company, x_ship_to_address: sanitise(shipTo.street || billing.street, 200), x_ship_to_country: sanitise(shipTo.country || billing.country || 'Sri Lanka', 60), x_ship_to_state: sanitise(shipTo.state || shipTo.city || billing.city, 60), x_ship_to_city: sanitise(shipTo.city || billing.city, 60), x_ship_to_zip: sanitise(shipTo.zip || billing.zip || '00000', 20), x_freight: Number(delivery.fee || 0).toFixed(2), x_platform: 'custom', x_version: '1.0', signed_field_names: PAYZY_FIELDS.join(',') };
     v.signature = payzySignature(v, secret);
     order.payzy = { signedRequest: v, signedFieldNames: v.signed_field_names, installmentPlan: installmentPlan || undefined, returnOrigin }; await order.save();
     const endpoint = gw.isLive ? 'https://api.payzy.lk/checkout/custom-checkout' : 'https://api.payzypay.xyz/checkout/custom-checkout';
     console.info('[PAYZY CHECKOUT]', { tenantId: String(req.tenantId), orderNumber: order.orderNumber, amount: v.x_amount, lineItemCount: orderItems.length, requiredFieldsPresent: PAYZY_FIELDS.every(field => String(v[field] ?? '').length > 0), signatureLength: v.signature.length, endpoint, mode: testMode });
-    // Match Payzy's supplied custom-web sample: Axios serialises the object as
-    // JSON and supplies Content-Length, which is required by some gateway
-    // edge handlers that do not reliably process chunked JSON requests.
-    const response = await axios.post(endpoint, v, {
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      timeout: 15000,
-      validateStatus: () => true,
+    // Match the verified working integration: send JSON and parse the raw
+    // response, because Payzy can return the checkout URL either as JSON or
+    // as a URL embedded in a non-JSON response body.
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(v),
     });
-    const data = response.data && typeof response.data === 'object' ? response.data : {};
-    const url = payzyUrl(data);
+    const raw = await response.text();
+    let data = {};
+    try { data = JSON.parse(raw); } catch (_) { /* URL fallback below */ }
+    const url = payzyUrl(data) || (typeof data === 'string' ? data : '') || (raw.match(/https?:\/\/[^\s"'<>]+/i) || [])[0];
     console.info('[PAYZY RESPONSE]', { orderNumber: order.orderNumber, httpStatus: response.status, responseKeys: Object.keys(data), hasCheckoutUrl: Boolean(url) });
-    if (response.status < 200 || response.status >= 300 || !url || !/^https:\/\//i.test(url)) throw new Error('Payzy did not return a valid checkout URL');
+    if (!response.ok || !url || !/^https:\/\//i.test(url)) throw new Error('Payzy did not return a valid checkout URL');
     res.json({ url, orderId: order._id });
   } catch (e) {
     if (order) { await Order.deleteOne({ _id: order._id, isPaymentDraft: true }).catch(() => {}); for (const i of order.items || []) await Product.updateOne({ _id: i.product, tenantId: req.tenantId }, { $inc: { stock: i.quantity, soldCount: -i.quantity } }).catch(() => {}); }
