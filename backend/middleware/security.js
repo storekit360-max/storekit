@@ -191,7 +191,11 @@ function xssClean(req, _res, next) {
         .replace(/</g,  '&lt;')
         .replace(/>/g,  '&gt;')
         .replace(/"/g,  '&quot;')
-        .replace(/'/g,  '&#x27;');
+        // Apostrophes are valid plain-text content. Encoding them in JSON
+        // causes tenant names such as Aarna's Choice to be permanently stored
+        // as Aarna&#x27;s Choice. React/template escaping still protects HTML at
+        // render time.
+        .replace(/'/g, "'");
     }
     if (Array.isArray(value)) return value.map(sanitize);
     if (value !== null && typeof value === 'object' && !(value instanceof Date)) {

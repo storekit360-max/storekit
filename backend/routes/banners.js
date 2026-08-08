@@ -4,6 +4,7 @@ const { Banner } = require('../models/index');
 const Tenant = require('../models/Tenant');
 const { adminAuth } = require('../middleware/auth');
 const { REQUIRED_BANNER_POSITIONS, seedDefaultBanner } = require('../utils/tenantBootstrap');
+const { decodeHtmlEntitiesDeep } = require('../services/tenantStarterKit');
 
 // Public - Get active banners (with optional position filter)
 router.get('/', async (req, res) => {
@@ -27,7 +28,7 @@ router.get('/', async (req, res) => {
     if (requestedPositions.length) filter.position = { $in: requestedPositions.slice(0, 10) };
     else if (position) filter.position = position;
     const banners = await Banner.find(filter).sort({ sortOrder: 1, createdAt: -1 }).lean();
-    res.json(banners);
+    res.json(decodeHtmlEntitiesDeep(banners));
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
@@ -47,7 +48,7 @@ router.get('/by-position/:position', async (req, res) => {
         { $or: [{ endDate: null }, { endDate: { $gte: now } }] },
       ]
     }).sort({ sortOrder: 1 });
-    res.json(banners);
+    res.json(decodeHtmlEntitiesDeep(banners));
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
@@ -57,7 +58,7 @@ router.get('/admin/all', adminAuth, async (req, res) => {
     const { position } = req.query;
     const filter = position ? { position } : {};
     const banners = await Banner.find(filter).sort({ sortOrder: 1, createdAt: -1 });
-    res.json(banners);
+    res.json(decodeHtmlEntitiesDeep(banners));
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 

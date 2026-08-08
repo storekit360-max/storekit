@@ -37,6 +37,15 @@ function normalizeStoreName(value, max = 80) {
     .slice(0, max);
 }
 
+function decodeHtmlEntitiesDeep(value) {
+  if (typeof value === 'string') return decodeBasicHtmlEntities(value);
+  if (Array.isArray(value)) return value.map(decodeHtmlEntitiesDeep);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, decodeHtmlEntitiesDeep(item)]));
+  }
+  return value;
+}
+
 function cleanText(value, max = 300) {
   return String(value || '')
     .replace(/<[^>]*>/g, ' ')
@@ -477,5 +486,6 @@ module.exports = {
   normalizeStarterKit,
   sanitizeBrief,
   normalizeStoreName,
+  decodeHtmlEntitiesDeep,
   slugify,
 };

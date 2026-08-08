@@ -8,7 +8,7 @@ const { clearThemeCache } = require('../utils/mailer');
 const https = require('https');
 const http = require('http');
 const { sanitizeThemeCss } = require('../utils/themeCss');
-const { normalizeStoreName } = require('../services/tenantStarterKit');
+const { normalizeStoreName, decodeHtmlEntitiesDeep } = require('../services/tenantStarterKit');
 
 const THEME_KEYS = new Set([
   'theme', 'primaryColor', 'primaryDarkColor', 'primaryLightColor',
@@ -84,13 +84,13 @@ function isLocalDomain(domain) {
 
 function tenantSettingsResponse(tenant) {
   const rawSettings = toPlain(tenant.settings);
-  const settings = { ...rawSettings };
+  const settings = decodeHtmlEntitiesDeep({ ...rawSettings });
   // Older tenant records use `phone`, while the current admin form uses
   // `storePhone`. Return both names so every storefront version can display it.
   if (!settings.storePhone && settings.phone) settings.storePhone = settings.phone;
   if (!settings.phone && settings.storePhone) settings.phone = settings.storePhone;
   SECRET_SETTING_KEYS.forEach(key => { delete settings[key]; });
-  const theme = normalizeTheme(toPlain(tenant.theme));
+  const theme = decodeHtmlEntitiesDeep(normalizeTheme(toPlain(tenant.theme)));
   return {
     ...settings,
     ...theme,
