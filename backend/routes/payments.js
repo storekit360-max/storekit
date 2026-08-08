@@ -9,6 +9,7 @@ const { DiscountEngine } = require('../services/discountEngine');
 const { sendOrderWhatsAppNotification } = require('../services/whatsappOrderNotify');
 const { sendMail, getAdminEmail, orderConfirmHtml, newOrderAdminHtml, isEmailEnabled } = require('../utils/mailer');
 const { auth, adminAuth } = require('../middleware/auth');
+const { withoutTenantScope } = require('../middleware/tenantContext');
 const webhookEvents = require('../services/webhookEventService');
 
 function recordWebhookSafely(input) {
