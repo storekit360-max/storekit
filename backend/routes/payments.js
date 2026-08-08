@@ -80,10 +80,22 @@ function payzyValue(req, key) { return req.body?.[key] ?? req.query?.[key] ?? ''
 function payzyUrl(payload) { return payload?.data?.url || payload?.data?.redirect_url || payload?.data?.checkout_url || payload?.data?.data?.url || payload?.response?.data?.url || payload?.url || payload?.redirect_url || payload?.checkout_url; }
 function normalisePem(value) { return String(value || '').replace(/\\n/g, '\n').trim(); }
 function safeReturnOrigin(req) {
+  const tenantSiteUrl = req.tenant?.settings?.siteUrl || req.tenant?.settings?.frontendUrl;
+  const configuredTenantDomain = req.tenant?.domains?.find(domain => domain.active !== false && domain.type === 'primary')?.domain
+    || req.tenant?.domains?.find(domain => domain.active !== false)?.domain;
+  const tenantFallbacks = [tenantSiteUrl, configuredTenantDomain && `https://${configuredTenantDomain}`].filter(Boolean);
+  const requestOrigin = String(req.get('origin') || '').trim();
   try {
-    const url = new URL(String(req.get('origin') || process.env.FRONTEND_URL || ''));
-    return ['http:', 'https:'].includes(url.protocol) ? url.origin : String(process.env.FRONTEND_URL || '').replace(/\/$/, '');
-  } catch (_) { return String(process.env.FRONTEND_URL || '').replace(/\/$/, ''); }
+    const url = new URL(requestOrigin || tenantFallbacks[0] || process.env.FRONTEND_URL || '');
+    if (['http:', 'https:'].includes(url.protocol)) return `${url.origin}${url.pathname === '/' ? '' : url.pathname.replace(/\/$/, '')}`;
+  } catch (_) { /* use the tenant-specific fallback below */ }
+  for (const candidate of tenantFallbacks) {
+    try {
+      const url = new URL(candidate);
+      if (['http:', 'https:'].includes(url.protocol)) return `${url.origin}${url.pathname === '/' ? '' : url.pathname.replace(/\/$/, '')}`;
+    } catch (_) { /* ignore malformed tenant configuration */ }
+  }
+  return String(process.env.FRONTEND_URL || '').replace(/\/$/, '');
 }
 
 // Server-authoritative public quote. Coupon codes are deliberately not accepted:
