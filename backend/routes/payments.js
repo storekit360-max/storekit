@@ -247,7 +247,11 @@ async function fetchKokoOrderStatus(order, gw) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`KOKO order view returned ${response.status}`);
   const payload = data?.data && typeof data.data === 'object' ? data.data : data;
-  const orderId = String(payload.orderId || ''); const trnId = String(payload.trnId || ''); const status = String(payload.status || '').toUpperCase(); const desc = String(payload.desc || ''); const supplied = String(payload.signature || '');
+  const orderId = String(payload.orderId || payload.order_id || payload._orderId || '');
+  const trnId = String(payload.trnId || payload.trn_id || payload.transactionId || payload.transaction_id || '');
+  const status = String(payload.status || payload.orderStatus || payload.paymentStatus || payload.responseCode || '').toUpperCase();
+  const desc = String(payload.desc || payload.description || '');
+  const supplied = String(payload.signature || payload.key || '');
   const verified = Boolean(orderId === order.orderNumber && supplied && crypto.verify('RSA-SHA256', Buffer.from(`${orderId}${trnId}${status}${desc}`), publicKey, Buffer.from(supplied, 'base64')));
   if (!verified) throw new Error('KOKO order view signature is invalid');
   return { orderId, trnId, status, desc };
