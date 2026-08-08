@@ -1,6 +1,7 @@
 const express  = require('express');
 const router   = express.Router();
 const crypto   = require('crypto');
+const axios = require('axios');
 const rateLimit = require('express-rate-limit');
 const { PaymentGateway, Settings, Notification } = require('../models/index');
 const Product = require('../models/Product');
@@ -86,9 +87,26 @@ function safeReturnOrigin(req) {
     || req.tenant?.domains?.find(domain => domain.active !== false)?.domain;
   const tenantFallbacks = [tenantSiteUrl, configuredTenantDomain && `https://${configuredTenantDomain}`].filter(Boolean);
   const requestOrigin = String(req.get('origin') || '').trim();
+  const tenantHeaderDomain = String(req.get('x-tenant-domain') || '').toLowerCase().replace(/^www\./, '').trim();
+  const tenantDomains = new Set((req.tenant?.domains || [])
+    .filter(domain => domain.active !== false)
+    .map(domain => String(domain.domain || '').toLowerCase().replace(/^www\./, '').trim())
+    .filter(Boolean));
   try {
-    // A tenant's configured public URL is the canonical destination. The
-    // browser Origin is only a fallback for tenants without a configured URL.
+    const origin = new URL(requestOrigin);
+    const originHost = origin.hostname.toLowerCase().replace(/^www\./, '');
+    // A checkout begins in the customer browser. Prefer that exact tenant
+    // origin only when it is the resolved tenant domain, never an arbitrary
+    // Origin header. This protects cross-tenant redirects while avoiding a
+    // stale/global siteUrl sending a payment back to another store.
+    if (['http:', 'https:'].includes(origin.protocol) &&
+      (originHost === tenantHeaderDomain || tenantDomains.has(originHost))) {
+      return origin.origin;
+    }
+  } catch (_) { /* fall through to the tenant's canonical configuration */ }
+  try {
+    // Server-to-server checkout creation has no validated browser Origin, so
+    // use the tenant's canonical public URL in that case.
     const url = new URL(tenantFallbacks[0] || requestOrigin || process.env.FRONTEND_URL || '');
     if (['http:', 'https:'].includes(url.protocol)) return `${url.origin}${url.pathname === '/' ? '' : url.pathname.replace(/\/$/, '')}`;
   } catch (_) { /* use the tenant-specific fallback below */ }
@@ -375,11 +393,19 @@ router.post('/payzy/create-checkout', paymentInitLimiter, async (req, res) => {
     v.signature = payzySignature(v, secret);
     order.payzy = { signedRequest: v, signedFieldNames: v.signed_field_names, installmentPlan: installmentPlan || undefined, returnOrigin }; await order.save();
     const endpoint = gw.isLive ? 'https://api.payzy.lk/checkout/custom-checkout' : 'https://api.payzypay.xyz/checkout/custom-checkout';
-    console.info('[PAYZY CHECKOUT]', { tenantId: String(req.tenantId), orderNumber: order.orderNumber, amount: v.x_amount, lineItemCount: orderItems.length, requiredFieldsPresent: PAYZY_FIELDS.every(field => String(v[field] ?? '').length > 0), mode: testMode });
-    const response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(v) });
-    const data = await response.json().catch(() => ({})); const url = payzyUrl(data);
-    console.info('[PAYZY RESPONSE]', { orderNumber: order.orderNumber, httpStatus: response.status, responseKeys: Object.keys(data || {}), hasCheckoutUrl: Boolean(url) });
-    if (!response.ok || !url || !/^https:\/\//i.test(url)) throw new Error('Payzy did not return a valid checkout URL');
+    console.info('[PAYZY CHECKOUT]', { tenantId: String(req.tenantId), orderNumber: order.orderNumber, amount: v.x_amount, lineItemCount: orderItems.length, requiredFieldsPresent: PAYZY_FIELDS.every(field => String(v[field] ?? '').length > 0), signatureLength: v.signature.length, endpoint, mode: testMode });
+    // Match Payzy's supplied custom-web sample: Axios serialises the object as
+    // JSON and supplies Content-Length, which is required by some gateway
+    // edge handlers that do not reliably process chunked JSON requests.
+    const response = await axios.post(endpoint, v, {
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      timeout: 15000,
+      validateStatus: () => true,
+    });
+    const data = response.data && typeof response.data === 'object' ? response.data : {};
+    const url = payzyUrl(data);
+    console.info('[PAYZY RESPONSE]', { orderNumber: order.orderNumber, httpStatus: response.status, responseKeys: Object.keys(data), hasCheckoutUrl: Boolean(url) });
+    if (response.status < 200 || response.status >= 300 || !url || !/^https:\/\//i.test(url)) throw new Error('Payzy did not return a valid checkout URL');
     res.json({ url, orderId: order._id });
   } catch (e) {
     if (order) { await Order.deleteOne({ _id: order._id, isPaymentDraft: true }).catch(() => {}); for (const i of order.items || []) await Product.updateOne({ _id: i.product, tenantId: req.tenantId }, { $inc: { stock: i.quantity, soldCount: -i.quantity } }).catch(() => {}); }
