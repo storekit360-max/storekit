@@ -231,7 +231,19 @@ async function fetchKokoOrderStatus(order, gw) {
   const body = new URLSearchParams({ _mId: String(merchantId), api_key: String(apiKey), _orderId: String(order.orderNumber), _pluginName: 'customapi', _pluginVersion: pluginVersion, signature });
   const createEndpoint = String(cfg.endpoint || (gw.isLive ? 'https://prodapi.paykoko.com/api/merchants/orderCreate' : 'https://qaapi.paykoko.com/api/merchants/orderCreate'));
   const endpoint = String(cfg.orderViewEndpoint || createEndpoint.replace(/\/orderCreate(?:\?.*)?$/, '/orderView'));
-  const response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: body.toString() });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`KOKO order view returned ${response.status}`);
   const payload = data?.data && typeof data.data === 'object' ? data.data : data;
@@ -273,7 +285,7 @@ async function handleKokoReturn(req, res) {
       const result = await fetchKokoOrderStatus(order, gw);
       if (result.status === 'SUCCESS') order = (await confirmKokoDraft(order, result.trnId)).toObject();
       else if (['FAILED', 'FAILURE', 'CANCELED', 'CANCELLED'].includes(result.status)) await failKokoDraft(order, `Order View returned ${result.status}`);
-    } catch (error) { console.warn('[KOKO RETURN RECOVERY]', orderNumber, error.message); }
+    } catch (error) { console.warn('[KOKO RETURN RECOVERY]', orderNumber, error.name === 'AbortError' ? 'Order View timed out' : error.message); }
   }
   for (let attempt = 0; order && order.paymentStatus === 'pending' && attempt < 10; attempt += 1) {
     await new Promise(resolve => setTimeout(resolve, 500));
