@@ -20,7 +20,7 @@ const {
 } = require('../services/tenantDeletionService');
 const { bootstrapTenantStore } = require('../utils/tenantBootstrap');
 const { normalizeWhatsappNumber } = require('../utils/whatsappConfig');
-const { generateStarterKit, normalizeStarterKit, sanitizeBrief } = require('../services/tenantStarterKit');
+const { generateStarterKit, normalizeStarterKit, sanitizeBrief, normalizeStoreName } = require('../services/tenantStarterKit');
 const featureRegistry = require('../config/featureRegistry');
 const { revokeAllUserSessions } = require('../services/authSessionService');
 const { connectTenantDomains } = require('../services/vercelDomainService');
@@ -377,7 +377,18 @@ router.delete('/plans/:id', requirePlatformPermission('billing.update'), async (
 router.get('/tenants', requirePlatformPermission('tenant.view'), async (_req, res, next) => {
   try {
     const tenants = await Tenant.find().populate('plan').populate('owner', 'firstName lastName email username role').sort({ createdAt: -1 });
-    res.json(tenants);
+    // Repair legacy records created while the global XSS middleware encoded
+    // apostrophes (for example Aarna&#x27;s Choice). This is idempotent and also
+    // makes the corrected value available immediately to the Control Center.
+    const normalizedTenants = await Promise.all(tenants.map(async (tenant) => {
+      const normalizedName = normalizeStoreName(tenant.storeName);
+      if (normalizedName && normalizedName !== tenant.storeName) {
+        await Tenant.updateOne({ _id: tenant._id }, { $set: { storeName: normalizedName } });
+        tenant.storeName = normalizedName;
+      }
+      return tenant;
+    }));
+    res.json(normalizedTenants);
   } catch (err) { next(err); }
 });
 
@@ -622,6 +633,10 @@ router.put('/tenants/:id', requirePlatformPermission('tenant.edit'), async (req,
     const allowed = ['storeName', 'plan', 'status', 'settings', 'theme', 'domains'];
     const patch = {};
     for (const key of allowed) if (Object.prototype.hasOwnProperty.call(req.body, key)) patch[key] = req.body[key];
+    if (Object.prototype.hasOwnProperty.call(patch, 'storeName')) {
+      patch.storeName = normalizeStoreName(patch.storeName);
+      if (!patch.storeName) return res.status(400).json({ message: 'Store name is required' });
+    }
     if (patch.domains) {
       patch.domains = patch.domains.filter(Boolean).map(d => ({
         domain: normalizeDomain(d.domain || d),

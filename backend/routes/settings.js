@@ -8,6 +8,7 @@ const { clearThemeCache } = require('../utils/mailer');
 const https = require('https');
 const http = require('http');
 const { sanitizeThemeCss } = require('../utils/themeCss');
+const { normalizeStoreName } = require('../services/tenantStarterKit');
 
 const THEME_KEYS = new Set([
   'theme', 'primaryColor', 'primaryDarkColor', 'primaryLightColor',
@@ -94,7 +95,7 @@ function tenantSettingsResponse(tenant) {
     ...settings,
     ...theme,
     resendApiKeyConfigured: !!rawSettings.resendApiKey,
-    storeName: tenant.storeName,
+    storeName: normalizeStoreName(tenant.storeName),
     tenantId: tenant._id,
     plan: tenant.plan?.name,
     features: tenant.plan?.features || {},
@@ -305,6 +306,10 @@ router.put('/', adminAuth, async (req, res) => {
 
     const tenant = await findTenantFromRequest(req);
     if (tenant) {
+      // Repair legacy HTML-encoded names whenever the tenant admin saves any
+      // settings, and keep the canonical plain-text value in MongoDB.
+      const normalizedTenantName = normalizeStoreName(tenant.storeName);
+      if (normalizedTenantName && normalizedTenantName !== tenant.storeName) tenant.storeName = normalizedTenantName;
       const nextSettings = { ...toPlain(tenant.settings) };
       const nextTheme = normalizeTheme(toPlain(tenant.theme));
 
@@ -317,7 +322,8 @@ router.put('/', adminAuth, async (req, res) => {
           continue;
         }
         if (key === 'storeName') {
-          tenant.storeName = value;
+          tenant.storeName = normalizeStoreName(value);
+          if (!tenant.storeName) return res.status(400).json({ message: 'Store name is required' });
         } else if (THEME_KEYS.has(key)) {
           nextTheme[key] = key === 'customCSS' ? sanitizeThemeCss(value) : value;
         } else if (key === 'storePhone' || key === 'phone') {

@@ -16,6 +16,27 @@ function defaultStarterHomepageLayout() {
   return [...visible, ...hidden].map((id, order) => ({ id, enabled: visible.includes(id), order }));
 }
 
+// The global request hardening middleware HTML-encodes request strings. Tenant
+// names are plain text database values, so decode only the small set of named/
+// numeric entities that middleware can produce before storing/displaying them.
+function decodeBasicHtmlEntities(value) {
+  return String(value || '')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;|&#34;/gi, '"')
+    .replace(/&#x27;|&#39;|&apos;/gi, "'");
+}
+
+function normalizeStoreName(value, max = 80) {
+  return decodeBasicHtmlEntities(value)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max);
+}
+
 function cleanText(value, max = 300) {
   return String(value || '')
     .replace(/<[^>]*>/g, ' ')
@@ -49,7 +70,7 @@ function safeRelativeLink(value, fallback = '/shop') {
 }
 
 function sanitizeBrief(input = {}) {
-  const storeName = cleanText(input.storeName, 80) || 'New Store';
+  const storeName = normalizeStoreName(input.storeName) || 'New Store';
   return {
     storeName,
     businessType: cleanText(input.businessType, 60) || 'General retail',
@@ -455,5 +476,6 @@ module.exports = {
   inferArchetype,
   normalizeStarterKit,
   sanitizeBrief,
+  normalizeStoreName,
   slugify,
 };
