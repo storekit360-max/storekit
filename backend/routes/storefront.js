@@ -4,6 +4,7 @@ const express = require('express');
 const Product = require('../models/Product');
 const { Category, Banner } = require('../models/index');
 const { normalizeProductImages, normalizeEntityImages } = require('../utils/imageUrlHelper');
+const { decodeHtmlEntitiesDeep } = require('../services/tenantStarterKit');
 const { requiredTenantId, disableSharedTenantCaching, sendTenantResolutionError } = require('../utils/tenantGuard');
 
 const router = express.Router();
@@ -70,7 +71,7 @@ router.get('/home', async (req, res, next) => {
     ]);
 
     const normalizedProducts = rows => rows.map(normalizeProductImages);
-    const normalizedBanners = banners.map(normalizeEntityImages);
+    const normalizedBanners = decodeHtmlEntitiesDeep(banners.map(normalizeEntityImages));
     return res.json({
       featured: normalizedProducts(featured),
       newArrivals: normalizedProducts(newArrivals),
