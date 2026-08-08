@@ -18,6 +18,7 @@ router.get('/', async (req, res) => {
     const { position, positions } = req.query;
     const now = new Date();
     const filter = {
+      tenantId: req.tenantId,
       isActive: true,
       $and: [
         { $or: [{ startDate: null }, { startDate: { $lte: now } }] },
@@ -41,6 +42,7 @@ router.get('/by-position/:position', async (req, res) => {
     res.setHeader('Expires', '0');
     const now = new Date();
     const banners = await Banner.find({
+      tenantId: req.tenantId,
       position: req.params.position,
       isActive: true,
       $and: [
@@ -56,7 +58,7 @@ router.get('/by-position/:position', async (req, res) => {
 router.get('/admin/all', adminAuth, async (req, res) => {
   try {
     const { position } = req.query;
-    const filter = position ? { position } : {};
+    const filter = { tenantId: req.tenantId, ...(position ? { position } : {}) };
     const banners = await Banner.find(filter).sort({ sortOrder: 1, createdAt: -1 });
     res.json(decodeHtmlEntitiesDeep(banners));
   } catch (err) { res.status(500).json({ message: err.message }); }
@@ -66,6 +68,7 @@ router.get('/admin/all', adminAuth, async (req, res) => {
 router.get('/admin/stats', adminAuth, async (req, res) => {
   try {
     const stats = await Banner.aggregate([
+      { $match: { tenantId: req.tenantId } },
       { $group: { _id: '$position', total: { $sum: 1 }, active: { $sum: { $cond: ['$isActive', 1, 0] } } } }
     ]);
     res.json(stats);
@@ -85,7 +88,7 @@ router.post('/admin/ensure-defaults', adminAuth, async (req, res) => {
 // Admin - Create banner
 router.post('/', adminAuth, async (req, res) => {
   try {
-    const banner = await Banner.create(req.body);
+    const banner = await Banner.create({ ...req.body, tenantId: req.tenantId });
     res.status(201).json(banner);
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -93,7 +96,11 @@ router.post('/', adminAuth, async (req, res) => {
 // Admin - Update banner
 router.put('/:id', adminAuth, async (req, res) => {
   try {
-    const banner = await Banner.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const banner = await Banner.findOneAndUpdate(
+      { _id: req.params.id, tenantId: req.tenantId },
+      { $set: { ...req.body, tenantId: req.tenantId } },
+      { new: true, runValidators: true }
+    );
     if (!banner) return res.status(404).json({ message: 'Banner not found' });
     res.json(banner);
   } catch (err) { res.status(500).json({ message: err.message }); }
@@ -103,7 +110,10 @@ router.put('/:id', adminAuth, async (req, res) => {
 router.put('/admin/reorder', adminAuth, async (req, res) => {
   try {
     const { items } = req.body; // [{ _id, sortOrder }]
-    await Promise.all(items.map(item => Banner.findByIdAndUpdate(item._id, { sortOrder: item.sortOrder })));
+    await Promise.all(items.map(item => Banner.findOneAndUpdate(
+      { _id: item._id, tenantId: req.tenantId },
+      { $set: { sortOrder: item.sortOrder } }
+    )));
     res.json({ message: 'Reordered' });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -111,15 +121,15 @@ router.put('/admin/reorder', adminAuth, async (req, res) => {
 // Admin - Delete banner
 router.delete('/:id', adminAuth, async (req, res) => {
   try {
-    const banner = await Banner.findById(req.params.id);
+    const banner = await Banner.findOne({ _id: req.params.id, tenantId: req.tenantId });
     if (!banner) return res.status(404).json({ message: 'Banner not found' });
     if (REQUIRED_BANNER_POSITIONS.includes(banner.position)) {
-      const remaining = await Banner.countDocuments({ position: banner.position });
+      const remaining = await Banner.countDocuments({ tenantId: req.tenantId, position: banner.position });
       if (remaining <= 1) {
         return res.status(409).json({ message: 'Every banner type must keep at least one record. Hide this banner instead of deleting it.' });
       }
     }
-    await Banner.deleteOne({ _id: banner._id });
+    await Banner.deleteOne({ _id: banner._id, tenantId: req.tenantId });
     res.json({ message: 'Deleted' });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
