@@ -211,10 +211,27 @@ async function confirmKokoDraft(order, trnId) {
     { new: true }
   ));
   if (!confirmed) return withoutTenantScope(() => Order.findById(order._id));
-  await withoutTenantScope(() => Notification.create({ tenantId: confirmed.tenantId, type: 'payment_confirmed', title: '✅ KOKO Payment Confirmed', message: `Order ${confirmed.orderNumber} payment confirmed`, link: `/admin/orders/${confirmed._id}`, data: { orderId: confirmed._id, paymentMethod: 'koko' } }));
-  sendOrderWhatsAppNotification(confirmed).catch(e => console.error('[KOKO WHATSAPP]', e.message));
-  if (confirmed.billing?.email && await isEmailEnabled('payment_confirmed_customer')) sendMail({ to: confirmed.billing.email, subject: `Order Confirmed — ${confirmed.orderNumber}`, html: await orderConfirmHtml(confirmed) }).catch(() => {});
-  const adminEmail = await getAdminEmail(); if (adminEmail && await isEmailEnabled('payment_confirmed_admin')) sendMail({ to: adminEmail, subject: `✅ KOKO Payment Confirmed — ${confirmed.orderNumber}`, html: await newOrderAdminHtml(confirmed) }).catch(() => {});
+  // The database transition above is the payment-critical operation. Delivery
+  // of notifications must never turn a paid KOKO return into a Railway 5xx or
+  // leave the customer stranded on KOKO's hosted success page.
+  Promise.resolve().then(async () => {
+    await withoutTenantScope(() => Notification.create({
+      tenantId: confirmed.tenantId,
+      type: 'payment_confirmed',
+      title: '✅ KOKO Payment Confirmed',
+      message: `Order ${confirmed.orderNumber} payment confirmed`,
+      link: `/admin/orders/${confirmed._id}`,
+      data: { orderId: confirmed._id, paymentMethod: 'koko' },
+    }));
+    sendOrderWhatsAppNotification(confirmed).catch(error => console.error('[KOKO WHATSAPP]', error.message));
+    if (confirmed.billing?.email && await isEmailEnabled('payment_confirmed_customer')) {
+      sendMail({ to: confirmed.billing.email, subject: `Order Confirmed — ${confirmed.orderNumber}`, html: await orderConfirmHtml(confirmed) }).catch(() => {});
+    }
+    const adminEmail = await getAdminEmail();
+    if (adminEmail && await isEmailEnabled('payment_confirmed_admin')) {
+      sendMail({ to: adminEmail, subject: `✅ KOKO Payment Confirmed — ${confirmed.orderNumber}`, html: await newOrderAdminHtml(confirmed) }).catch(() => {});
+    }
+  }).catch(error => console.error('[KOKO POST_PAYMENT]', error.message));
   return confirmed;
 }
 
@@ -291,7 +308,9 @@ async function handleKokoReturn(req, res) {
     // this provider-owned success handoff immediately; the signed response
     // webhook and idempotent update below remain safe reconciliation paths.
     if (returnedStatus === 'SUCCESS' && returnedTransactionId) {
-      order = (await confirmKokoDraft(order, returnedTransactionId)).toObject();
+      const confirmed = await confirmKokoDraft(order, returnedTransactionId);
+      if (!confirmed) throw new Error('KOKO order could not be confirmed');
+      return res.redirect(303, `${frontend}/my-orders?new=${confirmed._id}&payment=koko&status=success`);
     }
     try {
       if (order.paymentStatus === 'pending') {
@@ -306,13 +325,21 @@ async function handleKokoReturn(req, res) {
     await new Promise(resolve => setTimeout(resolve, 500));
     order = await withoutTenantScope(() => Order.findOne({ _id: order._id, paymentMethod: 'koko' }).lean());
   }
-  if (order?.paymentStatus === 'paid') return res.redirect(`${frontend}/my-orders?new=${order._id}&payment=koko&status=success`);
-  return res.redirect(`${frontend}/checkout?payment=processing`);
+  if (order?.paymentStatus === 'paid') return res.redirect(303, `${frontend}/my-orders?new=${order._id}&payment=koko&status=success`);
+  return res.redirect(303, `${frontend}/checkout?payment=processing`);
 }
-router.get('/koko/return/:order', handleKokoReturn);
-router.post('/koko/return/:order', handleKokoReturn);
-router.get('/koko/return', handleKokoReturn);
-router.post('/koko/return', handleKokoReturn);
+function kokoReturnRoute(req, res) {
+  return handleKokoReturn(req, res).catch(error => {
+    console.error('[KOKO RETURN]', error.message);
+    const frontend = String(process.env.FRONTEND_URL || '').replace(/\/$/, '');
+    if (!res.headersSent) return res.redirect(303, `${frontend}/checkout?payment=processing`);
+    return undefined;
+  });
+}
+router.get('/koko/return/:order', kokoReturnRoute);
+router.post('/koko/return/:order', kokoReturnRoute);
+router.get('/koko/return', kokoReturnRoute);
+router.post('/koko/return', kokoReturnRoute);
 async function handleKokoCancel(req, res) { const orderNumber = String(req.params.order || req.query.order || req.body?.orderId || ''); const order = await withoutTenantScope(() => Order.findOne({ orderNumber, paymentMethod: 'koko' })); const frontend = order?.koko?.returnOrigin || String(process.env.FRONTEND_URL || '').replace(/\/$/, ''); if (order) await failKokoDraft(order, 'Customer cancelled payment'); return res.redirect(`${frontend}/checkout?payment=cancelled`); }
 router.get('/koko/cancel/:order', handleKokoCancel);
 router.post('/koko/cancel/:order', handleKokoCancel);
