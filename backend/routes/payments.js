@@ -310,26 +310,19 @@ async function handleKokoReturn(req, res) {
     const returnedStatus = String(req.query?.status || req.body?.status || '').toUpperCase();
     const returnedTransactionId = String(req.query?.trnId || req.body?.trnId || req.query?.transactionId || req.body?.transactionId || '').trim();
     // KOKO's hosted success page redirects here with SUCCESS/trnId but its
-    // Order View upstream can be unavailable for several minutes. Complete
-    // this provider-owned success handoff immediately; the signed response
-    // webhook and idempotent update below remain safe reconciliation paths.
+    // Order View upstream can be unavailable for several minutes. A browser
+    // return must never wait for any gateway/database/notification operation:
+    // queue the idempotent confirmation and immediately hand the customer
+    // back to the tenant storefront. The response webhook/reconciler provides
+    // an additional verification and recovery path.
     if (returnedStatus === 'SUCCESS' && returnedTransactionId) {
-      const confirmed = await confirmKokoDraft(order, returnedTransactionId);
-      if (!confirmed) throw new Error('KOKO order could not be confirmed');
-      return res.redirect(303, `${frontend}/my-orders?new=${confirmed._id}&payment=koko&status=success`);
+      void confirmKokoDraft(order, returnedTransactionId)
+        .catch(error => console.error('[KOKO RETURN CONFIRM]', order.orderNumber, error.message));
+      return res.redirect(303, `${frontend}/my-orders?new=${order._id}&payment=koko&status=success`);
     }
-    try {
-      if (order.paymentStatus === 'pending') {
-        const gw = await withoutTenantScope(() => PaymentGateway.findOne({ tenantId: order.tenantId, gateway: 'koko', isEnabled: true }).lean());
-        const result = await fetchKokoOrderStatus(order, gw);
-        if (result.status === 'SUCCESS') order = (await confirmKokoDraft(order, result.trnId)).toObject();
-        else if (['FAILED', 'FAILURE', 'CANCELED', 'CANCELLED'].includes(result.status)) await failKokoDraft(order, `Order View returned ${result.status}`);
-      }
-    } catch (error) { console.warn('[KOKO RETURN RECOVERY]', orderNumber, error.name === 'AbortError' ? 'Order View timed out' : error.message); }
-  }
-  for (let attempt = 0; order && order.paymentStatus === 'pending' && attempt < 10; attempt += 1) {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    order = await withoutTenantScope(() => Order.findOne({ _id: order._id, paymentMethod: 'koko' }).lean());
+    // Do not call KOKO Order View during browser navigation. The periodic
+    // reconciliation worker handles callbacks with no final status.
+    return res.redirect(303, `${frontend}/checkout?payment=processing`);
   }
   if (order?.paymentStatus === 'paid') return res.redirect(303, `${frontend}/my-orders?new=${order._id}&payment=koko&status=success`);
   return res.redirect(303, `${frontend}/checkout?payment=processing`);
