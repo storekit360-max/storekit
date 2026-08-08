@@ -136,6 +136,7 @@ orderSchema.add({
     callbackProcessedAt: Date,
     stockRestoredAt: Date,
     returnOrigin: String,
+    cancelToken: String,
   },
 });
 

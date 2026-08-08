@@ -172,12 +172,13 @@ router.post('/koko/create-checkout', paymentInitLimiter, async (req, res) => {
       const applied = await DiscountEngine.applyBenefit(benefit, order._id, null, billing.email || null, 0);
       if (!applied.ok) throw new Error('Coupon is no longer available');
     }
-    const encodedOrderNumber = encodeURIComponent(order.orderNumber);
-    // KOKO QA has used both path and query-string return formats. Supplying
-    // both keeps the tenant/order context intact even if its hosted success
-    // page strips path parameters during the handoff.
-    const returnUrl = `${backendBase}/api/payments/koko/return/${encodedOrderNumber}?order=${encodedOrderNumber}`;
-    const cancelUrl = `${backendBase}/api/payments/koko/cancel/${encodedOrderNumber}?order=${encodedOrderNumber}`;
+    // Match KOKO's reference integration: its hosted success component uses
+    // the opaque payment-draft id from the return URL when it completes the
+    // handoff. The public order number remains only in the signed order data.
+    const draftId = String(order._id);
+    const cancelToken = crypto.randomBytes(24).toString('hex');
+    const returnUrl = `${backendBase}/api/payments/koko/return?draftId=${encodeURIComponent(draftId)}`;
+    const cancelUrl = `${backendBase}/api/payments/koko/cancel?draftId=${encodeURIComponent(draftId)}&token=${cancelToken}`;
     const responseUrl = `${backendBase}/api/payments/koko/response`;
     const amount = Number(totals.total).toFixed(2);
     const description = `${orderItems.length} item${orderItems.length === 1 ? '' : 's'}`;
@@ -185,7 +186,7 @@ router.post('/koko/create-checkout', paymentInitLimiter, async (req, res) => {
     const dataString = `${merchantId}${amount}LKRcustomapi1${returnUrl}${cancelUrl}${order.orderNumber}${reference}${sanitise(billing.firstName, 60)}${sanitise(billing.lastName, 60)}${sanitise(billing.email, 120)}${description}${apiKey}${responseUrl}`;
     const signature = crypto.sign('RSA-SHA256', Buffer.from(dataString), privateKey).toString('base64');
     const fields = { _mId: String(merchantId), api_key: String(apiKey), _returnUrl: returnUrl, _responseUrl: responseUrl, _currency: 'LKR', _amount: amount, _reference: reference, _pluginName: 'customapi', _pluginVersion: '1', _cancelUrl: cancelUrl, _orderId: String(order.orderNumber), _firstName: sanitise(billing.firstName, 60), _lastName: sanitise(billing.lastName, 60), _email: sanitise(billing.email, 120), _description: description, dataString, signature, _mobileNo: sanitise(billing.phone, 30) };
-    order.koko = { signedRequest: fields, returnOrigin }; await order.save();
+    order.koko = { signedRequest: fields, returnOrigin, cancelToken }; await order.save();
     const endpoint = gw.isLive ? String(cfg.endpoint || cfg.productionEndpoint || '') : String(cfg.endpoint || 'https://qaapi.paykoko.com/api/merchants/orderCreate');
     if (!/^https:\/\//i.test(endpoint)) throw new Error('KOKO endpoint is not configured');
     res.json({ endpoint, fields });
@@ -299,8 +300,11 @@ async function handleKokoResponse(req, res) {
 router.get('/koko/response', webhookLimiter, (req, res) => handleKokoResponse(req, res).catch(() => res.status(400).send('Invalid response')));
 router.post('/koko/response', webhookLimiter, (req, res) => handleKokoResponse(req, res).catch(() => res.status(400).send('Invalid response')));
 async function handleKokoReturn(req, res) {
-  const orderNumber = String(req.params.order || req.body?.orderId || req.query?.order || '');
-  let order = await withoutTenantScope(() => Order.findOne({ orderNumber, paymentMethod: 'koko' }).lean());
+  const draftId = String(req.query?.draftId || req.body?.draftId || '');
+  const orderNumber = String(req.params.order || req.body?.orderId || req.query?.order || req.query?.orderId || '');
+  let order = draftId
+    ? await withoutTenantScope(() => Order.findOne({ _id: draftId, paymentMethod: 'koko' }).lean()).catch(() => null)
+    : await withoutTenantScope(() => Order.findOne({ orderNumber, paymentMethod: 'koko' }).lean());
   const frontend = order?.koko?.returnOrigin || String(process.env.FRONTEND_URL || '').replace(/\/$/, '');
   if (order?.paymentStatus === 'pending') {
     const returnedStatus = String(req.query?.status || req.body?.status || '').toUpperCase();
@@ -333,10 +337,13 @@ async function handleKokoReturn(req, res) {
 function kokoReturnRoute(req, res) {
   return handleKokoReturn(req, res).catch(error => {
     console.error('[KOKO RETURN]', error.message);
+    const draftId = String(req.query?.draftId || req.body?.draftId || '');
     const orderNumber = String(req.params.order || req.body?.orderId || req.query?.order || req.query?.orderId || '');
     // Even the error path must return to the originating tenant. Resolve the
     // draft by its signed order number rather than using platform FRONTEND_URL.
-    return withoutTenantScope(() => Order.findOne({ orderNumber, paymentMethod: 'koko' }).lean())
+    return withoutTenantScope(() => (draftId
+      ? Order.findOne({ _id: draftId, paymentMethod: 'koko' }).lean()
+      : Order.findOne({ orderNumber, paymentMethod: 'koko' }).lean()))
       .then(order => {
         const frontend = order?.koko?.returnOrigin || String(process.env.FRONTEND_URL || '').replace(/\/$/, '');
         if (!res.headersSent) return res.redirect(303, `${frontend}/checkout?payment=processing`);
@@ -352,7 +359,17 @@ router.get('/koko/return/:order', kokoReturnRoute);
 router.post('/koko/return/:order', kokoReturnRoute);
 router.get('/koko/return', kokoReturnRoute);
 router.post('/koko/return', kokoReturnRoute);
-async function handleKokoCancel(req, res) { const orderNumber = String(req.params.order || req.query.order || req.body?.orderId || ''); const order = await withoutTenantScope(() => Order.findOne({ orderNumber, paymentMethod: 'koko' })); const frontend = order?.koko?.returnOrigin || String(process.env.FRONTEND_URL || '').replace(/\/$/, ''); if (order) await failKokoDraft(order, 'Customer cancelled payment'); return res.redirect(`${frontend}/checkout?payment=cancelled`); }
+async function handleKokoCancel(req, res) {
+  const draftId = String(req.query?.draftId || req.body?.draftId || '');
+  const orderNumber = String(req.params.order || req.query?.order || req.body?.orderId || '');
+  const order = draftId
+    ? await withoutTenantScope(() => Order.findOne({ _id: draftId, paymentMethod: 'koko' })).catch(() => null)
+    : await withoutTenantScope(() => Order.findOne({ orderNumber, paymentMethod: 'koko' }));
+  const frontend = order?.koko?.returnOrigin || String(process.env.FRONTEND_URL || '').replace(/\/$/, '');
+  const token = String(req.query?.token || req.body?.token || '');
+  if (order && (!draftId || safeEqual(String(order.koko?.cancelToken || ''), token))) await failKokoDraft(order, 'Customer cancelled payment');
+  return res.redirect(303, `${frontend}/checkout?payment=cancelled`);
+}
 router.get('/koko/cancel/:order', handleKokoCancel);
 router.post('/koko/cancel/:order', handleKokoCancel);
 router.get('/koko/cancel', handleKokoCancel);
