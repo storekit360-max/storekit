@@ -25,7 +25,8 @@ router.get('/dashboard', adminAuth, async (req, res) => {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     // Paid & NOT refunded = real revenue
-    const revenueFilter = { tenantId, paymentStatus: 'paid', orderStatus: { $ne: 'refunded' } };
+    const operationalOrderFilter = { tenantId, isPaymentDraft: { $ne: true } };
+    const revenueFilter = { ...operationalOrderFilter, paymentStatus: 'paid', orderStatus: { $ne: 'refunded' } };
 
     const [
       totalOrders, pendingOrders, todayOrders,
@@ -36,9 +37,9 @@ router.get('/dashboard', adminAuth, async (req, res) => {
       totalReturns, pendingReturns, totalRefundedAmount,
       revenueChart, topProducts, ordersByStatus, recentOrders,
     ] = await Promise.all([
-      Order.countDocuments(),
-      Order.countDocuments({ orderStatus: 'pending' }),
-      Order.countDocuments({ createdAt: { $gte: today } }),
+      Order.countDocuments(operationalOrderFilter),
+      Order.countDocuments({ ...operationalOrderFilter, orderStatus: 'pending' }),
+      Order.countDocuments({ ...operationalOrderFilter, createdAt: { $gte: today } }),
 
       // Revenue: paid orders that have NOT been refunded
       Order.aggregate([
@@ -58,7 +59,7 @@ router.get('/dashboard', adminAuth, async (req, res) => {
       Product.countDocuments({ isActive: true, $expr: { $lte: ['$stock', '$lowStockThreshold'] } }),
       User.countDocuments({ role: 'customer' }),
       User.countDocuments({ role: 'customer', createdAt: { $gte: thisMonth } }),
-      Order.countDocuments({ isRead: false }),
+      Order.countDocuments({ ...operationalOrderFilter, isRead: false }),
 
       // Return KPIs
       ReturnRequest.countDocuments(),
@@ -78,10 +79,10 @@ router.get('/dashboard', adminAuth, async (req, res) => {
         .select('name soldCount price thumbnail')
         .lean(),
       Order.aggregate([
-        { $match: { tenantId } },
+        { $match: operationalOrderFilter },
         { $group: { _id: '$orderStatus', count: { $sum: 1 } } }
       ]),
-      Order.find()
+      Order.find(operationalOrderFilter)
         .sort({ createdAt: -1 })
         .limit(10)
         .populate('customer', 'firstName lastName')
@@ -110,10 +111,10 @@ router.get('/dashboard', adminAuth, async (req, res) => {
 
 // Lightweight shell counts for the persistent admin sidebar. The previous
 // implementation ran the complete dashboard aggregation just to show badges.
-router.get('/nav-summary', adminAuth, async (_req, res) => {
+router.get('/nav-summary', adminAuth, async (req, res) => {
   try {
     const [pendingOrders, pendingReturns] = await Promise.all([
-      Order.countDocuments({ orderStatus: 'pending' }),
+      Order.countDocuments({ tenantId: req.user?.tenantId || req.tenantId, isPaymentDraft: { $ne: true }, orderStatus: 'pending' }),
       ReturnRequest.countDocuments({ status: 'pending' }),
     ]);
     res.setHeader('Cache-Control', 'private, max-age=10');

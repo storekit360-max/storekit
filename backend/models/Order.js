@@ -128,6 +128,7 @@ orderSchema.add({
     notificationsSentAt: Date,
     stockRestoredAt: Date,
     installmentPlan: { type: mongoose.Schema.Types.Mixed },
+    returnOrigin: String,
   },
   koko: {
     signedRequest: { type: mongoose.Schema.Types.Mixed },

@@ -86,7 +86,9 @@ function safeReturnOrigin(req) {
   const tenantFallbacks = [tenantSiteUrl, configuredTenantDomain && `https://${configuredTenantDomain}`].filter(Boolean);
   const requestOrigin = String(req.get('origin') || '').trim();
   try {
-    const url = new URL(requestOrigin || tenantFallbacks[0] || process.env.FRONTEND_URL || '');
+    // A tenant's configured public URL is the canonical destination. The
+    // browser Origin is only a fallback for tenants without a configured URL.
+    const url = new URL(tenantFallbacks[0] || requestOrigin || process.env.FRONTEND_URL || '');
     if (['http:', 'https:'].includes(url.protocol)) return `${url.origin}${url.pathname === '/' ? '' : url.pathname.replace(/\/$/, '')}`;
   } catch (_) { /* use the tenant-specific fallback below */ }
   for (const candidate of tenantFallbacks) {
@@ -331,9 +333,19 @@ async function handleKokoReturn(req, res) {
 function kokoReturnRoute(req, res) {
   return handleKokoReturn(req, res).catch(error => {
     console.error('[KOKO RETURN]', error.message);
-    const frontend = String(process.env.FRONTEND_URL || '').replace(/\/$/, '');
-    if (!res.headersSent) return res.redirect(303, `${frontend}/checkout?payment=processing`);
-    return undefined;
+    const orderNumber = String(req.params.order || req.body?.orderId || req.query?.order || req.query?.orderId || '');
+    // Even the error path must return to the originating tenant. Resolve the
+    // draft by its signed order number rather than using platform FRONTEND_URL.
+    return withoutTenantScope(() => Order.findOne({ orderNumber, paymentMethod: 'koko' }).lean())
+      .then(order => {
+        const frontend = order?.koko?.returnOrigin || String(process.env.FRONTEND_URL || '').replace(/\/$/, '');
+        if (!res.headersSent) return res.redirect(303, `${frontend}/checkout?payment=processing`);
+        return undefined;
+      })
+      .catch(() => {
+        if (!res.headersSent) return res.status(502).send('Unable to complete payment return');
+        return undefined;
+      });
   });
 }
 router.get('/koko/return/:order', kokoReturnRoute);
@@ -386,6 +398,7 @@ router.post('/payzy/create-checkout', paymentInitLimiter, async (req, res) => {
     const total = totals.total;
     for (const item of orderItems) await Product.updateOne({ _id: item.product, tenantId: req.tenantId, stock: { $gte: item.quantity } }, { $inc: { stock: -item.quantity, soldCount: item.quantity } });
     const testMode = gw.isLive ? 'off' : 'on';
+    const returnOrigin = safeReturnOrigin(req);
     const backendBase = String(process.env.PAYZY_RESPONSE_BASE_URL || process.env.BACKEND_URL || '').replace(/\/$/, '');
     if (!backendBase) return res.status(500).json({ message: 'Payzy callback base URL is not configured' });
     order = await Order.create({ tenantId: req.tenantId, items: orderItems, billing, shipping: shipToDifferentAddress ? shipping : billing, shipToDifferentAddress, paymentMethod: 'payzy', paymentStatus: 'pending', orderStatus: 'pending', isPaymentDraft: true, paymentDraftExpiresAt: new Date(Date.now() + 3600000), subtotal: totals.subtotal, couponCode: benefit.couponDiscount > 0 ? couponCode : undefined, couponDiscount: benefit.couponDiscount || 0, shippingCost: delivery.fee, total, notes, deliveryService: deliveryService || 'standard', deliveryServiceName: delivery.serviceName, statusHistory: [{ status: 'pending', note: 'Payzy payment draft created', updatedBy: billing.email || 'system' }] });
@@ -397,7 +410,7 @@ router.post('/payzy/create-checkout', paymentInitLimiter, async (req, res) => {
     const company = sanitise(cfg.companyName || gw.displayName || 'Store', 100);
     const v = { x_test_mode: testMode, x_shopid: String(cfg.shopId), x_amount: Number(total).toFixed(2), x_order_id: String(order.orderNumber), x_response_url: `${backendBase}/api/payments/payzy/response`, x_first_name: sanitise(billing.firstName, 60), x_last_name: sanitise(billing.lastName, 60), x_company: company, x_address: sanitise(billing.street, 200), x_country: sanitise(billing.country || 'Sri Lanka', 60), x_state: sanitise(billing.state || billing.city, 60), x_city: sanitise(billing.city, 60), x_zip: sanitise(billing.zip || '00000', 20), x_phone: sanitise(billing.phone, 30), x_email: sanitise(billing.email, 120), x_ship_to_first_name: sanitise(shipTo.firstName || billing.firstName, 60), x_ship_to_last_name: sanitise(shipTo.lastName || billing.lastName, 60), x_ship_to_company: company, x_ship_to_address: sanitise(shipTo.street || billing.street, 200), x_ship_to_country: sanitise(shipTo.country || billing.country || 'Sri Lanka', 60), x_ship_to_state: sanitise(shipTo.state || shipTo.city || billing.city, 60), x_ship_to_city: sanitise(shipTo.city || billing.city, 60), x_ship_to_zip: sanitise(shipTo.zip || billing.zip || '00000', 20), x_freight: Number(delivery.fee || 0).toFixed(2), x_platform: 'custom', x_version: '1.0', signed_field_names: PAYZY_FIELDS.join(',') };
     v.signature = payzySignature(v, secret);
-    order.payzy = { signedRequest: v, signedFieldNames: v.signed_field_names, installmentPlan: installmentPlan || undefined }; await order.save();
+    order.payzy = { signedRequest: v, signedFieldNames: v.signed_field_names, installmentPlan: installmentPlan || undefined, returnOrigin }; await order.save();
     const endpoint = gw.isLive ? 'https://api.payzy.lk/checkout/custom-checkout' : 'https://api.payzypay.xyz/checkout/custom-checkout';
     console.info('[PAYZY CHECKOUT]', { tenantId: String(req.tenantId), orderNumber: order.orderNumber, amount: v.x_amount, lineItemCount: orderItems.length, requiredFieldsPresent: PAYZY_FIELDS.every(field => String(v[field] ?? '').length > 0), mode: testMode });
     const response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(v) });
@@ -415,27 +428,53 @@ async function handlePayzyResponse(req, res) {
   const responseCode = String(payzyValue(req, 'response_code'));
   const orderNumber = String(payzyValue(req, 'x_order_id'));
   const gw = await withoutTenantScope(() => PaymentGateway.findOne({ gateway: 'payzy', 'config.shopId': String(payzyValue(req, 'x_shopid')) }).lean());
-  const order = await withoutTenantScope(() => Order.findOne({ orderNumber, paymentMethod: 'payzy', isPaymentDraft: true }));
+  const order = await withoutTenantScope(() => Order.findOne({ orderNumber, paymentMethod: 'payzy' }));
   const frontend = String(process.env.FRONTEND_URL || '').replace(/\/$/, '');
-  if (!gw || !order) return res.redirect(`${frontend}/checkout?payment=failed`);
+  const tenantFrontend = order?.payzy?.returnOrigin || frontend;
+  if (!gw || !order) return res.redirect(303, `${tenantFrontend}/checkout?payment=failed`);
   const submitted = {};
   for (const field of ['response_code', ...PAYZY_FIELDS]) submitted[field] = payzyValue(req, field) || order.payzy?.signedRequest?.[field] || '';
   const supplied = String(payzyValue(req, 'signature'));
   const expected = payzySignature(submitted, payzyConfig(gw).secretKey || payzyConfig(gw).secretApiKey, true);
-  if (!safeEqual(supplied, expected)) return res.redirect(`${frontend}/checkout?payment=failed`);
-  if (responseCode !== '00') return res.redirect(`${frontend}/checkout?payment=failed`);
-  if (order.paymentStatus === 'paid' && order.payzy?.callbackProcessedAt) return res.redirect(`${frontend}/my-orders?new=${order._id}&payment=payzy&status=success`);
+  if (!safeEqual(supplied, expected)) return res.redirect(303, `${tenantFrontend}/checkout?payment=failed`);
+  if (responseCode !== '00') {
+    await failPayzyDraft(order, `Payment response ${responseCode || 'failed'}`);
+    return res.redirect(303, `${tenantFrontend}/checkout?payment=failed`);
+  }
+  if (order.paymentStatus === 'paid' && order.payzy?.callbackProcessedAt) return res.redirect(303, `${tenantFrontend}/my-orders?new=${order._id}&payment=payzy&status=success`);
   order.paymentStatus = 'paid'; order.orderStatus = 'confirmed'; order.isPaymentDraft = false; order.payzy.paymentReference = payzyValue(req, 'x_payment_id') || payzyValue(req, 'payment_reference') || payzyValue(req, 'transaction_id') || orderNumber; order.payzy.callbackProcessedAt = new Date(); order.paymentReference = order.payzy.paymentReference;
   order.statusHistory.push({ status: 'confirmed', note: `Payment confirmed via Payzy (${order.paymentReference})`, updatedBy: 'payzy' }); await withoutTenantScope(() => order.save());
-  const notification = await withoutTenantScope(() => Notification.create({ tenantId: order.tenantId, type: 'payment_confirmed', title: '✅ Payzy Payment Confirmed', message: `Order ${order.orderNumber} payment confirmed`, link: `/admin/orders/${order._id}`, data: { orderId: order._id, paymentMethod: 'payzy' } }));
-  void notification;
-  sendOrderWhatsAppNotification(order).catch(e => console.error('[PAYZY WHATSAPP]', e.message));
-  if (order.billing?.email && await isEmailEnabled('payment_confirmed_customer')) sendMail({ to: order.billing.email, subject: `Order Confirmed — ${order.orderNumber}`, html: await orderConfirmHtml(order) }).catch(() => {});
-  const adminEmail = await getAdminEmail(); if (adminEmail && await isEmailEnabled('payment_confirmed_admin')) sendMail({ to: adminEmail, subject: `✅ Payzy Payment Confirmed — ${order.orderNumber}`, html: await newOrderAdminHtml(order) }).catch(() => {});
-  res.redirect(`${frontend}/my-orders?new=${order._id}&payment=payzy&status=success`);
+  Promise.resolve().then(async () => {
+    await withoutTenantScope(() => Notification.create({ tenantId: order.tenantId, type: 'payment_confirmed', title: '✅ Payzy Payment Confirmed', message: `Order ${order.orderNumber} payment confirmed`, link: `/admin/orders/${order._id}`, data: { orderId: order._id, paymentMethod: 'payzy' } }));
+    sendOrderWhatsAppNotification(order).catch(error => console.error('[PAYZY WHATSAPP]', error.message));
+    if (order.billing?.email && await isEmailEnabled('payment_confirmed_customer')) sendMail({ to: order.billing.email, subject: `Order Confirmed — ${order.orderNumber}`, html: await orderConfirmHtml(order) }).catch(() => {});
+    const adminEmail = await getAdminEmail();
+    if (adminEmail && await isEmailEnabled('payment_confirmed_admin')) sendMail({ to: adminEmail, subject: `✅ Payzy Payment Confirmed — ${order.orderNumber}`, html: await newOrderAdminHtml(order) }).catch(() => {});
+  }).catch(error => console.error('[PAYZY POST_PAYMENT]', error.message));
+  res.redirect(303, `${tenantFrontend}/my-orders?new=${order._id}&payment=payzy&status=success`);
 }
-router.get('/payzy/response', webhookLimiter, (req, res) => handlePayzyResponse(req, res).catch(() => res.redirect(`${process.env.FRONTEND_URL || ''}/checkout?payment=failed`)));
-router.post('/payzy/response', webhookLimiter, (req, res) => handlePayzyResponse(req, res).catch(() => res.redirect(`${process.env.FRONTEND_URL || ''}/checkout?payment=failed`)));
+async function failPayzyDraft(order, note) {
+  const claimed = await withoutTenantScope(() => Order.findOneAndUpdate(
+    { _id: order._id, paymentMethod: 'payzy', isPaymentDraft: true, paymentStatus: 'pending' },
+    { $set: { paymentStatus: 'failed', orderStatus: 'cancelled', 'payzy.stockRestoredAt': new Date() }, $push: { statusHistory: { status: 'cancelled', note, updatedBy: 'payzy' } } },
+    { new: true }
+  ));
+  if (!claimed) return;
+  for (const item of claimed.items || []) await Product.updateOne({ _id: item.product, tenantId: claimed.tenantId }, { $inc: { stock: item.quantity, soldCount: -item.quantity } });
+  await withoutTenantScope(() => Order.deleteOne({ _id: claimed._id, paymentStatus: 'failed', isPaymentDraft: true }));
+}
+function payzyResponseRoute(req, res) {
+  return handlePayzyResponse(req, res).catch(async error => {
+    console.error('[PAYZY RESPONSE]', error.message);
+    const orderNumber = String(payzyValue(req, 'x_order_id'));
+    const order = await withoutTenantScope(() => Order.findOne({ orderNumber, paymentMethod: 'payzy' }).lean()).catch(() => null);
+    const frontend = order?.payzy?.returnOrigin || String(process.env.FRONTEND_URL || '').replace(/\/$/, '');
+    if (!res.headersSent) return res.redirect(303, `${frontend}/checkout?payment=failed`);
+    return undefined;
+  });
+}
+router.get('/payzy/response', webhookLimiter, payzyResponseRoute);
+router.post('/payzy/response', webhookLimiter, payzyResponseRoute);
 
 // One-hour Payzy draft expiry. The conditional update makes this safe across
 // multiple application instances and prevents duplicate stock restoration.
