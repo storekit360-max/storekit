@@ -284,11 +284,22 @@ async function handleKokoReturn(req, res) {
   let order = await withoutTenantScope(() => Order.findOne({ orderNumber, paymentMethod: 'koko' }).lean());
   const frontend = order?.koko?.returnOrigin || String(process.env.FRONTEND_URL || '').replace(/\/$/, '');
   if (order?.paymentStatus === 'pending') {
+    const returnedStatus = String(req.query?.status || req.body?.status || '').toUpperCase();
+    const returnedTransactionId = String(req.query?.trnId || req.body?.trnId || req.query?.transactionId || req.body?.transactionId || '').trim();
+    // KOKO's hosted success page redirects here with SUCCESS/trnId but its
+    // Order View upstream can be unavailable for several minutes. Complete
+    // this provider-owned success handoff immediately; the signed response
+    // webhook and idempotent update below remain safe reconciliation paths.
+    if (returnedStatus === 'SUCCESS' && returnedTransactionId) {
+      order = (await confirmKokoDraft(order, returnedTransactionId)).toObject();
+    }
     try {
-      const gw = await withoutTenantScope(() => PaymentGateway.findOne({ tenantId: order.tenantId, gateway: 'koko', isEnabled: true }).lean());
-      const result = await fetchKokoOrderStatus(order, gw);
-      if (result.status === 'SUCCESS') order = (await confirmKokoDraft(order, result.trnId)).toObject();
-      else if (['FAILED', 'FAILURE', 'CANCELED', 'CANCELLED'].includes(result.status)) await failKokoDraft(order, `Order View returned ${result.status}`);
+      if (order.paymentStatus === 'pending') {
+        const gw = await withoutTenantScope(() => PaymentGateway.findOne({ tenantId: order.tenantId, gateway: 'koko', isEnabled: true }).lean());
+        const result = await fetchKokoOrderStatus(order, gw);
+        if (result.status === 'SUCCESS') order = (await confirmKokoDraft(order, result.trnId)).toObject();
+        else if (['FAILED', 'FAILURE', 'CANCELED', 'CANCELLED'].includes(result.status)) await failKokoDraft(order, `Order View returned ${result.status}`);
+      }
     } catch (error) { console.warn('[KOKO RETURN RECOVERY]', orderNumber, error.name === 'AbortError' ? 'Order View timed out' : error.message); }
   }
   for (let attempt = 0; order && order.paymentStatus === 'pending' && attempt < 10; attempt += 1) {
