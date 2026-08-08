@@ -59,7 +59,7 @@ router.get('/admin/all', adminAuth, async (req, res) => {
   try {
     const { position } = req.query;
     const filter = { tenantId: req.tenantId, ...(position ? { position } : {}) };
-    const banners = await Banner.find(filter).sort({ sortOrder: 1, createdAt: -1 });
+    const banners = await Banner.find(filter).sort({ sortOrder: 1, createdAt: -1 }).lean();
     res.json(decodeHtmlEntitiesDeep(banners));
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
