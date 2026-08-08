@@ -239,45 +239,6 @@ async function confirmKokoDraft(order, trnId) {
   return confirmed;
 }
 
-async function fetchKokoOrderStatus(order, gw) {
-  const cfg = gw?.config || {};
-  const merchantId = cfg.merchantId || cfg.merchantID;
-  const apiKey = cfg.apiKey;
-  const privateKey = normalisePem(cfg.privateKey);
-  const publicKey = normalisePem(cfg.publicKey);
-  if (!merchantId || !apiKey || !privateKey || !publicKey) throw new Error('KOKO credentials are incomplete');
-  const pluginVersion = String(order.koko?.signedRequest?._pluginVersion || '1');
-  const dataString = `${merchantId}customapi${pluginVersion}${order.orderNumber}${apiKey}`;
-  const signature = crypto.sign('RSA-SHA256', Buffer.from(dataString), privateKey).toString('base64');
-  const body = new URLSearchParams({ _mId: String(merchantId), api_key: String(apiKey), _orderId: String(order.orderNumber), _pluginName: 'customapi', _pluginVersion: pluginVersion, signature });
-  const createEndpoint = String(cfg.endpoint || (gw.isLive ? 'https://prodapi.paykoko.com/api/merchants/orderCreate' : 'https://qaapi.paykoko.com/api/merchants/orderCreate'));
-  const endpoint = String(cfg.orderViewEndpoint || createEndpoint.replace(/\/orderCreate(?:\?.*)?$/, '/orderView'));
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
-  let response;
-  try {
-    response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(`KOKO order view returned ${response.status}`);
-  const payload = data?.data && typeof data.data === 'object' ? data.data : data;
-  const orderId = String(payload.orderId || payload.order_id || payload._orderId || '');
-  const trnId = String(payload.trnId || payload.trn_id || payload.transactionId || payload.transaction_id || '');
-  const status = String(payload.status || payload.orderStatus || payload.paymentStatus || payload.responseCode || '').toUpperCase();
-  const desc = String(payload.desc || payload.description || '');
-  const supplied = String(payload.signature || payload.key || '');
-  const verified = Boolean(orderId === order.orderNumber && supplied && crypto.verify('RSA-SHA256', Buffer.from(`${orderId}${trnId}${status}${desc}`), publicKey, Buffer.from(supplied, 'base64')));
-  if (!verified) throw new Error('KOKO order view signature is invalid');
-  return { orderId, trnId, status, desc };
-}
-
 async function handleKokoResponse(req, res) {
   const input = { ...req.query, ...req.body };
   const orderId = String(input.orderId || input._orderId || input.order_id || '');
@@ -369,21 +330,12 @@ router.post('/koko/cancel/:order', handleKokoCancel);
 router.get('/koko/cancel', handleKokoCancel);
 router.post('/koko/cancel', handleKokoCancel);
 
-// KOKO's hosted success page may occasionally fail before redirecting or sending
-// its webhook. Reconcile pending drafts through KOKO's signed Order View API.
-setInterval(async () => {
-  try {
-    const drafts = await withoutTenantScope(() => Order.find({ paymentMethod: 'koko', isPaymentDraft: true, paymentStatus: 'pending', createdAt: { $lte: new Date(Date.now() - 15000) }, paymentDraftExpiresAt: { $gt: new Date() } }).limit(50));
-    for (const order of drafts) {
-      try {
-        const gw = await withoutTenantScope(() => PaymentGateway.findOne({ tenantId: order.tenantId, gateway: 'koko', isEnabled: true }).lean());
-        const result = await fetchKokoOrderStatus(order, gw);
-        if (result.status === 'SUCCESS') await confirmKokoDraft(order, result.trnId);
-        else if (['FAILED', 'FAILURE', 'CANCELED', 'CANCELLED'].includes(result.status)) await failKokoDraft(order, `Order View returned ${result.status}`);
-      } catch (error) { console.warn('[KOKO RECONCILE]', order.orderNumber, error.message); }
-    }
-  } catch (error) { console.error('[KOKO RECONCILE]', error.message); }
-}, 60 * 1000).unref?.();
+// KOKO's documented, verifiable sources of payment truth are its signed
+// response callback and the hosted return handoff. Do not poll Order View with
+// a response signature format that KOKO has not documented for this API: an
+// unverifiable result must never mutate an order or create repeated log noise.
+// Drafts that never receive a verified completion are handled by the one-hour
+// expiry worker below, which atomically restores their stock.
 
 router.post('/payzy/create-checkout', paymentInitLimiter, async (req, res) => {
   let order;
