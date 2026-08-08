@@ -438,13 +438,27 @@ router.post('/payzy/create-checkout', paymentInitLimiter, async (req, res) => {
 async function handlePayzyResponse(req, res) {
   const responseCode = String(payzyValue(req, 'response_code'));
   const orderNumber = String(payzyValue(req, 'x_order_id'));
-  const gw = await withoutTenantScope(() => PaymentGateway.findOne({ gateway: 'payzy', 'config.shopId': String(payzyValue(req, 'x_shopid')) }).lean());
   const order = await withoutTenantScope(() => Order.findOne({ orderNumber, paymentMethod: 'payzy' }));
   const frontend = String(process.env.FRONTEND_URL || '').replace(/\/$/, '');
   const tenantFrontend = order?.payzy?.returnOrigin || frontend;
-  if (!gw || !order) return res.redirect(303, `${tenantFrontend}/checkout?payment=failed`);
+  if (!order) return res.redirect(303, `${tenantFrontend}/checkout?payment=failed`);
+  // Resolve credentials only through the payment draft's tenant. A callback
+  // from tenant A must never be able to use a matching Shop ID or secret that
+  // belongs to tenant B.
+  const callbackShopId = String(payzyValue(req, 'x_shopid'));
+  const draftShopId = String(order.payzy?.signedRequest?.x_shopid || '');
+  if (!callbackShopId || !safeEqual(callbackShopId, draftShopId)) {
+    console.warn('[PAYZY RESPONSE] Shop ID does not match payment draft', order.orderNumber);
+    return res.redirect(303, `${tenantFrontend}/checkout?payment=failed`);
+  }
+  const gw = await withoutTenantScope(() => PaymentGateway.findOne({ tenantId: order.tenantId, gateway: 'payzy', 'config.shopId': callbackShopId, isEnabled: true }).lean());
+  if (!gw) return res.redirect(303, `${tenantFrontend}/checkout?payment=failed`);
   const submitted = {};
   for (const field of ['response_code', ...PAYZY_FIELDS]) submitted[field] = payzyValue(req, field) || order.payzy?.signedRequest?.[field] || '';
+  // Payzy's callback sample signs a new field-name list with response_code
+  // prepended. Never reuse the initial request list here: it does not include
+  // response_code and would make a legitimate payment callback fail.
+  submitted.signed_field_names = ['response_code', ...PAYZY_FIELDS].join(',');
   const supplied = String(payzyValue(req, 'signature'));
   const expected = payzySignature(submitted, payzyConfig(gw).secretKey || payzyConfig(gw).secretApiKey, true);
   if (!safeEqual(supplied, expected)) return res.redirect(303, `${tenantFrontend}/checkout?payment=failed`);

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
@@ -826,8 +827,12 @@ const MobileBottomNav = ({ settings }) => {
     { to: user?'/account':'/login', icon:<svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>, label: user?'Me':'Login' },
   ];
 
-  return (
-    <div className="mobile-bottom-nav">
+  // Keep the bar outside the storefront tree. Some mobile browsers treat a
+  // fixed child of an animated/transformed layout ancestor as document-flow
+  // content, which makes the navigation scroll with product cards.
+  if (typeof document === 'undefined') return null;
+  return createPortal(
+    <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
       {tabs.map((tab, i) => {
         const isActive = tab.to && (
           tab.exact
@@ -855,7 +860,8 @@ const MobileBottomNav = ({ settings }) => {
           </Link>
         );
       })}
-    </div>
+    </nav>,
+    document.body
   );
 };
 
