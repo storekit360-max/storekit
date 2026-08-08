@@ -14,6 +14,12 @@ const PAYMENT_COLORS = {
   pending: 'bg-yellow-100 text-yellow-700', paid: 'bg-green-100 text-green-700',
   failed: 'bg-red-100 text-red-700'
 };
+const PAYMENT_METHOD_LABELS = {
+  cod: 'COD', bank_transfer: 'Bank transfer', payhere: 'PayHere',
+  stripe: 'Stripe', paypal: 'PayPal', payzy: 'Payzy', koko: 'KOKO',
+  cash: 'Cash', card: 'Card', qr: 'QR', mobile_wallet: 'Mobile wallet', free: 'Free',
+};
+const paymentMethodLabel = method => PAYMENT_METHOD_LABELS[method] || String(method || 'Unknown').replace(/_/g, ' ');
 const ALL_STATUSES = ['all','pending','confirmed','processing','shipped','out_for_delivery','delivered','cancelled'];
 
 export default function AdminOrders() {
@@ -141,7 +147,7 @@ export default function AdminOrders() {
                       <td>
                         <div className="space-y-1">
                           <span className={`badge ${PAYMENT_COLORS[order.paymentStatus] || ''} text-xs capitalize`}>{order.paymentStatus}</span>
-                          <p className="text-xs text-gray-400">{order.paymentMethod === 'bank_transfer' ? 'Bank' : 'COD'}</p>
+                          <p className="text-xs text-gray-400">{paymentMethodLabel(order.paymentMethod)}</p>
                         </div>
                       </td>
                       <td><span className={`badge ${STATUS_COLORS[order.orderStatus] || ''} capitalize text-xs`}>{order.orderStatus?.replace(/_/g,' ')}</span></td>
